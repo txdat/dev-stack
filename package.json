@@ -1,0 +1,29 @@
+{
+  "name": "dev-stack",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.engine.json && tsc -p tsconfig.node.json",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "node --test --test-isolation=none 'test/**/*.test.ts'",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "pi": {
+    "extensions": [
+      "./plugins/dev/pi/dev.ts"
+    ],
+    "skills": [
+      "./plugins/dev/skills"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@earendil-works/pi-coding-agent": "1.5.2",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

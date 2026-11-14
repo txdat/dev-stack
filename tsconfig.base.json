@@ -1,0 +1,21 @@
+{
+  // TypeScript 7, type-check only: Node 24 and both harnesses run the .ts sources directly,
+  // so the code must stay erasable (no enums, namespaces, or parameter properties).
+  "compilerOptions": {
+    "target": "esnext",
+    "lib": ["esnext"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  }
+}
