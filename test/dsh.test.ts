@@ -10,9 +10,12 @@ import type {
   PreStepDecision,
   PromptSection,
   SkillRegistration,
+  UserMessage,
 } from "../plugins/dev/dsh/api.ts";
+import { messageText } from "../plugins/dev/dsh/api.ts";
 import { gatedPhase, planText, toolCall, typedPhase } from "../plugins/dev/dsh/gate.ts";
 import { apply } from "../plugins/dev/dsh/index.ts";
+import { planText as planFixture, repo, tmp, write } from "./helpers.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PLUGIN = path.join(ROOT, "plugins/dev");
@@ -20,7 +23,7 @@ const PLUGIN = path.join(ROOT, "plugins/dev");
 type Handler = (...args: never[]) => unknown;
 
 /** A Host context that records what `apply` registers and keeps its listeners by event name. */
-const host = () => {
+const host = (cwd = ROOT) => {
   const sections: PromptSection[] = [];
   const skills: SkillRegistration[] = [];
   const commands: CommandDefinition[] = [];
@@ -48,12 +51,18 @@ const host = () => {
         return () => {};
       },
     },
-    workingDirectory: { get: () => ROOT },
+    workingDirectory: { get: () => cwd },
   } as unknown as DshContext;
   return { ctx, sections, skills, commands, handlers };
 };
 
-const agent = (): Agent => ({ session: { header: { cwd: ROOT } }, whenIdle: async () => {} });
+const agent = (injected: UserMessage[] = []): Agent => ({
+  session: { header: { cwd: ROOT } },
+  whenIdle: async () => {},
+  inject: (message) => {
+    injected.push(message);
+  },
+});
 
 const listener = (handlers: Map<string, Handler>, event: string) => {
   const found = handlers.get(event);
@@ -140,6 +149,49 @@ test("a command with a bad argument prints its usage instead of running", async 
   const result = await next.handler({ agent: agent(), rawInput: "   " });
   assert.equal(result.kind, "success");
   assert.ok(result.kind === "success" && result.text?.startsWith("Usage: /dev-stack-next"));
+});
+
+test("a write's note reaches the model as context, not as the gate's plan text", async () => {
+  const dir = repo(tmp("dev-dsh-note"));
+  const plan = path.join(dir, "docs/plans/7_note/pr1.spec.md");
+  write(
+    plan,
+    planFixture({ Status: "planning", Spec: "-", Tip: "-", Type: "feature", Base: "main" }),
+  );
+  const { ctx, commands, handlers } = host(dir);
+  apply(ctx);
+  const injected: UserMessage[] = [];
+  const stopping = agent(injected);
+  const stop = commands.find((c) => c.name === "dev-stack-stop");
+  assert.ok(stop !== undefined);
+  const result = await stop.handler({ agent: stopping, rawInput: `${plan} needs a decision` });
+  assert.equal(result.kind, "success");
+  assert.equal(injected.length, 1);
+  assert.equal(injected[0]?.role, "user");
+  assert.equal(injected[0]?.source?.kind, "dev-stack");
+  assert.match(
+    messageText(injected[0]),
+    /The user stopped .*pr1\.spec\.md with dev-stack\.js stop: needs a decision/,
+  );
+
+  // The note is context for the model, not the user's words: it names a plan, but a gated phase
+  // still has no plan text the gate may resolve.
+  await listener(handlers, "session/event")(stopping.session, {
+    type: "user/message",
+    seq: 1,
+    data: injected[0],
+  });
+  const decision = (await listener(handlers, "tools/pre-execute")(
+    {
+      name: "skill",
+      callId: "call-1",
+      arguments: { name: "dev-execute-feature" },
+      agent: stopping,
+    },
+    async () => ({ kind: "allow" }),
+  )) as { kind: string; reason?: string };
+  assert.equal(decision.kind, "deny");
+  assert.match(decision.reason ?? "", /none was named/);
 });
 
 test("a gated phase load with no plan named is denied, with the reason", async () => {

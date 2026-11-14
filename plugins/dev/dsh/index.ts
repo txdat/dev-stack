@@ -10,6 +10,7 @@
 // has no plan text the gate could read, so the pre-step listener refuses the turn rather than load
 // a gated phase ungated.
 
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,7 @@ import type {
   Session,
   SessionEvent,
   ToolExecution,
+  UserMessage,
 } from "./api.ts";
 import { inject, messageText } from "./api.ts";
 
@@ -46,6 +48,21 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 /** The prefix the registered skills carry, so this plugin's names stay to itself. */
 const SKILL_PREFIX = "dev-";
+
+/** The message source a command's note carries, so the gate reads it as context, not a prompt. */
+const NOTE_KIND = "dev-stack";
+
+/** The model-facing message that tells the model what a write command recorded. */
+const note = (text: string): UserMessage => ({
+  id: randomUUID(),
+  role: "user",
+  content: [{ type: "text", text }],
+  source: { kind: NOTE_KIND, form: "notice", summary: text },
+});
+
+/** A message's text for the gate's plan resolution; "" for this plugin's own injected notes. */
+const promptText = (message: Message | undefined): string =>
+  message?.source?.kind === NOTE_KIND ? "" : messageText(message);
 
 /** The rules, read once; a failed read is retried on the next assembly. */
 let rulesCache: string | undefined;
@@ -79,7 +96,7 @@ const seenOf = (session: Session): Seen => {
 const observe = (session: Session, event: SessionEvent): void => {
   const state = seenOf(session);
   if (event.type === "user/message") {
-    const text = messageText(event.data as Message);
+    const text = promptText(event.data as Message);
     if (text !== "") state.user = text;
     return;
   }
@@ -179,6 +196,8 @@ export function apply(ctx: DshContext): void {
           process.env,
         );
         if (result === undefined) return { kind: "error", text: `no command /${command.name}` };
+        // A command's text is shown to the user, so a write's note reaches the model as context.
+        if (result.note !== undefined) agent.inject(note(result.note));
         return { kind: "success", text: result.text === "" ? "(no output)" : result.text };
       },
     });
@@ -190,7 +209,7 @@ export function apply(ctx: DshContext): void {
     // The entering prompt is the fallback plan text for a phase load later in this turn.
     const state = seenOf(agent.session);
     for (const message of messages) {
-      const text = messageText(message);
+      const text = promptText(message);
       if (text !== "") state.user = text;
     }
     const decision = await next();

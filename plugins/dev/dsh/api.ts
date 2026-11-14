@@ -9,15 +9,25 @@ export const inject = ["commands", "skills", "systemPrompt", "tools", "workingDi
 export type TextBlock = { type: "text"; text: string };
 export type ContentBlock = TextBlock | { type: string; [key: string]: unknown };
 
+/**
+ * A message's provenance: the producer's `kind`, which tells a user's prompt from injected context,
+ * and the `form` an injected context declares, such as `notice`.
+ */
+export type MessageSource = {
+  readonly kind?: string;
+  readonly form?: string;
+  readonly summary?: string;
+};
+
 /** A model-visible message: user, assistant, or a synthetic injection. */
 export type Message = {
   readonly role?: string;
   readonly content?: string | readonly ContentBlock[];
+  readonly source?: MessageSource;
 };
 
 export type UserMessage = Message & {
   readonly id?: string;
-  readonly source?: unknown;
 };
 
 export type Session = {
@@ -27,6 +37,8 @@ export type Session = {
 export type Agent = {
   readonly session: Session;
   whenIdle(): Promise<void>;
+  /** Queue model-facing context for the next step without waking the driver. */
+  inject(message: UserMessage): void;
 };
 
 /** One durable session event; `session/event` publishes the appended event after commit. */
