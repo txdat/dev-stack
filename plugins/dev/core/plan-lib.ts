@@ -177,6 +177,16 @@ export class PlanLib {
     }
   }
 
+  /** Reads the files again, replacing what the cache holds for them (dev-plan-lib.sh load_plans). */
+  reload(paths: readonly string[]): void {
+    this.load(paths);
+  }
+
+  /** Caches `text` as the plan at `key`, as load_plans reads a file holding it. */
+  loadText(key: string, text: string): void {
+    this.plans.set(key, parsePlan(text) ?? { head: "", stacks: "", spec: "" });
+  }
+
   /** The plan files in a directory, in number order, as the stack index lists them. */
   private dirPlans(dir: string): string[] {
     return (
@@ -472,7 +482,7 @@ export class PlanLib {
       const r = git(["rev-parse", "--verify", "-q", `refs/heads/${branch}^{commit}`], {
         cwd: this.repoRoot,
       });
-      tip = r.code === 0 ? stripNewlines(r.stdout) : stripNewlines(r.stdout) + "-";
+      tip = r.code === 0 ? stripNewlines(r.stdout) : `${stripNewlines(r.stdout)}-`;
     }
     let status = this.fieldOr(plan, "Status");
     if (statusRank(status) === 0) status = "planning";

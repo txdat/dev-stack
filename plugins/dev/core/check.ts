@@ -4,7 +4,7 @@
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { asciiLower, stripNewlines, utf8 } from "./bytes.ts";
+import { asciiLower, b, stripNewlines, utf8 } from "./bytes.ts";
 import { type Command, Exit, Output } from "./cli.ts";
 import { git, isDir, isFile, readable, readBytes } from "./sys.ts";
 
@@ -91,7 +91,9 @@ const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
     // None/null/zero implicitly; plan.md#verification permits only a throwing stub.
     if (added.some((l) => BODYLESS.test(l)))
       block(
-        `stub has a body-less implementation (pass / ... / empty block / bare return): ${path} — a stub must throw (rules/plan.md#verification)`,
+        b(
+          `stub has a body-less implementation (pass / ... / empty block / bare return): ${utf8(path)} — a stub must throw (rules/plan.md#verification)`,
+        ),
       );
   }
   if (!found) block(`proof commit is empty: ${commit}`);

@@ -37,7 +37,7 @@ const PLAN_THEN_REST = /^(.*?\.spec\.md)(?:\s+(.*))?$/s;
 
 // The engine shows a plugin command's output after the plugin's name, so multi-line output starts
 // on the next line: a table's header and the first row or tree root then align with the rest.
-const ownLines = (text: string) => (text.includes("\n") ? "\n" + text : text);
+const ownLines = (text: string) => (text.includes("\n") ? `\n${text}` : text);
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -158,11 +158,11 @@ export const register: Register = (on) => {
       let root = "";
       try {
         const main = await $.process.run(["bash", home + UTILS, "main-root"]);
-        if (main.exitCode === 0 && main.stdout.trim()) root = main.stdout.trim() + "/docs/plans";
+        if (main.exitCode === 0 && main.stdout.trim()) root = `${main.stdout.trim()}/docs/plans`;
       } catch {
         // Outside a repository: plan paths pass through as typed.
       }
-      const forms = [root, root.startsWith(home + "/") ? "~" + root.slice(home.length) : ""];
+      const forms = [root, root.startsWith(`${home}/`) ? `~${root.slice(home.length)}` : ""];
       const prefix = new RegExp(
         `(?:${forms.filter(Boolean).map(escapeRegExp).join("|") || "(?!)"})/(?![^\\s]*<issue>)`,
         "g",
@@ -189,7 +189,7 @@ export const register: Register = (on) => {
           : "";
         return { text: ownLines(short(err || `dev-stack.sh exited ${ran.exitCode}`) + hint) };
       } catch (error) {
-        return { text: "dev-stack.sh failed: " + String((error as Error)?.message ?? error) };
+        return { text: `dev-stack.sh failed: ${String((error as Error)?.message ?? error)}` };
       }
     });
   }

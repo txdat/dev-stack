@@ -107,14 +107,14 @@ function skillSlug(file: string): string | undefined {
   for (const form of pathForms(file)) {
     for (const base of CLAUDE_SKILLS) {
       const parts = segmentsUnder(base, form);
-      if (parts?.length === 2 && parts[0]!.startsWith("dev-") && parts[1] === "SKILL.md") {
-        return parts[0]!.slice("dev-".length);
+      if (parts?.length === 2 && parts[0]?.startsWith("dev-") && parts[1] === "SKILL.md") {
+        return parts[0]?.slice("dev-".length);
       }
     }
     for (const base of AI_SHARED_DEV) {
       const parts = segmentsUnder(base, form);
-      if (parts?.length === 1 && parts[0]!.endsWith(".md"))
-        return parts[0]!.slice(0, -".md".length);
+      if (parts?.length === 1 && parts[0]?.endsWith(".md"))
+        return parts[0]?.slice(0, -".md".length);
     }
   }
   return undefined;

@@ -3,6 +3,7 @@
 // command that hands off to another program (`exec` in the old scripts) returns `exec` instead.
 
 import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 import { b, utf8 } from "./bytes.ts";
 import { type Ran, type RunOptions, run } from "./sys.ts";
 
@@ -16,6 +17,8 @@ export type Out = {
   stderr: string;
   /** Run this argv with inherited stdio after writing the output, and exit with its status. */
   exec?: readonly string[];
+  /** stdout (1) and stderr (2) text in the order it was written, so `2>&1` reads as it did. */
+  chunks?: readonly (readonly [1 | 2, string])[];
 };
 
 export type Command = (ctx: Ctx) => Out;
@@ -24,16 +27,18 @@ export type Command = (ctx: Ctx) => Out;
 export class Output {
   stdout = "";
   stderr = "";
+  readonly chunks: [1 | 2, string][] = [];
   out(text: string): void {
     this.stdout += text;
+    if (text !== "") this.chunks.push([1, text]);
   }
   err(text: string): void {
     this.stderr += text;
+    if (text !== "") this.chunks.push([2, text]);
   }
   done(code = 0, exec?: readonly string[]): Out {
-    return exec === undefined
-      ? { code, stdout: this.stdout, stderr: this.stderr }
-      : { code, stdout: this.stdout, stderr: this.stderr, exec };
+    const res: Out = { code, stdout: this.stdout, stderr: this.stderr, chunks: this.chunks };
+    return exec === undefined ? res : { ...res, exec };
   }
 }
 
@@ -87,8 +92,12 @@ export const childEnv = (env: Env): NodeJS.ProcessEnv => {
 export const main = (command: Command): void => {
   const ctx = processCtx();
   const res = command(ctx);
-  if (res.stdout) process.stdout.write(Buffer.from(res.stdout, "latin1"));
-  if (res.stderr) process.stderr.write(Buffer.from(res.stderr, "latin1"));
+  if (res.chunks)
+    for (const [fd, text] of res.chunks) fs.writeSync(fd, Buffer.from(text, "latin1"));
+  else {
+    if (res.stdout) fs.writeSync(1, Buffer.from(res.stdout, "latin1"));
+    if (res.stderr) fs.writeSync(2, Buffer.from(res.stderr, "latin1"));
+  }
   if (res.exec) {
     const [cmd, ...args] = res.exec.map(utf8);
     if (cmd === undefined) {

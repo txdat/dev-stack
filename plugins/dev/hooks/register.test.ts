@@ -15,7 +15,7 @@ type Ran = { exitCode: number; stdout: string; stderr: string };
 function engine(
   on: On,
   ran: Ran = { exitCode: 0, stdout: "ok\n", stderr: "" },
-  main: Ran = { exitCode: 0, stdout: MAIN + "\n", stderr: "" },
+  main: Ran = { exitCode: 0, stdout: `${MAIN}\n`, stderr: "" },
 ) {
   const calls: string[][] = [];
   on("env.get", (_, e) => ({ value: e.name === "HOME" ? "/home/u" : undefined }));

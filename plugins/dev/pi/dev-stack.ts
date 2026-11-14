@@ -151,7 +151,7 @@ const COMMANDS: Command[] = [
 function shorten(text: string, root: string): string {
   if (!root) return text;
   const forms = [root];
-  if (root.startsWith(HOME + "/")) forms.push("~" + root.slice(HOME.length));
+  if (root.startsWith(`${HOME}/`)) forms.push(`~${root.slice(HOME.length)}`);
   const prefix = new RegExp(`(?:${forms.map(escapeRegExp).join("|")})/(?![^\\s]*<issue>)`, "g");
   return text.replace(prefix, "");
 }
@@ -194,7 +194,7 @@ async function run(
       : "";
     return { text: shorten(err || `dev-stack.sh exited ${ran.code}`, root) + hint };
   } catch (error) {
-    return { text: "dev-stack.sh failed: " + String((error as Error)?.message ?? error) };
+    return { text: `dev-stack.sh failed: ${String((error as Error)?.message ?? error)}` };
   }
 }
 
