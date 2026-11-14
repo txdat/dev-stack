@@ -4,6 +4,7 @@
 
 import { spawnSync } from "node:child_process";
 import { b, utf8 } from "./bytes.ts";
+import { type Ran, type RunOptions, run } from "./sys.ts";
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
@@ -108,4 +109,23 @@ export const main = (command: Command): void => {
     return;
   }
   process.exitCode = res.code;
+};
+
+/**
+ * Runs a command as a `set -e` script line does: its stderr passes through, its stdout goes to
+ * `stdout` ("out", "err" for `>&2`, or "drop" for `>/dev/null`), and a failure ends the command
+ * with the same status. Returns the result for a caller that reads stdout ("keep").
+ */
+export const sh = (
+  o: Output,
+  argv: readonly string[],
+  opts: RunOptions & { stdout?: "out" | "err" | "drop" | "keep" } = {},
+): Ran => {
+  const { stdout = "out", ...rest } = opts;
+  const r = run(argv, rest);
+  o.err(r.stderr);
+  if (stdout === "out") o.out(r.stdout);
+  else if (stdout === "err") o.err(r.stdout);
+  if (r.code !== 0) throw new Exit(r.code);
+  return r;
 };
