@@ -13,40 +13,70 @@ export const P = (p: string): Buffer => Buffer.from(p, "latin1");
 
 export type Ran = { code: number; stdout: string; stderr: string };
 
+/** An environment as byte strings; an undefined value unsets the variable. */
+export type Env = Readonly<Record<string, string | undefined>>;
+
 export type RunOptions = {
   cwd?: string;
   /** Bytes for stdin, as a byte string. */
   input?: string;
-  env?: NodeJS.ProcessEnv;
+  /**
+   * The caller's environment, the ctx env core reads, so a child sees what core sees. It is laid
+   * over this process's environment, which supplies only what it leaves out.
+   */
+  env: Env;
+};
+
+/** The environment a child process gets for `env`. */
+export const spawnEnv = (env: Env): NodeJS.ProcessEnv => {
+  const out: NodeJS.ProcessEnv = { ...process.env };
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) delete out[k];
+    else out[k] = utf8(v);
+  }
+  return out;
 };
 
 /**
- * Runs argv without a shell. A command that cannot start reads as exit 127, one killed by a signal
- * as 128 plus its number, and one stopped for passing the output limit as a failure with the
- * reason on stderr, never as a success with the output it had written.
+ * A spawned process's status as bash reports it: 127 when it cannot start, 128 plus the number of
+ * the signal that killed it, and a failure, never a success, when spawn reports an error after it
+ * ran, such as passing the output limit.
  */
-export const run = (argv: readonly string[], opts: RunOptions = {}): Ran => {
+export const exitCode = (r: {
+  error?: Error | undefined;
+  pid?: number | undefined;
+  signal?: NodeJS.Signals | null;
+  status: number | null;
+}): number => {
+  if (r.error && !r.pid) return 127;
+  const code = r.status ?? (r.signal ? 128 + (os.constants.signals[r.signal] ?? 0) : 1);
+  return r.error && code === 0 ? 1 : code;
+};
+
+/**
+ * Runs argv without a shell; its status is exitCode's, with the reason on stderr when it cannot
+ * start or stopped for passing the output limit.
+ */
+export const run = (argv: readonly string[], opts: RunOptions): Ran => {
   const [cmd, ...args] = argv;
   if (cmd === undefined) throw new Error("run: empty argv");
   const res = spawnSync(utf8(cmd), args.map(utf8), {
     cwd: opts.cwd === undefined ? undefined : utf8(opts.cwd),
-    env: opts.env,
+    env: spawnEnv(opts.env),
     input: opts.input === undefined ? undefined : Buffer.from(opts.input, "latin1"),
     stdio: [opts.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     maxBuffer: 256 * 1024 * 1024,
   });
   if (res.error && !res.pid) return { code: 127, stdout: "", stderr: String(res.error.message) };
-  const killed = res.signal ? 128 + (os.constants.signals[res.signal] ?? 0) : 1;
-  const code = res.status ?? killed;
   return {
-    code: res.error && code === 0 ? 1 : code,
+    code: exitCode(res),
     stdout: res.stdout?.toString("latin1") ?? "",
     stderr: (res.stderr?.toString("latin1") ?? "") + (res.error ? `${res.error.message}\n` : ""),
   };
 };
 
 /** Runs git; `cwd` is passed as `-C` when given. */
-export const git = (args: readonly string[], opts: RunOptions = {}): Ran => {
+export const git = (args: readonly string[], opts: RunOptions): Ran => {
   const { cwd, ...rest } = opts;
   return run(["git", ...(cwd === undefined ? [] : ["-C", cwd]), ...args], rest);
 };

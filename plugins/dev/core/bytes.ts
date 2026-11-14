@@ -24,6 +24,18 @@ export const stripNewlines = (s: string): string => s.replace(/\n+$/, "");
 /** Lines as `while read` sees them from `printf '%s\n' "$s"`; none for an empty string. */
 export const lines = (s: string): string[] => (s === "" ? [] : stripNewlines(s).split("\n"));
 
+/**
+ * A text's lines as split on LF, without the empty one after a final LF: "a\n" and "a" are both
+ * ["a"], "a\n\n" is ["a", ""], and "" is none. Unlike lines(), it keeps blank lines at the end,
+ * so joining them with LF gives the text back up to its final LF.
+ */
+export const rowsOf = (s: string): string[] => {
+  if (s === "") return [];
+  const out = s.split("\n");
+  if (out[out.length - 1] === "") out.pop();
+  return out;
+};
+
 /** Version order of two strings, as sort -V on names that differ only in digit runs. */
 export const versionCompare = (a: string, b2: string): number => {
   const re = /(\d+)|(\D+)/g;

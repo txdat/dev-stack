@@ -3,8 +3,8 @@
 
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { byteCompare, stripNewlines } from "./bytes.ts";
-import { type Command, childEnv, fail, guard, Output, sh } from "./cli.ts";
+import { b, byteCompare, stripNewlines } from "./bytes.ts";
+import { type Command, fail, guard, Output, sh } from "./cli.ts";
 import { PlanLib } from "./plan-lib.ts";
 import {
   basename,
@@ -63,14 +63,10 @@ export const devWorktree: Command = (ctx) => {
       o.err(`${USAGE}\n`);
       return o.done(2);
     }
-    const MAIN = mainRoot(ctx.cwd, o);
-    const lib = new PlanLib(MAIN, {
-      home: ctx.env["HOME"] ?? "",
-      worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
-      cwd: ctx.cwd,
-    });
+    const MAIN = mainRoot(ctx.cwd, ctx.env, o);
+    const lib = new PlanLib(MAIN, ctx);
     const SCRATCH = `${lib.worktreesRoot}/scratch`;
-    const env = childEnv(ctx.env);
+    const env = ctx.env;
     const abs = (p: string): string => (p.startsWith("/") ? p : `${ctx.cwd}/${p}`);
 
     const registered = (requested: string): string => {
@@ -78,7 +74,8 @@ export const devWorktree: Command = (ctx) => {
       const wt = realpathM(requested, ctx.cwd);
       if (wt === MAIN) fail("Dependency operations may not target the main working tree.");
       const listing = stripNewlines(
-        sh(o, ["git", "-C", MAIN, "worktree", "list", "--porcelain"], { stdout: "keep" }).stdout,
+        sh(o, ["git", "-C", MAIN, "worktree", "list", "--porcelain"], { env, stdout: "keep" })
+          .stdout,
       );
       if (!listing.startsWith(`worktree ${wt}\n`) && !listing.includes(`\nworktree ${wt}\n`))
         fail("Target is not a registered worktree.");
@@ -118,7 +115,7 @@ export const devWorktree: Command = (ctx) => {
       const wt = registered(requested);
       if (!wt.startsWith(`${SCRATCH}/`)) fail(`Not a scratch worktree: ${wt}`);
       const gitDir = stripNewlines(
-        sh(o, ["git", "-C", wt, "rev-parse", "--absolute-git-dir"], { stdout: "keep" }).stdout,
+        sh(o, ["git", "-C", wt, "rev-parse", "--absolute-git-dir"], { env, stdout: "keep" }).stdout,
       );
       const baseFile = `${gitDir}/scratch-base`;
       if (!isFile(baseFile)) fail(`Scratch worktree has no recorded base: ${wt}`);
@@ -131,11 +128,16 @@ export const devWorktree: Command = (ctx) => {
         if (n !== 4) fail("create takes slug, branch, and parent.");
         const [, slug = "", branch = "", parent = ""] = argv;
         validName(slug);
-        sh(o, ["git", "check-ref-format", "--branch", branch], { cwd: ctx.cwd, stdout: "drop" });
+        sh(o, ["git", "check-ref-format", "--branch", branch], {
+          cwd: ctx.cwd,
+          env,
+          stdout: "drop",
+        });
         if (parent === "") fail("An explicit parent is required.");
         if (
           git(["rev-parse", "--verify", "--quiet", "--end-of-options", `${parent}^{commit}`], {
             cwd: MAIN,
+            env,
           }).code !== 0
         )
           fail(`Parent does not resolve: ${parent}`);
@@ -145,11 +147,14 @@ export const devWorktree: Command = (ctx) => {
         if (exists(dest) || isLink(dest)) fail(`Destination already exists: ${dest}`);
         // A plan whose worktree went missing gets it back on its existing branch; prune drops the
         // registration a deleted directory leaves behind.
-        sh(o, ["git", "-C", MAIN, "worktree", "prune"]);
-        if (git(["show-ref", "--verify", "-q", `refs/heads/${branch}`], { cwd: MAIN }).code === 0)
-          sh(o, ["git", "-C", MAIN, "worktree", "add", dest, branch], { stdout: "err" });
+        sh(o, ["git", "-C", MAIN, "worktree", "prune"], { env });
+        if (
+          git(["show-ref", "--verify", "-q", `refs/heads/${branch}`], { cwd: MAIN, env }).code === 0
+        )
+          sh(o, ["git", "-C", MAIN, "worktree", "add", dest, branch], { env, stdout: "err" });
         else
           sh(o, ["git", "-C", MAIN, "worktree", "add", dest, "-b", branch, parent], {
+            env,
             stdout: "err",
           });
         o.out(`${dest}\n`);
@@ -175,23 +180,24 @@ export const devWorktree: Command = (ctx) => {
       case "remove": {
         if (n !== 2) fail("remove requires a registered worktree.");
         const wt = registered(argv[1] as string);
-        const head = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: wt });
+        const head = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: wt, env });
         o.err(head.stderr);
         if (head.code !== 0) fail("Worktree HEAD is detached; its branch cannot be identified.");
         const branch = stripNewlines(head.stdout);
         // An unignored dependency link would otherwise block removal; its main-root target stays.
         for (const e of depLinks(wt)) fs.unlinkSync(P(e));
-        const status = git(["status", "--porcelain", "--untracked-files=all"], { cwd: wt });
+        const status = git(["status", "--porcelain", "--untracked-files=all"], { cwd: wt, env });
         o.err(status.stderr);
         if (stripNewlines(status.stdout) !== "")
           fail(`Worktree has uncommitted or untracked changes: ${wt}`);
-        sh(o, ["git", "-C", MAIN, "worktree", "remove", wt], { stdout: "err" });
+        sh(o, ["git", "-C", MAIN, "worktree", "remove", wt], { env, stdout: "err" });
         // Delete the branch only when a fresh fetch shows origin at the same tip, so no unpushed
         // commit is lost. A failed fetch keeps it rather than trusting a stale tracking ref.
         const fetched = git(
           ["fetch", "--quiet", "origin", `+refs/heads/${branch}:refs/remotes/origin/${branch}`],
           {
             cwd: MAIN,
+            env,
           },
         );
         if (fetched.code !== 0) {
@@ -201,9 +207,10 @@ export const devWorktree: Command = (ctx) => {
           o.out(`kept ${branch}\n`);
           return o.done();
         }
-        const local = git(["rev-parse", "--verify", `refs/heads/${branch}`], { cwd: MAIN });
+        const local = git(["rev-parse", "--verify", `refs/heads/${branch}`], { cwd: MAIN, env });
         const remote = git(["rev-parse", "--verify", `refs/remotes/origin/${branch}`], {
           cwd: MAIN,
+          env,
         });
         o.err(local.stderr + remote.stderr);
         if (stripNewlines(local.stdout) !== stripNewlines(remote.stdout)) {
@@ -211,7 +218,7 @@ export const devWorktree: Command = (ctx) => {
           o.out(`kept ${branch}\n`);
           return o.done();
         }
-        sh(o, ["git", "-C", MAIN, "branch", "-D", branch], { stdout: "err" });
+        sh(o, ["git", "-C", MAIN, "branch", "-D", branch], { env, stdout: "err" });
         o.out(`deleted ${branch}\n`);
         return o.done();
       }
@@ -222,7 +229,7 @@ export const devWorktree: Command = (ctx) => {
         // Resolved where the caller runs, so HEAD in a worktree is that worktree's.
         const rb = git(
           ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`],
-          { cwd: ctx.cwd },
+          { cwd: ctx.cwd, env },
         );
         o.err(rb.stderr);
         if (rb.code !== 0) fail(`Ref does not resolve: ${ref}`);
@@ -236,11 +243,15 @@ export const devWorktree: Command = (ctx) => {
           fail("Scratch worktrees must be outside the main working tree.");
         if (exists(dest) || isLink(dest)) fail(`Scratch worktree already exists: ${dest}`);
         // A scratch deleted by hand leaves a registration that would block this path.
-        sh(o, ["git", "-C", MAIN, "worktree", "prune"]);
+        sh(o, ["git", "-C", MAIN, "worktree", "prune"], { env });
         fs.mkdirSync(P(SCRATCH), { recursive: true });
-        sh(o, ["git", "-C", MAIN, "worktree", "add", "--detach", dest, base], { stdout: "err" });
+        sh(o, ["git", "-C", MAIN, "worktree", "add", "--detach", dest, base], {
+          env,
+          stdout: "err",
+        });
         const gitDir = stripNewlines(
-          sh(o, ["git", "-C", dest, "rev-parse", "--absolute-git-dir"], { stdout: "keep" }).stdout,
+          sh(o, ["git", "-C", dest, "rev-parse", "--absolute-git-dir"], { env, stdout: "keep" })
+            .stdout,
         );
         writeBytes(`${gitDir}/scratch-base`, `${base}\n`);
         // Patches go in before the links, so none writes through one into the main root;
@@ -249,10 +260,14 @@ export const devWorktree: Command = (ctx) => {
           if (!nonEmpty(patch)) continue;
           const applied = git(["apply", "--3way", "--binary", "--whitespace=nowarn", "--", patch], {
             cwd: dest,
+            env,
           });
           o.err(applied.stderr + applied.stdout);
           if (applied.code !== 0) {
-            sh(o, ["git", "-C", MAIN, "worktree", "remove", "--force", dest], { stdout: "err" });
+            sh(o, ["git", "-C", MAIN, "worktree", "remove", "--force", dest], {
+              env,
+              stdout: "err",
+            });
             fail(`Patch does not apply at ${ref}: ${patch}; removed ${dest}.`);
           }
         }
@@ -274,13 +289,14 @@ export const devWorktree: Command = (ctx) => {
         const indexFile = `${index}/index`;
         fs.writeFileSync(indexFile, "");
         try {
-          const ienv = { ...env, GIT_INDEX_FILE: indexFile };
+          const ienv = { ...env, GIT_INDEX_FILE: b(indexFile) };
           const g = (args: string[], stdout: "out" | "keep" = "out") =>
             sh(o, ["git", "-C", wt, ...args], { env: ienv, stdout });
           g(["read-tree", base]);
           g(paths.length > 0 ? ["add", "-A", "--", ...paths] : ["add", "-A"]);
           for (const dep of DEFAULT_DEPS) {
             const tracked = sh(o, ["git", "-C", wt, "ls-tree", "--name-only", base, "--", dep], {
+              env,
               stdout: "keep",
             });
             if (stripNewlines(tracked.stdout) === "")
@@ -296,7 +312,7 @@ export const devWorktree: Command = (ctx) => {
         if (n !== 2) fail("scratch-remove requires a scratch worktree.");
         const { wt } = scratchWorktree(argv[1] as string);
         // Forced removal deletes dependency links without following them.
-        sh(o, ["git", "-C", MAIN, "worktree", "remove", "--force", wt], { stdout: "err" });
+        sh(o, ["git", "-C", MAIN, "worktree", "remove", "--force", wt], { env, stdout: "err" });
         return o.done();
       }
       default:

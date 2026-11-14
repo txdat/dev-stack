@@ -62,11 +62,7 @@ class Publish {
     this.root = root;
     this.ctx = ctx;
     this.o = o;
-    this.lib = new PlanLib(root, {
-      home: ctx.env["HOME"] ?? "",
-      worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
-      cwd: ctx.cwd,
-    });
+    this.lib = new PlanLib(root, ctx);
   }
 
   // ── plan reading ─────────────────────────────────────────────────────
@@ -108,7 +104,7 @@ class Publish {
   // ── git and GitHub state ─────────────────────────────────────────────
 
   git(args: readonly string[]): Ran {
-    const r = git(args, { cwd: this.root });
+    const r = git(args, { cwd: this.root, env: this.ctx.env });
     this.o.err(r.stderr);
     return r;
   }
@@ -136,7 +132,8 @@ class Publish {
   }
 
   isAncestor(a: string, d: string): boolean {
-    if (git(["cat-file", "-e", `${a}^{commit}`], { cwd: this.root }).code !== 0) return false;
+    if (git(["cat-file", "-e", `${a}^{commit}`], { cwd: this.root, env: this.ctx.env }).code !== 0)
+      return false;
     return this.git(["merge-base", "--is-ancestor", a, d]).code === 0;
   }
 
@@ -155,7 +152,7 @@ class Publish {
         "--json",
         "number,url,state,baseRefName,headRefOid,body",
       ],
-      { cwd: this.root, stdout: "keep" },
+      { cwd: this.root, env: this.ctx.env, stdout: "keep" },
     );
     let parsed: unknown;
     try {
@@ -321,11 +318,17 @@ class Publish {
     if (!this.reportProblems()) fail("Publication is not verified; cleanup keeps everything.");
     const wt = this.wt;
     if (wt !== "") {
-      const status = git(["status", "--porcelain", "--untracked-files=all"], { cwd: wt });
+      const status = git(["status", "--porcelain", "--untracked-files=all"], {
+        cwd: wt,
+        env: this.ctx.env,
+      });
       this.o.err(status.stderr);
       if (stripNewlines(status.stdout) !== "")
         fail(`Worktree ${wt} has uncommitted or untracked changes.`);
-      const headRan = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: wt });
+      const headRan = git(["symbolic-ref", "--quiet", "--short", "HEAD"], {
+        cwd: wt,
+        env: this.ctx.env,
+      });
       this.o.err(headRan.stderr);
       const head = headRan.code === 0 ? stripNewlines(headRan.stdout) : "";
       if (head !== this.branch)
@@ -337,6 +340,7 @@ class Publish {
       if (!checked) {
         const listed = git(["status", "--porcelain", "--ignored", "--untracked-files=normal"], {
           cwd: wt,
+          env: this.ctx.env,
         });
         this.o.err(listed.stderr);
         if (listed.code !== 0) fail(`Cannot list ignored files in ${wt}.`);
@@ -367,8 +371,10 @@ class Publish {
           `Local ${this.branch} differs from origin; kept. Cleanup stopped; the plan stays unpublished.`,
         );
       // A worktree directory deleted by hand still holds the branch until pruned.
-      sh(this.o, ["git", "-C", this.root, "worktree", "prune"]);
-      sh(this.o, ["git", "-C", this.root, "branch", "-q", "-D", this.branch]);
+      sh(this.o, ["git", "-C", this.root, "worktree", "prune"], { env: this.ctx.env });
+      sh(this.o, ["git", "-C", this.root, "branch", "-q", "-D", this.branch], {
+        env: this.ctx.env,
+      });
       this.o.out(`deleted ${this.branch}\n`);
     }
     if (!this.lib.setHeader(this.plan, [["Status", "published"]]))
@@ -387,7 +393,7 @@ export const devPublish: Command = (ctx) => {
       return o.done();
     }
     if (argv.length < 2) usage();
-    const root = mainRoot(ctx.cwd, o);
+    const root = mainRoot(ctx.cwd, ctx.env, o);
     const p = new Publish(root, ctx, o);
     switch (cmd) {
       case "check":

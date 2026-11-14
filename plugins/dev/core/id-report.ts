@@ -7,7 +7,7 @@
 // traceability block would teach readers to distrust the hook. `@` is a citation of another
 // artifact's ID. Anything else is a closure finding.
 
-import { b, trimSpace } from "./bytes.ts";
+import { b, rowsOf, trimSpace } from "./bytes.ts";
 
 const OWNER: Readonly<Record<string, string>> = {
   AC: "Acceptance Criteria",
@@ -64,8 +64,7 @@ export const idReport = (text: string): string[] => {
     out.push(`!${msg}`);
     unreadable = true;
   };
-  const rows = text.split("\n");
-  if (rows[rows.length - 1] === "") rows.pop();
+  const rows = rowsOf(text);
 
   let fenced = false;
   let sec = "";

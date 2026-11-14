@@ -7,7 +7,8 @@
 // gates a phase. It is a guardrail against an agent's mistakes and shortcuts, not a sandbox.
 
 import * as fs from "node:fs";
-import { byteCompare, stripNewlines } from "./bytes.ts";
+import { fileURLToPath } from "node:url";
+import { b, byteCompare, rowsOf, stripNewlines } from "./bytes.ts";
 import { block, type GateCtx, type HookInput, type Json, member, str } from "./hook-input.ts";
 import { PlanLib, statusRank } from "./plan-lib.ts";
 import {
@@ -56,11 +57,43 @@ const WRITE_RE = new RegExp(
   "s",
 );
 
-/** `node <path>/<dev CLI>.ts` in command position. */
-const DEV_CLI_RE = new RegExp(
-  `(^|[;&|(\\n])${SP}*node${SP}+['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack-command|dev-stack|dev-publish|dev-check|dev-utils|dev-worktree|handoff-path)\\.ts['"]?`,
+/** `node <path>` in command position, the path's quote, and the path. */
+const NODE_RE = new RegExp(
+  `(^|[;&|(\\n])${SP}*node${SP}+(['"]?)([^ \\t\\n\\v\\f\\r;&|'"]*)\\2(?=[ \\t\\n\\v\\f\\r;&|)]|$)`,
   "g",
 );
+const DEV_CLIS = new Set(
+  [
+    "dev-stack-command",
+    "dev-stack",
+    "dev-publish",
+    "dev-check",
+    "dev-utils",
+    "dev-worktree",
+    "handoff-path",
+  ].map((n) => `${n}.ts`),
+);
+
+/**
+ * Whether `path`, as a shell command names it from `cwd`, is one of this plugin's own dev CLIs: a
+ * known name in the bin/ directory this module ships beside. A copy elsewhere, or a path the shell
+ * would expand, is any other script.
+ */
+const isDevCli = (path: string, ctx: GateCtx): boolean => {
+  if (!DEV_CLIS.has(basename(path)) || /[$`*?[\\]/.test(path)) return false;
+  const home = ctx.env["HOME"] ?? "";
+  const named = path.startsWith("~/") ? `${home}/${path.slice(2)}` : path;
+  if (named.startsWith("~")) return false;
+  const real = (p: string): string => {
+    try {
+      return fs.realpathSync(P(p), { encoding: "latin1" });
+    } catch {
+      return "";
+    }
+  };
+  const bin = real(b(fileURLToPath(new URL("../bin", import.meta.url))));
+  return bin !== "" && real(realpathM(dirname(named), ctx.cwd)) === bin;
+};
 
 const shellGuard = (input: HookInput, ctx: GateCtx): void => {
   const cmd = str(member(input["tool_input"], "command")) ?? "";
@@ -82,7 +115,9 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
   );
   // The dev CLIs run under node write the log only through dev-stack, so node in that position is
   // no writing tool; node -e and other scripts still are.
-  const tools = probe.replace(DEV_CLI_RE, "$1");
+  const tools = probe.replace(NODE_RE, (all, lead: string, _q, path: string) =>
+    isDevCli(path, ctx) ? lead : all,
+  );
   if (REDIR_RE.test(probe) || (LOG_RE.test(probe) && WRITE_RE.test(tools))) block(LOG_BLOCK);
   snapshotPlans(input, ctx);
 };
@@ -196,12 +231,7 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
     );
 };
 
-const libFor = (root: string, ctx: GateCtx): PlanLib =>
-  new PlanLib(root, {
-    home: ctx.env["HOME"] ?? "",
-    worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
-    cwd: ctx.cwd,
-  });
+const libFor = (root: string, ctx: GateCtx): PlanLib => new PlanLib(root, ctx);
 
 /** Before a shell or edit call: throws Block when the call breaks the record. */
 export const recordGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
@@ -252,7 +282,7 @@ const snapDir = (input: HookInput, ctx: GateCtx): string | undefined => {
  */
 const snapScope = (input: HookInput, ctx: GateCtx): string | undefined => {
   const cwd = str(input["cwd"]) ?? "";
-  return tryMainRoot(cwd !== "" && isDir(cwd) ? cwd : ctx.cwd);
+  return tryMainRoot(cwd !== "" && isDir(cwd) ? cwd : ctx.cwd, ctx.env);
 };
 
 const PLAN_NAME = /^pr[1-9].*\.spec\.md$/s;
@@ -308,10 +338,60 @@ const copyTree = (src: string, dst: string): void => {
   fs.utimesSync(P(dst), st.atime, st.mtime);
 };
 
+/** The store's name beside the snapshots; an encoded id never starts with "." and a letter. */
+const STORE = ".store";
+
 /**
- * Before a shell call: copies every plan spec and stack log in the docs/plans of the cwd's
+ * A file's store entry name. Ctime is in it because no write, chmod, or touch leaves ctime
+ * unchanged, so a file whose name matches holds the bytes the entry holds.
+ */
+const storeKey = (st: fs.BigIntStats): string =>
+  `${st.dev}-${st.ino}-${st.size}-${st.mtimeNs}-${st.ctimeNs}`;
+
+/** Timestamp granularity margin: a file changed this recently may change again at the same ctime. */
+const RACY_NS = 2_000_000_000n;
+
+/**
+ * Snapshots src at dst. A file unchanged since well before start links its write-once store
+ * entry, so the published plans kept as records cost a link, not a copy; otherwise it is copied,
+ * and the copy becomes the entry when src did not change during it and is not racy. An entry is
+ * never written after it is created, so each snapshot keeps the bytes it linked even after the
+ * entry goes. Any failure of the store falls back to the copy.
+ */
+const snapFile = (src: string, dst: string, store: string | undefined, start: bigint): void => {
+  let st: fs.BigIntStats | undefined;
+  try {
+    st = fs.statSync(P(src), { bigint: true });
+  } catch {}
+  const stale = store !== undefined && st !== undefined && st.ctimeNs + RACY_NS < start;
+  const entry = stale && st !== undefined ? `${store}/${storeKey(st)}` : undefined;
+  if (entry !== undefined)
+    try {
+      fs.linkSync(P(entry), P(dst));
+      return;
+    } catch {}
+  copyFile(src, dst);
+  if (entry === undefined || st === undefined) return;
+  try {
+    if (storeKey(fs.statSync(P(src), { bigint: true })) === storeKey(st))
+      fs.linkSync(P(dst), P(entry));
+  } catch {}
+};
+
+/** The store beside the snapshots in parent, created if missing; undefined when unusable. */
+const storeDir = (parent: string): string | undefined => {
+  const store = `${parent}/${STORE}`;
+  try {
+    fs.mkdirSync(P(store), { mode: 0o700 });
+  } catch {}
+  return lstat(store)?.isDirectory() ? store : undefined;
+};
+
+/**
+ * Before a shell call: snapshots every plan spec and stack log in the docs/plans of the cwd's
  * repository. A file it cannot read is skipped, and the check after treats it as new. Snapshots
- * older than a day, left by calls that never finished, go.
+ * older than a day, left by calls that never finished, go, as do store entries no snapshot linked
+ * or unlinked for a day.
  */
 const snapshotPlans = (input: HookInput, ctx: GateCtx): void => {
   const scope = snapScope(input, ctx);
@@ -320,13 +400,24 @@ const snapshotPlans = (input: HookInput, ctx: GateCtx): void => {
   const snap = snapDir(input, ctx);
   if (snap === undefined) return;
   const parent = dirname(snap);
+  const start = BigInt(Date.now()) * 1_000_000n;
   const cutoff = Date.now() - 1440 * 60_000;
   try {
     for (const n of fs.readdirSync(P(parent), { encoding: "latin1" })) {
+      if (n === STORE) continue;
       const st = lstat(`${parent}/${n}`);
       if (st && st.mtimeMs < cutoff) rmrf(`${parent}/${n}`);
     }
   } catch {}
+  const store = storeDir(parent);
+  // Linking or unlinking an entry updates its ctime; its mtime is the plan's own.
+  if (store !== undefined)
+    try {
+      for (const n of fs.readdirSync(P(store), { encoding: "latin1" })) {
+        const st = lstat(`${store}/${n}`);
+        if (st && st.ctimeMs < cutoff) rmrf(`${store}/${n}`);
+      }
+    } catch {}
   rmrf(snap);
   try {
     fs.mkdirSync(P(snap), { mode: 0o700 });
@@ -339,7 +430,7 @@ const snapshotPlans = (input: HookInput, ctx: GateCtx): void => {
     for (const rel of planFiles(base, 2)) {
       try {
         fs.mkdirSync(P(dirname(`${snap}/files/${rel}`)), { recursive: true });
-        copyFile(`${base}/${rel}`, `${snap}/files/${rel}`);
+        snapFile(`${base}/${rel}`, `${snap}/files/${rel}`, store, start);
       } catch {}
     }
   fs.writeFileSync(P(`${snap}/.complete`), "");
@@ -347,15 +438,12 @@ const snapshotPlans = (input: HookInput, ctx: GateCtx): void => {
 
 // ── shell commands, after they run ───────────────────────────────────
 
-/** File's count of lines matching re; 0 when missing. */
-const lineCount = (file: string, re: RegExp): number => {
-  if (!isFile(file)) return 0;
-  const text = readBytes(file);
-  if (text === undefined) return 0;
-  const rows = text.split("\n");
-  if (rows[rows.length - 1] === "") rows.pop();
-  return rows.filter((r) => re.test(r)).length;
-};
+/** A file's lines; none when it is missing or unreadable. */
+const fileRows = (file: string): string[] => (isFile(file) ? rowsOf(readBytes(file) ?? "") : []);
+
+/** How many of `lines` match re. */
+const count = (lines: readonly string[], re: RegExp): number =>
+  lines.filter((l) => re.test(l)).length;
 
 /** Restores dst from snapshot copy src, replacing whatever stands at dst with a new file. */
 const restoreFile = (src: string, dst: string): boolean => {
@@ -434,9 +522,10 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
     const now = `${base}/${rel}`;
     let why = "";
     const user = /: (cleared|reopened)$/;
-    if (lineCount(now, user) > lineCount(old, user))
+    const [before, after] = [fileRows(old), fileRows(now)];
+    if (count(after, user) > count(before, user))
       why = "it gained a resume or reopen line, which only the user's dev-stack.ts writes";
-    else if (LOG_VERBS.some((re) => lineCount(now, re) < lineCount(old, re)))
+    else if (LOG_VERBS.some((re) => count(after, re) < count(before, re)))
       why = "it lost a line only dev-stack.ts writes";
     if (why === "") continue;
     if (!isFile(old)) {
@@ -518,7 +607,7 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
       // A plan removed with its log lines left would hand its rounds and stops to the next plan
       // written at its number; dev-stack renumber and drop relabel them.
       const f = basename(rel).replace(/\.spec\.md$/, "");
-      if (lineCount(`${dirname(now)}/log`, new RegExp(`^${f}: `)) !== 0)
+      if (count(fileRows(`${dirname(now)}/log`), new RegExp(`^${f}: `)) !== 0)
         why =
           "it was moved or deleted while the stack log still holds its lines; dev-stack.ts renumber moves a plan and drop removes one";
     } else if ((nr ?? 0) >= 1) {
@@ -606,8 +695,7 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
       );
       continue;
     }
-    const tail = newB.slice(oldB.length).split("\n");
-    if (tail[tail.length - 1] === "") tail.pop();
+    const tail = rowsOf(newB.slice(oldB.length));
     const kept = tail
       .filter((l) => {
         const p = prefixes.find((x) => l.startsWith(x));

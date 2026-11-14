@@ -19,7 +19,7 @@ export const stackCommand = (
   return runCommand(command, args, {
     cwd,
     plansRoot: () => {
-      const main = tryMainRoot(b(cwd));
+      const main = tryMainRoot(b(cwd), byteEnv(env));
       return main === undefined ? "" : `${utf8(main)}/docs/plans`;
     },
     home: env["HOME"] ?? "",

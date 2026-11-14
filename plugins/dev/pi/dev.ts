@@ -30,11 +30,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { b, utf8 } from "../core/bytes.ts";
 import { byteEnv } from "../core/cli.ts";
-import { type GateResult, gateCheck, isPhaseCall } from "../core/gate-check.ts";
+import { type GateResult, gateCheck, gateContinue, isPhaseCall } from "../core/gate-check.ts";
 import type { GateCtx, HookInput } from "../core/hook-input.ts";
 import { serialCheck } from "../core/serial-check.ts";
 import { stackCommand } from "../core/stack-command.ts";
-import { COMMANDS, RULE_FILES, RULES_MARK, rulesText } from "../hooks/commands.ts";
+import { COMMANDS, GATED_PHASES, RULE_FILES, RULES_MARK, rulesText } from "../hooks/commands.ts";
 
 type Message = { role?: string; content?: unknown };
 
@@ -163,15 +163,19 @@ const latestPhase = (ctx: ExtensionContext): PhaseEntry | undefined => {
 };
 
 /**
- * Whether reading `skill` continues the phase entered last rather than entering one: the latest
- * skill entered is `skill`, and `args` names no plan or the same plans. Pi reads a SKILL.md again
- * mid-phase, such as after compaction, when the plan's status has already moved on.
+ * The plans of the phase entered last when reading `skill` continues it rather than entering one:
+ * the latest skill entered is `skill`, and `args` names no plan or the same plans. Pi reads a
+ * SKILL.md again mid-phase, such as after compaction, when the plan's status has already moved on.
  */
-const continuesPhase = (ctx: ExtensionContext, skill: string, args: string): boolean => {
+const continuedPlans = (
+  ctx: ExtensionContext,
+  skill: string,
+  args: string,
+): readonly string[] | undefined => {
   const last = latestPhase(ctx);
-  if (last?.skill !== skill) return false;
+  if (last?.skill !== skill) return undefined;
   const plans = plansIn(args);
-  return plans.length === 0 || plans.join("\n") === last.plans.join("\n");
+  return plans.length === 0 || plans.join("\n") === last.plans.join("\n") ? last.plans : undefined;
 };
 
 /**
@@ -354,8 +358,17 @@ export default function devExtension(pi: ExtensionAPI) {
       // recorded in the transcript.
       const callId = event.toolCallId.split("/")[0] ?? event.toolCallId;
       const args = skillArguments(ctx, callId, lastAssistant);
-      // Reading the skill of the phase in progress again is not an entry, so it is not gated.
-      if (continuesPhase(ctx, slug, args)) return;
+      // Reading the skill of the phase in progress again is not an entry: its entry status is not
+      // checked, but a plan published, frozen, or stopped since still blocks.
+      const continued = continuedPlans(ctx, slug, args);
+      if (continued !== undefined) {
+        const v = GATED_PHASES.includes(slug)
+          ? gateContinue(slug, continued.map(b), gateCtx(ctx.cwd))
+          : undefined;
+        if (v !== undefined && "block" in v)
+          return { block: true, reason: `[dev] ${utf8(v.block)}` };
+        return;
+      }
       const v = check(
         {
           hook_event_name: "PreToolUse",

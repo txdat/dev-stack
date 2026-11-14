@@ -4,7 +4,7 @@
 
 import { stripNewlines } from "./bytes.ts";
 import { type Command, type Ctx, fail, guard, Output } from "./cli.ts";
-import { git, isDir, isFile, readable, run } from "./sys.ts";
+import { type Env, git, isDir, isFile, readable, run } from "./sys.ts";
 
 const USAGE = [
   "Usage: dev-utils.ts main-root",
@@ -19,31 +19,31 @@ const USAGE = [
 ].join("\n");
 
 /** The main working-tree root from `cwd`; throws Exit with the old messages. */
-export const mainRoot = (cwd: string, o?: Output): string => {
-  const listing = git(["worktree", "list", "--porcelain"], { cwd });
+export const mainRoot = (cwd: string, env: Env, o?: Output): string => {
+  const listing = git(["worktree", "list", "--porcelain"], { cwd, env });
   o?.err(listing.stderr);
   if (listing.code !== 0) fail("Cannot resolve the main working-tree root.");
   const first = stripNewlines(listing.stdout).split("\n")[0] ?? "";
   if (!first.startsWith("worktree ")) fail("Cannot resolve the main working-tree root.");
   const root = first.slice("worktree ".length);
   if (root === "" || !isDir(root)) fail("Cannot resolve an existing main working-tree root.");
-  const inside = git(["rev-parse", "--is-inside-work-tree"], { cwd: root });
+  const inside = git(["rev-parse", "--is-inside-work-tree"], { cwd: root, env });
   o?.err(inside.stderr);
   if (stripNewlines(inside.stdout) !== "true") fail("The main repository has no working tree.");
   return root;
 };
 
 /** The main root, or undefined outside a repository with a working tree. */
-export const tryMainRoot = (cwd: string): string | undefined => {
+export const tryMainRoot = (cwd: string, env: Env): string | undefined => {
   try {
-    return mainRoot(cwd);
+    return mainRoot(cwd, env);
   } catch {
     return undefined;
   }
 };
 
-const diagnosticBase = (cwd: string): string => {
-  const def = git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], { cwd });
+const diagnosticBase = (cwd: string, env: Env): string => {
+  const def = git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], { cwd, env });
   const candidates = [
     def.code === 0 ? stripNewlines(def.stdout) : "",
     "refs/heads/main",
@@ -51,7 +51,7 @@ const diagnosticBase = (cwd: string): string => {
   ];
   for (const ref of candidates) {
     if (ref === "") continue;
-    if (git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], { cwd }).code === 0)
+    if (git(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], { cwd, env }).code === 0)
       return ref;
   }
   return fail("Cannot resolve a diagnostic base; provide an existing branch or commit.");
@@ -148,7 +148,7 @@ const recent = (
       "--jq",
       kind.jq,
     ],
-    { cwd: ctx.cwd },
+    { cwd: ctx.cwd, env: ctx.env },
   );
   o.err(ran.stderr);
   if (ran.code !== 0) fail(kind.failText);
@@ -171,11 +171,11 @@ export const devUtils: Command = (ctx) => {
     switch (sub) {
       case "main-root":
         if (n !== 1) fail("main-root takes no arguments.");
-        o.out(`${mainRoot(ctx.cwd, o)}\n`);
+        o.out(`${mainRoot(ctx.cwd, ctx.env, o)}\n`);
         return o.done();
       case "diagnostic-base":
         if (n !== 1) fail("diagnostic-base takes no arguments.");
-        o.out(`${diagnosticBase(ctx.cwd)}\n`);
+        o.out(`${diagnosticBase(ctx.cwd, ctx.env)}\n`);
         return o.done();
       case "search-production":
         if (!(n >= 2 && n <= 3 && rest[0]))
