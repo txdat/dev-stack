@@ -234,7 +234,7 @@ test("tool_call: the serial-test check and the record guard", async () => {
     toolCallId: "b2",
     input: { command: `echo x >> ${path.dirname(P)}/log` },
   })) as { reason: string };
-  assert.match(log.reason, /written only by dev-stack\.ts/);
+  assert.match(log.reason, /written only by dev-stack\.js/);
   const edited = (await fire("tool_call", {
     toolName: "edit",
     toolCallId: "e1",
@@ -262,7 +262,7 @@ test("tool_call: the serial-test check and the record guard", async () => {
   })) as { reason: string };
   assert.match(
     written.reason,
-    /written only by dev-stack\.ts/,
+    /written only by dev-stack\.js/,
     "a relative path resolves against the cwd",
   );
   assert.equal(

@@ -202,7 +202,7 @@ const verdict = (run: () => void): GateResult => {
     if (e instanceof Block) return { block: e.reason };
     const why = e instanceof Error ? e.message : String(e);
     return {
-      block: `gate-check.ts failed (${why}) before reaching a verdict; this blocks rather than passing. Check the plan for invalid bytes or report the failure.`,
+      block: `gate-check.js failed (${why}) before reaching a verdict; this blocks rather than passing. Check the plan for invalid bytes or report the failure.`,
     };
   }
 };
@@ -337,7 +337,7 @@ class Gate {
       );
     if (reason !== "")
       block(
-        `${what}: ${reason}. Only the user clears it, with dev-stack.ts resume (skills/run-stack/SKILL.md#stops).`,
+        `${what}: ${reason}. Only the user clears it, with dev-stack.js resume (skills/run-stack/SKILL.md#stops).`,
       );
   }
 
@@ -346,7 +346,7 @@ class Gate {
     if (this.lib.worktreeOf(plan) !== "") return;
     const name = this.lib.worktreeName(plan);
     block(
-      `Plan ${plan} has no worktree at ${this.lib.worktreePath(name)}. Create it with dev-worktree.ts create ${name} ${this.field(plan, "Branch")} <PR target>, which reattaches an existing Branch. If publication cleanup removed it, rerun dev-publish.ts cleanup on the plans not yet published (rules/plan.md#worktree).`,
+      `Plan ${plan} has no worktree at ${this.lib.worktreePath(name)}. Create it with dev-worktree.js create ${name} ${this.field(plan, "Branch")} <PR target>, which reattaches an existing Branch. If publication cleanup removed it, rerun dev-publish.js cleanup on the plans not yet published (rules/plan.md#worktree).`,
     );
   }
 
@@ -433,7 +433,7 @@ class Gate {
     if (report.length === 0) return;
     if (report.some((l) => l.startsWith("!")))
       block(
-        `gate-check.ts cannot read the IDs in ${this.plan}; fix them per rules/plan.md#schema and re-run. This is NOT a traceability verdict:\n${report.map((l) => l.replace(/^[!@]/, "")).join("\n")}`,
+        `gate-check.js cannot read the IDs in ${this.plan}; fix them per rules/plan.md#schema and re-run. This is NOT a traceability verdict:\n${report.map((l) => l.replace(/^[!@]/, "")).join("\n")}`,
       );
     if (report.some((l) => l.startsWith("@")))
       block(
@@ -594,7 +594,7 @@ class Gate {
       );
     if (state !== "ready")
       block(
-        `Plan ${plan} has no ready 'Spec:' hash for its current spec and the specs below it: it changed after review-feature, its verdict was needs-changes, or no verdict was recorded. An approved plan is frozen: the user reverts the change, or reopens it with dev-stack.ts reopen (rules/plan.md#changes).`,
+        `Plan ${plan} has no ready 'Spec:' hash for its current spec and the specs below it: it changed after review-feature, its verdict was needs-changes, or no verdict was recorded. An approved plan is frozen: the user reverts the change, or reopens it with dev-stack.js reopen (rules/plan.md#changes).`,
       );
   }
 
@@ -602,7 +602,7 @@ class Gate {
   requirePassed(plan: string): void {
     if (!this.lib.passedAtTip(plan))
       block(
-        `Plan ${plan} is reviewed, but its last review-code verdict in the stack log is not a pass at its Tip ${this.lib.greenOf(plan)}. Run review-code and record its verdict with dev-stack.ts code-review; the main agent sets reviewed only after a logged pass (skills/review-code/SKILL.md#finalize).`,
+        `Plan ${plan} is reviewed, but its last review-code verdict in the stack log is not a pass at its Tip ${this.lib.greenOf(plan)}. Run review-code and record its verdict with dev-stack.js code-review; the main agent sets reviewed only after a logged pass (skills/review-code/SKILL.md#finalize).`,
       );
   }
 

@@ -6,7 +6,7 @@ import { git } from "./sys.ts";
 import { tryMainRoot } from "./utils.ts";
 
 const USAGE = [
-  "Usage: handoff-path.ts [session-id]",
+  "Usage: handoff-path.js [session-id]",
   "Prints <main root>/docs/handoff/<session-id>.md; writes nothing.",
   "Defaults to the harness session id, $CLAUDE_CODE_SESSION_ID or else $PI_SESSION_ID; an",
   "argument overrides it. Fails without an id, outside a Git repository, or when Git does not",

@@ -11,7 +11,7 @@ Edits to this repository are direct edits, not plan-backed work. See [plan.md �
 ## Writing rules
 
 - **Each policy has one owner.** Each file owns the policy it states. Other files link to it as `[file — Section](path#anchor)` instead of paraphrasing it. A copied rule drifts from its source. Before adding a rule, find the file that already owns that topic and edit it there.
-- **Links resolve from the source file's directory.** Files under `plugins/dev/` ship alone in the harness cache, so their links must stay inside `plugins/dev/`.
+- **Links resolve from the source file's directory.** Files under `plugins/dev/` ship as their build, `dist/dev/`, which loads without the rest of the checkout, so their links must resolve inside `dist/dev/`. There, CLIs and modules are `.js`: rules, skills, agents, manifests, and user-facing messages name `bin/<name>.js`, never the `.ts` source.
 - **Headings and paths are load-bearing.** Before renaming a heading, a file, or a `bin/` CLI, grep for links in `plugins/dev/` (agents cite anchors such as `CORE.md#work`) and for anchors and paths in `core/` block messages (they cite anchors such as `rules/plan.md#schema`).
 - **Rules must be harness-neutral.** Claude Code and Pi both read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool".
 - **Style:** terse, declarative, and imperative, without filler or rigid templates. Word choice follows [Wording](#wording).
@@ -55,9 +55,9 @@ Write rules in English only, whatever language the request uses.
 
 ## Code
 
-All code is TypeScript that Node 24, Claude Code, and Pi run directly, without a build:
+All code is TypeScript. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace and the Pi package load `dist/dev/`. Tests run the `.ts` sources under Node 24, and `test/dist.test.ts` checks a fresh build.
 
-- Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers.
+- Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers; the build rewrites them to `.js`.
 - `core/` holds the workflow logic as synchronous Node. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`; Pi's extension imports core directly. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
 - Core functions never call `process.exit` or `chdir`, take the working directory as an argument, and keep no module-level cache. CLIs write with `process.stdout.write` and set `process.exitCode`.
 - Plans are read as bytes (latin1) and matched with ASCII-only classes, never `\s` or locale-aware case folding, so hashes and parsing match the original bash under `LC_ALL=C`.
@@ -71,10 +71,11 @@ Tests that need a repository build scratch Git repos under `/tmp`, whose `docs/p
 ## Commands
 
 ```
+npm run build         # compile plugins/dev into dist/dev
 npm run typecheck     # tsc 7 over tsconfig.engine.json and tsconfig.node.json
 npm run lint          # biome check
 npm run format        # biome check --write
 npm test              # node --test, serial
-npm run check         # all of the above
+npm run check         # typecheck, lint, test, then build
 node --test --test-isolation=none test/<file>.test.ts   # one test file
 ```

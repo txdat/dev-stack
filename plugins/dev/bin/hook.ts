@@ -25,7 +25,7 @@ try {
 } catch {}
 // Unreadable input names no call, so no verdict: the adapter passes it with a visible warning.
 if (input === undefined) {
-  process.stderr.write("hook.ts: the hook input is not a JSON object\n");
+  process.stderr.write("hook.js: the hook input is not a JSON object\n");
   process.exitCode = 1;
 } else {
   try {
@@ -35,12 +35,12 @@ if (input === undefined) {
     if (isPhaseCall(input))
       write(
         claudeVerdict(input, {
-          block: `hook.ts failed (${why}) before reaching a verdict; this blocks rather than passing.`,
+          block: `hook.js failed (${why}) before reaching a verdict; this blocks rather than passing.`,
         }),
       );
     else {
       // A guard or serial check that failed passes the call; exit 1 makes the adapter warn.
-      process.stderr.write(`hook.ts: ${why}\n`);
+      process.stderr.write(`hook.js: ${why}\n`);
       process.exitCode = 1;
     }
   }

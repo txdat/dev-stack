@@ -517,7 +517,7 @@ test("a crash while checking a phase blocks", () => {
   const ctx = { cwd: b(repo), env };
   const r = gateCheck({ tool_input: { skill: "dev:execute-feature", args: P } }, ctx);
   assert.ok(
-    r !== undefined && "block" in r && r.block.includes("gate-check.ts failed (boom)"),
+    r !== undefined && "block" in r && r.block.includes("gate-check.js failed (boom)"),
     JSON.stringify(r),
   );
   // The record guard fails open: its error reaches the caller, which passes the call with a
@@ -638,7 +638,7 @@ test("worktree and root", () => {
   writePlan(P, `reviewed ${sha("HEAD")}`);
   blocks(
     runGate(repo, "dev-create-pr", P),
-    "rerun dev-publish.ts cleanup",
+    "rerun dev-publish.js cleanup",
     "a missing worktree points to cleanup",
   );
 
@@ -1676,8 +1676,8 @@ const shellRun = (command: string) => {
 test("record guard: Bash, Edit, and Write calls", () => {
   useRepo();
   const LOG = `${path.dirname(P)}/log`;
-  const resume = "dev-stack.ts resume is the user's alone";
-  const logOnly = "written only by dev-stack.ts";
+  const resume = "dev-stack.js resume is the user's alone";
+  const logOnly = "written only by dev-stack.js";
   blocks(
     bashGuard(`~/.dotfiles/.ai-shared/bin/dev-stack.sh resume ${P}`),
     resume,
@@ -1685,7 +1685,7 @@ test("record guard: Bash, Edit, and Write calls", () => {
   );
   blocks(
     bashGuard(`bash dev-stack.sh reopen '${P}'`),
-    "dev-stack.ts reopen is the user's alone",
+    "dev-stack.js reopen is the user's alone",
     "or reopen",
   );
   const denied = cli("hook", [], {
@@ -1717,7 +1717,7 @@ test("record guard: Bash, Edit, and Write calls", () => {
   );
   blocks(
     bashGuard(`cd /tmp && ${viaCommand} 'dev-stack-reopen' '${P}'`),
-    "dev-stack.ts reopen is the user's alone",
+    "dev-stack.js reopen is the user's alone",
     "reopen through the command CLI",
   );
   passes(bashGuard(`${viaCommand} dev-stack-next ${P}; cat ${LOG}`), "its reads pass");
@@ -1756,12 +1756,25 @@ test("record guard: Bash, Edit, and Write calls", () => {
     `${fake}/dev-stack.ts`,
     `${PLUGIN}/bin/../core/dev-stack.ts`,
     "$DEV_LIB/bin/dev-stack.ts",
+    // Run from the sources, only .ts names in bin/ are this plugin's CLIs.
+    `${PLUGIN}/bin/dev-stack.js`,
   ])
     blocks(bashGuard(`node ${script} ${LOG}`), logOnly, `node ${script} writing the log`);
   blocks(
     bashGuard(`node "$DEV_LIB/bin/dev-stack.ts" resume ${P}`),
     resume,
     "resume under node is caught",
+  );
+  // The built plugin's CLIs are .js; the user's writes are caught under either extension.
+  blocks(
+    bashGuard(`node "$DEV_LIB/bin/dev-stack.js" resume ${P}`),
+    resume,
+    "resume through the built CLI is caught",
+  );
+  blocks(
+    bashGuard(`node "$DEV_LIB/bin/dev-stack-command.js" dev-stack-reopen ${P}`),
+    "dev-stack.js reopen is the user's alone",
+    "reopen through the built command CLI is caught",
   );
   passes(bashGuard(`cat ${LOG} 2>/dev/null; tail -3 ${LOG}`), "an agent reads the stack log");
   passes(
@@ -1810,7 +1823,7 @@ test("record guard: Bash, Edit, and Write calls", () => {
   );
   blocks(
     editGuard(P, "Status: ready", "Status: auto-approved"),
-    "Only dev-stack.ts approve",
+    "Only dev-stack.js approve",
     "cannot auto-approve",
   );
   passes(
@@ -1941,7 +1954,7 @@ test("record guard: shell commands are checked after they run", () => {
   assert.ok(hasLine(SP, "Status: auto-approved"));
   blocks(
     shellRun(`sed -i '/auto-reopened/d' ${SD}/lo''g`),
-    "lost a line only dev-stack.ts writes",
+    "lost a line only dev-stack.js writes",
     "an auto-reopen line stays",
   );
   fs.rmSync(SD, { recursive: true });
@@ -1983,7 +1996,7 @@ test("record guard: shell commands are checked after they run", () => {
   write(`${D}/log`, `${n}: stop review-code round limit (3/3) at ${"0".repeat(40)}\n`);
   blocks(
     shellRun(`: > ${D}/lo''g`),
-    "lost a line only dev-stack.ts writes",
+    "lost a line only dev-stack.js writes",
     "a shell command cannot drop a stop line",
   );
   assert.ok(read(`${D}/log`).includes(": stop "), "stop line not restored");
@@ -2026,7 +2039,7 @@ test("record guard: shell commands are checked after they run", () => {
     "only through approval",
     "an edit cannot skip approval",
   );
-  const autoOnly = "only dev-stack.ts approve sets";
+  const autoOnly = "only dev-stack.js approve sets";
   blocks(
     shellRun(`sed -i 's/^Status: ready/Status: auto-approved/' ${P}`),
     autoOnly,

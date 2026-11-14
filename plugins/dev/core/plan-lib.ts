@@ -617,13 +617,13 @@ export class PlanLib {
     const rank = statusRank(status);
     if (rank === 4) return "";
     if (rank === 0)
-      return `it was approved at ${approved}, but its Status is '${status}'; an approved plan never returns to planning. The user reverts the change, or reopens it with dev-stack.ts reopen; where a change goes instead follows rules/plan.md#changes`;
+      return `it was approved at ${approved}, but its Status is '${status}'; an approved plan never returns to planning. The user reverts the change, or reopens it with dev-stack.js reopen; where a change goes instead follows rules/plan.md#changes`;
     const hash = this.planHash(plan);
     if (hash === undefined)
       return `it was approved at ${approved}, but a plan below it is missing or unreadable`;
     return hash === approved
       ? ""
-      : `its spec, or a spec below it, changed since its approval at ${approved}; an approved plan is frozen. The user reverts the change, or reopens it with dev-stack.ts reopen (rules/plan.md#changes)`;
+      : `its spec, or a spec below it, changed since its approval at ${approved}; an approved plan is frozen. The user reverts the change, or reopens it with dev-stack.js reopen (rules/plan.md#changes)`;
   }
 }
 

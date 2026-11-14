@@ -14,18 +14,18 @@ import { dirname, git, globNames, isFile, isLink, P, readBytes, replaceBytes } f
 import { mainRoot } from "./utils.ts";
 
 const USAGE = [
-  "Usage: dev-stack.ts stack <root plan>",
-  "       dev-stack.ts next <root plan> [--tab|--tree|--md]",
-  "       dev-stack.ts review <plan> ready|needs-changes",
-  "       dev-stack.ts approve <plan>",
-  "       dev-stack.ts code-review <plan> pass|needs-changes",
-  "       dev-stack.ts stop <plan> <reason>",
-  "       dev-stack.ts resume <plan>",
-  "       dev-stack.ts reopen <plan>",
-  "       dev-stack.ts auto-reopen <plan>",
-  "       dev-stack.ts renumber <root plan> <old>=<new> ...",
-  "       dev-stack.ts drop <plan>",
-  "       dev-stack.ts check <root plan>",
+  "Usage: dev-stack.js stack <root plan>",
+  "       dev-stack.js next <root plan> [--tab|--tree|--md]",
+  "       dev-stack.js review <plan> ready|needs-changes",
+  "       dev-stack.js approve <plan>",
+  "       dev-stack.js code-review <plan> pass|needs-changes",
+  "       dev-stack.js stop <plan> <reason>",
+  "       dev-stack.js resume <plan>",
+  "       dev-stack.js reopen <plan>",
+  "       dev-stack.js auto-reopen <plan>",
+  "       dev-stack.js renumber <root plan> <old>=<new> ...",
+  "       dev-stack.js drop <plan>",
+  "       dev-stack.js check <root plan>",
   "stack lists the unpublished plans, or every plan once the root is",
   "published, parents before children. next prints, per listed plan,",
   '"<plan> <status> <parent> <action> <reason>" tab-separated, with "-" for none',
@@ -65,7 +65,7 @@ const usage = (): never => {
 };
 
 const REOPEN_HINT =
-  "The user reverts the change, or reopens it with dev-stack.ts reopen (rules/plan.md#changes)";
+  "The user reverts the change, or reopens it with dev-stack.js reopen (rules/plan.md#changes)";
 
 class Stack {
   readonly lib: PlanLib;
@@ -180,7 +180,7 @@ class Stack {
     if (frozen !== "") fail(`${plan} is frozen: ${frozen}.`);
     const reason = this.stoppedWhy(plan);
     if (reason !== "")
-      fail(`${plan} is stopped: ${reason}. Only the user clears it, with dev-stack.ts resume.`);
+      fail(`${plan} is stopped: ${reason}. Only the user clears it, with dev-stack.js resume.`);
   }
 
   /**
@@ -248,7 +248,7 @@ class Stack {
     if (verdict === "needs-changes" && k >= limit) {
       this.logEvent(plan, `stop review-feature round limit (${k}/${limit}) at ${key}`);
       this.o.out(
-        `Stopped: review-feature round limit (${k}/${limit}); only the user grants more rounds, with dev-stack.ts resume.\n`,
+        `Stopped: review-feature round limit (${k}/${limit}); only the user grants more rounds, with dev-stack.js resume.\n`,
       );
     }
   }
@@ -278,7 +278,7 @@ class Stack {
     if (verdict === "needs-changes" && k >= limit) {
       this.logEvent(plan, `stop review-code round limit (${k}/${limit}) at ${key}`);
       this.o.out(
-        `Stopped: review-code round limit (${k}/${limit}); only the user grants more rounds, with dev-stack.ts resume.\n`,
+        `Stopped: review-code round limit (${k}/${limit}); only the user grants more rounds, with dev-stack.js resume.\n`,
       );
     }
   }
@@ -328,15 +328,15 @@ class Stack {
       if (!this.reopenable(p)) continue;
       if (this.lib.status(p) === "approved" || this.lib.approvalKind(p) !== "auto-approved")
         fail(
-          `${p} carries the user's approval, or none recorded; only the user reopens it, with dev-stack.ts reopen.`,
+          `${p} carries the user's approval, or none recorded; only the user reopens it, with dev-stack.js reopen.`,
         );
       if (this.lib.autoReopens(p) !== 0)
         fail(
-          `${p} was auto-reopened once; only the user reopens it now, with dev-stack.ts reopen.`,
+          `${p} was auto-reopened once; only the user reopens it now, with dev-stack.js reopen.`,
         );
       const reason = this.stoppedWhy(p);
       if (reason !== "" && heldStop(reason))
-        fail(`${p} is stopped: ${reason}. Only the user clears it, with dev-stack.ts resume.`);
+        fail(`${p} is stopped: ${reason}. Only the user clears it, with dev-stack.js resume.`);
     }
     this.o.out(`Auto-reopened to planning: ${this.toPlanning(plans, "auto-reopened").join(" ")}\n`);
   }
@@ -517,7 +517,7 @@ class Stack {
       );
     if (!this.lib.reviewLogged(plan))
       fail(
-        `${plan} has no ready verdict from dev-stack.ts review at its current spec since its last reopen; approve needs one.`,
+        `${plan} has no ready verdict from dev-stack.js review at its current spec since its last reopen; approve needs one.`,
       );
     const parent = this.stacksOn(plan);
     if (parent !== "" && (this.rank(parent) ?? 0) < 1)

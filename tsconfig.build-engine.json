@@ -1,0 +1,10 @@
+{
+  // Emits the Claude Code engine module (hooks/) into the built plugin, without Node types;
+  // scripts/build.ts passes --outDir.
+  "extends": "./tsconfig.engine.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "plugins/dev",
+    "rewriteRelativeImportExtensions": true
+  }
+}

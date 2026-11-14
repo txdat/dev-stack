@@ -226,7 +226,7 @@ test("check", () => {
   }
   for (const p of [R, C, S, G])
     assert.ok(
-      out.includes(`BLOCK ${p}\ngate-check.ts failed (boom) before reaching a verdict`),
+      out.includes(`BLOCK ${p}\ngate-check.js failed (boom) before reaching a verdict`),
       out,
     );
   ok("check", R);
@@ -288,7 +288,7 @@ test("approve: an agent's approval, as auto-approved", () => {
   edit(S, (t) =>
     t.replace(/^Status: .*$/m, "Status: ready").replace(/^Spec: .*$/m, `Spec: ${hash}`),
   );
-  fails("no ready verdict from dev-stack.ts review", "approve", S);
+  fails("no ready verdict from dev-stack.js review", "approve", S);
   writePlan(S, "planning", "feat/sib", "pr1");
   ok("review", S, "ready");
   ok("stop", S, "Failed fixes: 3/3 — test");
