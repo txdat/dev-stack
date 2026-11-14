@@ -217,19 +217,30 @@ class Gate {
 
   // ── plan resolution ──────────────────────────────────────────────────
 
-  /** Exactly one plan path, which must resolve: a typo or foreign path blocks. */
+  /**
+   * Exactly one plan path, which must resolve: a typo or foreign path blocks. A relative mention,
+   * such as `12_x/pr1.spec.md` in a listing Pi passes with the whole message, is ignored when an
+   * exact path resolves; alone, it blocks.
+   */
   resolvePlan(): void {
     const named: string[] = [];
     const format = this.lib.planFormat;
+    const notFound = (mention: string): never =>
+      block(
+        `Named plan not found: ${mention}. Pass the full path of an existing ${format} of this repository.`,
+      );
+    let relative: string | undefined;
     for (const mention of planMentions(this.text)) {
       if (mention === "") continue;
       const doc = this.lib.canonicalPlan(mention);
-      if (doc === undefined)
-        block(
-          `Named plan not found: ${mention}. Pass the full path of an existing ${format} of this repository.`,
-        );
+      if (doc === undefined) {
+        if (mention.startsWith("/") || mention.startsWith("~/")) notFound(mention);
+        relative ??= mention;
+        continue;
+      }
       if (!named.includes(doc)) named.push(doc);
     }
+    if (named.length === 0 && relative !== undefined) notFound(relative);
     if (named.length === 0)
       block(
         `${this.slug} operates on a plan and none was named. Pass its exact path: ${this.slug} ${format}. A slug or the only plan in a directory does not resolve. No plan yet ${ARROW} run design-feature first.`,
