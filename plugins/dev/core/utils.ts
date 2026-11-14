@@ -7,12 +7,12 @@ import { type Command, type Ctx, fail, guard, Output } from "./cli.ts";
 import { type Env, git, isDir, isFile, readable, run } from "./sys.ts";
 
 const USAGE = [
-  "Usage: dev-utils.ts main-root",
-  "       dev-utils.ts diagnostic-base",
-  "       dev-utils.ts search-production <literal-symbol> [directory]",
-  "       dev-utils.ts issue-create <title> <body-file> [gh issue create options ...]",
-  "       dev-utils.ts recent-issues [days]",
-  "       dev-utils.ts recent-prs [days]",
+  "Usage: dev-utils.js main-root",
+  "       dev-utils.js diagnostic-base",
+  "       dev-utils.js search-production <literal-symbol> [directory]",
+  "       dev-utils.js issue-create <title> <body-file> [gh issue create options ...]",
+  "       dev-utils.js recent-issues [days]",
+  "       dev-utils.js recent-prs [days]",
   "Paths/refs are printed on stdout; errors go to stderr.",
   "recent-issues and recent-prs list 7 days back by default, newest first, at most 100.",
   "search-production preserves rg status: 0 matches, 1 none, 2 error.",

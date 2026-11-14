@@ -57,7 +57,7 @@ export const rulesText = (
   contents: readonly (string | { error: string })[],
   readTool: string,
 ): string => {
-  let text = `${RULES_MARK}${root}: the dev plugin's install root. Run its CLIs as node $DEV_LIB/bin/<name>.ts.`;
+  let text = `${RULES_MARK}${root}: the dev plugin's install root. Run its CLIs as node $DEV_LIB/bin/<name>.js.`;
   RULE_FILES.forEach((name, i) => {
     const file = `${root}/rules/${name}`;
     const c = contents[i] ?? { error: "not read" };
@@ -86,7 +86,7 @@ const planOnly =
 export const COMMANDS: readonly Command[] = [
   {
     name: "dev-stack-next",
-    description: "Show each plan's next action in a stack (dev-stack.ts next)",
+    description: "Show each plan's next action in a stack (dev-stack.js next)",
     argumentHint: "<root spec file> [--tab|--tree|--md]",
     parse: (text) => {
       // A trailing view flag; dev-stack.ts defaults to --tab, its tab-separated rows.
@@ -99,20 +99,20 @@ export const COMMANDS: readonly Command[] = [
   },
   {
     name: "dev-stack-list",
-    description: "List a stack's plans, parents first (dev-stack.ts stack)",
+    description: "List a stack's plans, parents first (dev-stack.js stack)",
     argumentHint: "<root spec file>",
     parse: planOnly("stack"),
   },
   {
     name: "dev-stack-check",
     description:
-      "Run the review-feature gate on every plan in a stack, minus the parent-approval and stop checks (dev-stack.ts check)",
+      "Run the review-feature gate on every plan in a stack, minus the parent-approval and stop checks (dev-stack.js check)",
     argumentHint: "<root spec file>",
     parse: planOnly("check"),
   },
   {
     name: "dev-stack-review",
-    description: "Record a review-feature verdict on a plan (dev-stack.ts review)",
+    description: "Record a review-feature verdict on a plan (dev-stack.js review)",
     argumentHint: "<spec file> ready|needs-changes",
     parse: (text) => {
       const [, plan, verdict] = text.match(/^(.*\S)\s+(ready|needs-changes)$/s) ?? [];
@@ -122,41 +122,41 @@ export const COMMANDS: readonly Command[] = [
     },
     write: {
       note: ([, plan, verdict]) =>
-        `The user recorded the review-feature verdict ${verdict} on ${plan} with dev-stack.ts review.`,
+        `The user recorded the review-feature verdict ${verdict} on ${plan} with dev-stack.js review.`,
     },
   },
   {
     name: "dev-stack-stop",
-    description: "Record why a plan stopped in its stack's log (dev-stack.ts stop)",
+    description: "Record why a plan stopped in its stack's log (dev-stack.js stop)",
     argumentHint: "<spec file> <reason>",
     parse: (text) => {
       const [, plan, reason] = text.match(PLAN_THEN_REST) ?? [];
       return plan && reason?.trim() ? { argv: ["stop", plan, reason.trim()] } : { usage: true };
     },
     write: {
-      note: ([, plan, reason]) => `The user stopped ${plan} with dev-stack.ts stop: ${reason}`,
+      note: ([, plan, reason]) => `The user stopped ${plan} with dev-stack.js stop: ${reason}`,
     },
   },
   {
     name: "dev-stack-resume",
     description:
-      "Clear a plan's stop so run-stack continues it (dev-stack.ts resume; only the user runs it)",
+      "Clear a plan's stop so run-stack continues it (dev-stack.js resume; only the user runs it)",
     argumentHint: "<spec file>",
     parse: planOnly("resume"),
     write: {
       note: ([, plan]) =>
-        `The user cleared the stop on ${plan} with dev-stack.ts resume; for a "Failed fixes" stop at its limit this raises the limit by three attempts, and for a review round limit three more rounds.`,
+        `The user cleared the stop on ${plan} with dev-stack.js resume; for a "Failed fixes" stop at its limit this raises the limit by three attempts, and for a review round limit three more rounds.`,
     },
   },
   {
     name: "dev-stack-reopen",
     description:
-      "Return an approved plan, and every plan above it that is approved or later, to planning (dev-stack.ts reopen; only the user runs it)",
+      "Return an approved plan, and every plan above it that is approved or later, to planning (dev-stack.js reopen; only the user runs it)",
     argumentHint: "<spec file>",
     parse: planOnly("reopen"),
     write: {
       note: ([, plan]) =>
-        `The user reopened ${plan} with dev-stack.ts reopen: it and every plan above it that was approved or later are back in planning, to revise and review again.`,
+        `The user reopened ${plan} with dev-stack.js reopen: it and every plan above it that was approved or later are back in planning, to revise and review again.`,
     },
   },
 ];
@@ -226,8 +226,8 @@ export const runCommand = (
     const hint = /Plan must be|main working-tree root|pass the stack's root/.test(err)
       ? "\nRun it from the plan's repository; next, list, and check take the root plan (lowest pr<N>)."
       : "";
-    return { text: shorten(err || `dev-stack.ts exited ${ran.code}`, root, io.home) + hint };
+    return { text: shorten(err || `dev-stack.js exited ${ran.code}`, root, io.home) + hint };
   } catch (error) {
-    return { text: `dev-stack.ts failed: ${String((error as Error)?.message ?? error)}` };
+    return { text: `dev-stack.js failed: ${String((error as Error)?.message ?? error)}` };
   }
 };

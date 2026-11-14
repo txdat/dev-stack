@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "dev",
-      "source": "./plugins/dev",
+      "source": "./dist/dev",
       "description": "Plan-backed dev workflow: skills, agents, phase gates, rules, and /dev-stack-* commands"
     }
   ]

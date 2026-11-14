@@ -22,13 +22,13 @@ import {
 import { mainRoot } from "./utils.ts";
 
 const USAGE = [
-  "Usage: dev-worktree.ts create <slug> <branch> <parent>",
-  "       dev-worktree.ts link-deps <worktree> [dependency-name ...]",
-  "       dev-worktree.ts isolate-dep <worktree> <dependency-name>",
-  "       dev-worktree.ts remove <worktree>",
-  "       dev-worktree.ts scratch <name> <ref> [patch ...]",
-  "       dev-worktree.ts scratch-diff <scratch> [-- <path> ...]",
-  "       dev-worktree.ts scratch-remove <scratch>",
+  "Usage: dev-worktree.js create <slug> <branch> <parent>",
+  "       dev-worktree.js link-deps <worktree> [dependency-name ...]",
+  "       dev-worktree.js isolate-dep <worktree> <dependency-name>",
+  "       dev-worktree.js remove <worktree>",
+  "       dev-worktree.js scratch <name> <ref> [patch ...]",
+  "       dev-worktree.js scratch-diff <scratch> [-- <path> ...]",
+  "       dev-worktree.js scratch-remove <scratch>",
   "create makes <repo>-<slug> under $AI_WORKTREES_ROOT, or $HOME/work/wt, on <branch> from <parent>,",
   "or on <branch> as it is when it exists, and prints the new path.",
   "link-deps defaults to node_modules vendor .venv venv Pods.",

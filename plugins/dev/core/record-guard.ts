@@ -27,7 +27,7 @@ import {
 import { tryMainRoot } from "./utils.ts";
 
 const LOG_BLOCK =
-  "The stack log is written only by dev-stack.ts (review, code-review, approve, stop, and autopilot's auto-reopen; resume and reopen are the user's). Read it, never write it (rules/plan.md#changes).";
+  "The stack log is written only by dev-stack.js (review, code-review, approve, stop, and autopilot's auto-reopen; resume and reopen are the user's). Read it, never write it (rules/plan.md#changes).";
 
 // ── shell commands, before they run ──────────────────────────────────
 
@@ -35,11 +35,11 @@ const SP = "[ \\t\\n\\v\\f\\r]";
 const NSP = "[^ \\t\\n\\v\\f\\r]";
 
 // dev-stack resume or reopen in command position: at the start, after a separator or newline, or
-// after a runner such as bash or env; also dev-stack-command.ts dev-stack-resume or -reopen, the
-// same writes as the Claude Code module runs them. A mention inside an argument, such as a grep
-// pattern or a message, passes.
+// after a runner such as bash or env; also dev-stack-command dev-stack-resume or -reopen, the
+// same writes as the Claude Code module runs them. Either extension matches: the sources are .ts,
+// the built plugin .js. A mention inside an argument, such as a grep pattern or a message, passes.
 const USER_RE = new RegExp(
-  `(^|[;&|(]|\\n)${SP}*((bash|sh|exec|env|command|sudo|time|nohup|node)${SP}+|[A-Za-z_][A-Za-z0-9_]*=${NSP}*${SP}+)*['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack(\\.(sh|ts))?['"]?${SP}+|dev-stack-command\\.ts['"]?${SP}+['"]?dev-stack-)(resume|reopen)([^A-Za-z0-9_-]|$)`,
+  `(^|[;&|(]|\\n)${SP}*((bash|sh|exec|env|command|sudo|time|nohup|node)${SP}+|[A-Za-z_][A-Za-z0-9_]*=${NSP}*${SP}+)*['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack(\\.(sh|ts|js))?['"]?${SP}+|dev-stack-command\\.(ts|js)['"]?${SP}+['"]?dev-stack-)(resume|reopen)([^A-Za-z0-9_-]|$)`,
 );
 
 // A stack log path under a repository's docs/plans (a worktree's log/ directory is not one): under
@@ -62,6 +62,8 @@ const NODE_RE = new RegExp(
   `(^|[;&|(\\n])${SP}*node${SP}+(['"]?)([^ \\t\\n\\v\\f\\r;&|'"]*)\\2(?=[ \\t\\n\\v\\f\\r;&|)]|$)`,
   "g",
 );
+// The CLIs carry this module's own extension: .ts run from the sources, .js in the built plugin.
+const EXT = import.meta.url.slice(import.meta.url.lastIndexOf("."));
 const DEV_CLIS = new Set(
   [
     "dev-stack-command",
@@ -71,7 +73,7 @@ const DEV_CLIS = new Set(
     "dev-utils",
     "dev-worktree",
     "handoff-path",
-  ].map((n) => `${n}.ts`),
+  ].map((n) => `${n}${EXT}`),
 );
 
 /**
@@ -101,7 +103,7 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
   if (user) {
     const verb = user[0].includes("reopen") ? "reopen" : "resume";
     block(
-      `dev-stack.ts ${verb} is the user's alone: it clears a stop, grants more rounds or fix attempts, or reopens an approved plan. Report the stop and what the user would decide (skills/run-stack/SKILL.md#stops).`,
+      `dev-stack.js ${verb} is the user's alone: it clears a stop, grants more rounds or fix attempts, or reopens an approved plan. Report the stop and what the user would decide (skills/run-stack/SKILL.md#stops).`,
     );
   }
   // Redirections to /dev/null or another descriptor write nothing.
@@ -206,28 +208,28 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
     block(`Plan ${real} is published; no phase resumes or edits it (rules/plan.md#sequence).`);
   if (newStatus === "approved" && oldStatus !== "approved")
     block(
-      "Only the user sets 'Status: approved' (rules/plan.md#sequence). Under dev-autopilot, run-stack --auto-approve runs dev-stack.ts approve, which sets auto-approved.",
+      "Only the user sets 'Status: approved' (rules/plan.md#sequence). Under dev-autopilot, run-stack --auto-approve runs dev-stack.js approve, which sets auto-approved.",
     );
   if (newStatus === "auto-approved" && oldStatus !== "auto-approved")
     block(
-      "Only dev-stack.ts approve sets 'Status: auto-approved', under run-stack --auto-approve (rules/plan.md#sequence).",
+      "Only dev-stack.js approve sets 'Status: auto-approved', under run-stack --auto-approve (rules/plan.md#sequence).",
     );
   const oldRank = statusRank(oldStatus);
   const newRank = statusRank(newStatus);
   if (!oldRank && (!isFile(real) || lib.approvedHash(real) === "")) {
     if (newRank)
       block(
-        `Plan ${real} is '${oldStatus || "new"}'; it reaches '${newStatus}' only through approval: the user's 'Status: approved' or dev-stack.ts approve (rules/plan.md#sequence).`,
+        `Plan ${real} is '${oldStatus || "new"}'; it reaches '${newStatus}' only through approval: the user's 'Status: approved' or dev-stack.js approve (rules/plan.md#sequence).`,
       );
     return;
   }
   if (!newRank)
     block(
-      `Plan ${real} is '${oldStatus}'; an approved plan's Status never returns to planning or to an unknown value. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.ts reopen.`,
+      `Plan ${real} is '${oldStatus}'; an approved plan's Status never returns to planning or to an unknown value. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.js reopen.`,
     );
   if (lib.spec(NEW) !== lib.spec(old))
     block(
-      `Plan ${real} is '${oldStatus}' and frozen: after approval only its Status and Tip lines change. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.ts reopen.`,
+      `Plan ${real} is '${oldStatus}' and frozen: after approval only its Status and Tip lines change. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.js reopen.`,
     );
 };
 
@@ -496,7 +498,7 @@ export const bashPostCheck = (input: HookInput, ctx: GateCtx): string | undefine
     msgs.length === 0
       ? []
       : [
-          `A shell command changed plans in a way only dev-stack.ts or the user may (rules/plan.md#changes):\n${msgs.map((m) => `- ${m}`).join("\n")}\nChange Status and Tip with the Edit tool; any other change goes where rules/plan.md#changes says, or the user reopens the plan with dev-stack.ts reopen.`,
+          `A shell command changed plans in a way only dev-stack.js or the user may (rules/plan.md#changes):\n${msgs.map((m) => `- ${m}`).join("\n")}\nChange Status and Tip with the Edit tool; any other change goes where rules/plan.md#changes says, or the user reopens the plan with dev-stack.js reopen.`,
         ];
   if (failed !== "")
     report.push(
@@ -524,9 +526,9 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
     const user = /: (cleared|reopened)$/;
     const [before, after] = [fileRows(old), fileRows(now)];
     if (count(after, user) > count(before, user))
-      why = "it gained a resume or reopen line, which only the user's dev-stack.ts writes";
+      why = "it gained a resume or reopen line, which only the user's dev-stack.js writes";
     else if (LOG_VERBS.some((re) => count(after, re) < count(before, re)))
-      why = "it lost a line only dev-stack.ts writes";
+      why = "it lost a line only dev-stack.js writes";
     if (why === "") continue;
     if (!isFile(old)) {
       msgs.push(
@@ -609,7 +611,7 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
       const f = basename(rel).replace(/\.spec\.md$/, "");
       if (count(fileRows(`${dirname(now)}/log`), new RegExp(`^${f}: `)) !== 0)
         why =
-          "it was moved or deleted while the stack log still holds its lines; dev-stack.ts renumber moves a plan and drop removes one";
+          "it was moved or deleted while the stack log still holds its lines; dev-stack.js renumber moves a plan and drop removes one";
     } else if ((nr ?? 0) >= 1) {
       // Unapproved (or new) and now approved or later: only dev-stack approve's step passes:
       // auto-approved at the plan's hash with its review still holding and logged by dev-stack
@@ -627,7 +629,7 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
           autos[autos.length - 1] !== `approve auto-approved at ${lib.planHash(now) ?? ""}`
         )
           why =
-            "its Status was set to auto-approved, which only dev-stack.ts approve sets, on a ready plan whose review still holds";
+            "its Status was set to auto-approved, which only dev-stack.js approve sets, on a ready plan whose review still holds";
       }
     }
     if (why !== "") undo(rel, why);

@@ -36,7 +36,7 @@ function engine(
   on("process.run", (_, e) => {
     const argv = binPath(e.argv);
     let answer: Ran | "throw";
-    if (argv[1] === "bin/hook.ts") {
+    if (argv[1] === "bin/hook.js") {
       const input = JSON.parse(e.init?.stdin ?? "{}") as Record<string, unknown>;
       hooks.push({ input, cwd: e.init?.cwd });
       answer = gate(input);
@@ -61,13 +61,13 @@ const typed = (command: string, args: string) => ({
 
 // Parsing, plan paths, and output shaping are commands.ts's, tested in test/commands.test.ts.
 
-test("a command runs bin/dev-stack-command.ts once, in the session directory", async ($, on) => {
+test("a command runs bin/dev-stack-command.js once, in the session directory", async ($, on) => {
   const calls = engine(on);
   await $.command.run(typed("dev-stack-stop", `${PLAN}  flaky test`));
   await $.command.run(typed("dev-stack-next", `${PLAN} --md`));
   expect(calls).toEqual([
-    ["node", "bin/dev-stack-command.ts", "dev-stack-stop", `${PLAN}  flaky test`],
-    ["node", "bin/dev-stack-command.ts", "dev-stack-next", `${PLAN} --md`],
+    ["node", "bin/dev-stack-command.js", "dev-stack-stop", `${PLAN}  flaky test`],
+    ["node", "bin/dev-stack-command.js", "dev-stack-next", `${PLAN} --md`],
   ]);
   expect(new Set(calls.cwds)).toEqual(new Set([CWD]));
 });
@@ -99,15 +99,15 @@ test("a read's result carries no note", async ($, on) => {
 });
 
 test("a CLI that fails or cannot start is reported", async ($, on) => {
-  engine(on, { exitCode: 2, stdout: "", stderr: "dev-stack-command.ts: no command x" });
+  engine(on, { exitCode: 2, stdout: "", stderr: "dev-stack-command.js: no command x" });
   const failed = await $.command.run(typed("dev-stack-list", PLAN));
-  expect(failed.text).toBe("dev-stack.ts failed: dev-stack-command.ts: no command x");
+  expect(failed.text).toBe("dev-stack.js failed: dev-stack-command.js: no command x");
 });
 
 test("a CLI that cannot start is reported", async ($, on) => {
   engine(on, "throw");
   const out = await $.command.run(typed("dev-stack-list", PLAN));
-  expect(out.text?.startsWith("dev-stack.ts failed: ")).toBe(true);
+  expect(out.text?.startsWith("dev-stack.js failed: ")).toBe(true);
 });
 
 test("a write runs only from the user, at the terminal or through Remote Control", async ($, on) => {
@@ -233,7 +233,7 @@ test("a failed Bash call is checked as PostToolUseFailure", async ($, on) => {
   ]);
 });
 
-test("hook.ts that cannot run passes the call", async ($, on) => {
+test("hook.js that cannot run passes the call", async ($, on) => {
   engine(on, undefined, () => "throw");
   let ran = false;
   on("tool.call", () => {
@@ -305,7 +305,7 @@ test("the rules are read once; a failed read is retried", async ($, on) => {
   expect(reads.length).toBe(4);
 });
 
-test("hook.ts runs with a timeout, so a hung gate passes with a warning", async ($, on) => {
+test("hook.js runs with a timeout, so a hung gate passes with a warning", async ($, on) => {
   let timeout: number | undefined;
   on("session.cwd", () => ({ value: CWD }));
   on("process.run", (_, e) => {

@@ -16,9 +16,9 @@ import { mainRoot } from "./utils.ts";
 import { devWorktree } from "./worktree.ts";
 
 const USAGE = [
-  "Usage: dev-publish.ts check <plan>",
-  "       dev-publish.ts verify <plan>",
-  "       dev-publish.ts cleanup <plan> [--ignored-checked]",
+  "Usage: dev-publish.js check <plan>",
+  "       dev-publish.js verify <plan>",
+  "       dev-publish.js cleanup <plan> [--ignored-checked]",
   "<plan> is <main root>/docs/plans/<issue>_<slug>/pr<N>.spec.md, run from the repository.",
   "cleanup sets Status: published and keeps the plan as a record.",
   "Exit: 0 ok, 1 failure, 2 usage, 4 confirmation needed (cleanup).",
@@ -241,7 +241,7 @@ class Publish {
           cwd: this.root,
         });
         if (scan.code !== 0)
-          this.problems.push(`conflict markers; run dev-check.ts artifacts ${parentSha} ${green}`);
+          this.problems.push(`conflict markers; run dev-check.js artifacts ${parentSha} ${green}`);
       }
       // An open PR from an earlier run is this plan's own when it targets its PR target; a repair
       // moves the tip ahead of it until the push.
@@ -350,7 +350,7 @@ class Publish {
         if (ignored.length !== 0) {
           this.o.out(`IGNORED in ${wt}:\n${ignored.join("\n")}\n`);
           fail(
-            `Check the ignored content above for unrelated files, then rerun: dev-publish.ts cleanup ${this.plan} --ignored-checked`,
+            `Check the ignored content above for unrelated files, then rerun: dev-publish.js cleanup ${this.plan} --ignored-checked`,
             4,
           );
         }

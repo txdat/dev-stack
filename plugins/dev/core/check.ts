@@ -9,7 +9,7 @@ import { type Command, Exit, Output } from "./cli.ts";
 import { type Env, exitCode, git, isDir, isFile, readable, readBytes, spawnEnv } from "./sys.ts";
 
 const USAGE =
-  "usage: dev-check.ts proof <commit> [--test path] [--stub path] | artifacts <base> [head] | pcs <plan> [--cwd dir] [PC-<n> ...]";
+  "usage: dev-check.js proof <commit> [--test path] [--stub path] | artifacts <base> [head] | pcs <plan> [--cwd dir] [PC-<n> ...]";
 
 const block = (text: string): never => {
   throw new Exit(1, `BLOCK ${text}\n`);

@@ -148,7 +148,7 @@ test("a plan path as shown, under docs/plans, ./, or ../, or after @, is read ba
 });
 
 test("a usage error from dev-stack.ts shows the usage line; a throw is reported", () => {
-  const { run } = runner({ code: 2, stdout: "", stderr: "Usage: dev-stack.ts ..." });
+  const { run } = runner({ code: 2, stdout: "", stderr: "Usage: dev-stack.js ..." });
   assert.equal(
     run("dev-stack-review", `${PLAN} ready`).text,
     "Usage: /dev-stack-review <spec file> ready|needs-changes",
@@ -161,7 +161,7 @@ test("a usage error from dev-stack.ts shows the usage line; a throw is reported"
       throw new Error("boom");
     },
   });
-  assert.deepEqual(threw, { text: "dev-stack.ts failed: boom" });
+  assert.deepEqual(threw, { text: "dev-stack.js failed: boom" });
 });
 
 test("no output reads as (no output)", () => {

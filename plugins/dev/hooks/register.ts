@@ -30,12 +30,12 @@ const hook = async ($: Engine, input: Record<string, unknown>): Promise<Verdict>
   let out: string;
   try {
     // A run past the timeout rejects, so a hung gate passes the call with a warning.
-    const ran = await $.process.run(["node", `${$.plugin.root}/bin/hook.ts`], {
+    const ran = await $.process.run(["node", `${$.plugin.root}/bin/hook.js`], {
       cwd: await $.session.cwd(),
       stdin: JSON.stringify(input),
       timeoutMs: HOOK_TIMEOUT_MS,
     });
-    if (ran.exitCode !== 0) return { error: ran.stderr.trim() || `hook.ts exited ${ran.exitCode}` };
+    if (ran.exitCode !== 0) return { error: ran.stderr.trim() || `hook.js exited ${ran.exitCode}` };
     out = ran.stdout.trim();
   } catch (error) {
     return { error: String((error as Error)?.message ?? error) };
@@ -51,9 +51,9 @@ const hook = async ($: Engine, input: Record<string, unknown>): Promise<Verdict>
     const denied = v.hookSpecificOutput?.permissionDecision === "deny";
     if (denied || v.continue === false)
       return {
-        deny: v.hookSpecificOutput?.permissionDecisionReason ?? v.reason ?? "hook.ts blocked",
+        deny: v.hookSpecificOutput?.permissionDecisionReason ?? v.reason ?? "hook.js blocked",
       };
-    if (v.decision === "block") return { report: v.reason ?? "hook.ts restored a plan change" };
+    if (v.decision === "block") return { report: v.reason ?? "hook.js restored a plan change" };
     return {};
   } catch {
     return { error: `unreadable output: ${out.slice(0, 200)}` };
@@ -62,7 +62,7 @@ const hook = async ($: Engine, input: Record<string, unknown>): Promise<Verdict>
 
 // hook.ts that cannot run passes the call with a visible warning, as a failed Claude Code hook does.
 const warn = ($: Engine, what: string, error: string) =>
-  $.ui.toast(`dev: hook.ts failed, ${what} ran unchecked: ${error}`, { timeoutMs: 8000 });
+  $.ui.toast(`dev: hook.js failed, ${what} ran unchecked: ${error}`, { timeoutMs: 8000 });
 
 export const register: Register = (on) => {
   // The rules, with $DEV_LIB, the plugin's install root, which they and the skills cite. A context
@@ -186,15 +186,15 @@ export const register: Register = (on) => {
       }
       try {
         const ran = await $.process.run(
-          ["node", `${$.plugin.root}/bin/dev-stack-command.ts`, c.name, e.args],
+          ["node", `${$.plugin.root}/bin/dev-stack-command.js`, c.name, e.args],
           { cwd: await $.session.cwd(), timeoutMs: 120_000 },
         );
         if (ran.exitCode !== 0)
-          return { text: `dev-stack.ts failed: ${ran.stderr.trim() || `exit ${ran.exitCode}`}` };
+          return { text: `dev-stack.js failed: ${ran.stderr.trim() || `exit ${ran.exitCode}`}` };
         const { text, note } = JSON.parse(ran.stdout) as { text: string; note?: string };
         return { text: ownLines(text), ...(note === undefined ? {} : { context: [note] }) };
       } catch (error) {
-        return { text: `dev-stack.ts failed: ${String((error as Error)?.message ?? error)}` };
+        return { text: `dev-stack.js failed: ${String((error as Error)?.message ?? error)}` };
       }
     });
   }
