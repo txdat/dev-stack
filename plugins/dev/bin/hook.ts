@@ -4,6 +4,7 @@
 // `--serial` run one check alone.
 //
 // Every error is caught: on a phase-gate call it denies, on a guard or serial-check call it passes.
+// Input that is not a JSON object exits 1, which an adapter reports as a check that could not run.
 
 import * as fs from "node:fs";
 import { processCtx } from "../core/cli.ts";
@@ -23,7 +24,11 @@ try {
   if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed))
     input = parsed as HookInput;
 } catch {}
-if (input !== undefined) {
+// Unreadable input names no call, so no verdict: the adapter passes it with a visible warning.
+if (input === undefined) {
+  process.stderr.write("hook.ts: the hook input is not a JSON object\n");
+  process.exitCode = 1;
+} else {
   try {
     run(input);
   } catch (e) {

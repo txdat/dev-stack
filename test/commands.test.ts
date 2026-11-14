@@ -22,6 +22,7 @@ const runner = (ran: StackRun = { code: 0, stdout: "ok\n", stderr: "" }, plansRo
   const calls: string[][] = [];
   const run = (name: string, args: string) =>
     runCommand(command(name), args, {
+      cwd: "/home/u/repo/sub",
       plansRoot: () => plansRoot,
       home: "/home/u",
       devStack: (argv) => {
@@ -131,10 +132,16 @@ test("the format hint keeps its prefix", () => {
   );
 });
 
-test("a plan path as shown, relative to docs/plans or after @, is read back from it", () => {
+test("a plan path as shown, under docs/plans, ./, or ../, or after @, is read back", () => {
   const { calls, run } = runner();
   run("dev-stack-next", "@12_s/pr1.spec.md");
   assert.deepEqual(calls.pop(), ["next", `${PLANS}/12_s/pr1.spec.md`]);
+  run("dev-stack-next", "docs/plans/12_s/pr1.spec.md");
+  assert.deepEqual(calls.pop(), ["next", `${PLANS}/12_s/pr1.spec.md`], "relative to the root");
+  run("dev-stack-next", "@./pr1.spec.md");
+  assert.deepEqual(calls.pop(), ["next", "/home/u/repo/sub/./pr1.spec.md"], "relative to the cwd");
+  run("dev-stack-next", "../docs/plans/12_s/pr1.spec.md");
+  assert.deepEqual(calls.pop(), ["next", "/home/u/repo/sub/../docs/plans/12_s/pr1.spec.md"]);
   const out = run("dev-stack-resume", "12_s/pr1.spec.md");
   assert.deepEqual(calls.pop(), ["resume", `${PLANS}/12_s/pr1.spec.md`]);
   assert.match(out.note ?? "", /\/home\/u\/repo\/docs\/plans\/12_s\/pr1\.spec\.md/);
@@ -147,6 +154,7 @@ test("a usage error from dev-stack.ts shows the usage line; a throw is reported"
     "Usage: /dev-stack-review <spec file> ready|needs-changes",
   );
   const threw = runCommand(command("dev-stack-list"), PLAN, {
+    cwd: "/",
     plansRoot: () => PLANS,
     home: "",
     devStack: () => {

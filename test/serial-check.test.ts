@@ -108,7 +108,7 @@ test("a deny has Claude Code's PreToolUse shape", () => {
   assertDeny(claudeSerialDeny(reason as string));
 });
 
-test("bin/hook.ts --serial denies, and passes other tools and unreadable input", () => {
+test("bin/hook.ts --serial denies, passes other tools, and reports unreadable input", () => {
   const hook = (input: string) => cli("hook", ["--serial"], { cwd: PLUGIN, input });
   const denied = hook(
     JSON.stringify({
@@ -119,8 +119,11 @@ test("bin/hook.ts --serial denies, and passes other tools and unreadable input",
   );
   assert.equal(denied.code, 0);
   assertDeny(denied.out);
-  for (const input of ['{"tool_name":"Edit","tool_input":{"file_path":"jest"}}', "not json"]) {
+  const edit = hook('{"tool_name":"Edit","tool_input":{"file_path":"jest"}}');
+  assert.deepEqual([edit.code, edit.out], [0, ""]);
+  // No verdict, and exit 1, so the adapter passes the call with a warning.
+  for (const input of ["not json", "[1]", ""]) {
     const r = hook(input);
-    assert.deepEqual([r.code, r.out], [0, ""], input);
+    assert.deepEqual([r.code, r.out], [1, ""], input);
   }
 });

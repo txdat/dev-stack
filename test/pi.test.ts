@@ -224,6 +224,20 @@ test("tool_call: the serial-test check and the record guard", async () => {
     input: { path: P, edits: [{ oldText: "## Test Cases", newText: "## Tests" }] },
   })) as { reason: string };
   assert.match(edited.reason, /frozen/);
+  // Pi matches every edit in the original file: this swap changes the spec, though applying the
+  // second edit to the first one's output would put the original back.
+  const swapped = (await fire("tool_call", {
+    toolName: "edit",
+    toolCallId: "e2",
+    input: {
+      path: P,
+      edits: [
+        { oldText: "AC-1 — outcome", newText: "TC-1 — scenario" },
+        { oldText: "TC-1 — scenario", newText: "AC-1 — outcome" },
+      ],
+    },
+  })) as { reason: string } | undefined;
+  assert.match(swapped?.reason ?? "", /frozen/, "a swap of two spec lines is a spec change");
   const written = (await fire("tool_call", {
     toolName: "write",
     toolCallId: "w1",

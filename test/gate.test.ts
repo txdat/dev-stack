@@ -433,6 +433,13 @@ test("hook input shapes", () => {
       "already approved",
       `${prompt.split(" ")[0]} is gated in any case`,
     );
+  for (const prompt of [`/dev-review-codebase ${P}`, `/dev:create-pr-draft ${P}`])
+    passes(promptGate(repo, prompt), `${prompt.split(" ")[0]} is a longer name, not a phase`);
+  for (const skill of ["review-feature", "create-pr", "dev:review-feature-notes", "x:review-code"])
+    passes(
+      call({ hook_event_name: "PreToolUse", tool_name: "Skill", tool_input: { skill, args: P } }),
+      `a Skill call to ${skill}, not this plugin's, is not gated`,
+    );
   for (const prompt of [`/review-feature ${P}`, `/create-pr ${P}`, `/other:review-code ${P}`])
     passes(promptGate(repo, prompt), `${prompt.split(" ")[0]}, not this plugin's, is not gated`);
   passes(

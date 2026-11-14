@@ -200,7 +200,9 @@ export const devUtils: Command = (ctx) => {
         ]);
       case "issue-create": {
         const [title, body, ...opts] = rest;
-        if (!(n >= 3 && title && body !== undefined && isReadableFile(body)))
+        // gh runs in ctx.cwd, so a relative body file is checked there.
+        const at = body?.startsWith("/") ? body : `${ctx.cwd}/${body}`;
+        if (!(n >= 3 && title && body !== undefined && isReadableFile(at)))
           fail("issue-create requires a nonempty title and a readable body file.");
         return o.done(0, [
           "gh",

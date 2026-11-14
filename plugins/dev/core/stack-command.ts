@@ -17,6 +17,7 @@ export const stackCommand = (
   const command = COMMANDS.find((c) => c.name === name);
   if (command === undefined) return undefined;
   return runCommand(command, args, {
+    cwd,
     plansRoot: () => {
       const main = tryMainRoot(b(cwd));
       return main === undefined ? "" : `${utf8(main)}/docs/plans`;

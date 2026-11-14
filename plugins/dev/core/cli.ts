@@ -3,7 +3,6 @@
 // command that hands off to another program (`exec` in the old scripts) returns `exec` instead.
 
 import { spawnSync } from "node:child_process";
-import * as fs from "node:fs";
 import { b, utf8 } from "./bytes.ts";
 import { type Ran, type RunOptions, run } from "./sys.ts";
 
@@ -99,11 +98,15 @@ export const childEnv = (env: Env): NodeJS.ProcessEnv => {
 export const main = (command: Command): void => {
   const ctx = processCtx();
   const res = command(ctx);
-  if (res.chunks)
-    for (const [fd, text] of res.chunks) fs.writeSync(fd, Buffer.from(text, "latin1"));
+  // On Linux process.stdout and process.stderr write pipes, files, and terminals synchronously, so
+  // the chunks keep their order and are out before an exec'd program writes. Elsewhere a pipe is
+  // written asynchronously, and the process still drains it before it exits.
+  const write = (fd: 1 | 2, text: string) =>
+    (fd === 1 ? process.stdout : process.stderr).write(Buffer.from(text, "latin1"));
+  if (res.chunks) for (const [fd, text] of res.chunks) write(fd, text);
   else {
-    if (res.stdout) fs.writeSync(1, Buffer.from(res.stdout, "latin1"));
-    if (res.stderr) fs.writeSync(2, Buffer.from(res.stderr, "latin1"));
+    if (res.stdout) write(1, res.stdout);
+    if (res.stderr) write(2, res.stderr);
   }
   if (res.exec) {
     const [cmd, ...args] = res.exec.map(utf8);

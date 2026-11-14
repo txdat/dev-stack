@@ -248,6 +248,12 @@ test("issue-create arguments and refusals (stubbed)", () => {
         "<Next release>",
       ].join("\n"),
     );
+    // A relative body file is the caller's, in its cwd, not the process's.
+    assert.match(
+      out(utils(["issue-create", "title", "body with spaces.md"], ROOT)),
+      /^<--body-file>\n<body with spaces\.md>$/m,
+    );
+    rejects(utils(["issue-create", "title", "body with spaces.md"]), "not in the caller's cwd");
     rejects(utils(["issue-create", "title", `${ROOT}/missing`]), "a missing body file");
     rejects(utils(["issue-create", "", body]), "an empty title");
   });

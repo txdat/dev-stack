@@ -3,6 +3,7 @@
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { utf8 } from "./bytes.ts";
 
@@ -19,7 +20,11 @@ export type RunOptions = {
   env?: NodeJS.ProcessEnv;
 };
 
-/** Runs argv without a shell; a command that cannot start reads as exit 127. */
+/**
+ * Runs argv without a shell. A command that cannot start reads as exit 127, one killed by a signal
+ * as 128 plus its number, and one stopped for passing the output limit as a failure with the
+ * reason on stderr, never as a success with the output it had written.
+ */
 export const run = (argv: readonly string[], opts: RunOptions = {}): Ran => {
   const [cmd, ...args] = argv;
   if (cmd === undefined) throw new Error("run: empty argv");
@@ -30,11 +35,13 @@ export const run = (argv: readonly string[], opts: RunOptions = {}): Ran => {
     stdio: [opts.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     maxBuffer: 256 * 1024 * 1024,
   });
-  if (res.error) return { code: 127, stdout: "", stderr: String(res.error.message) };
+  if (res.error && !res.pid) return { code: 127, stdout: "", stderr: String(res.error.message) };
+  const killed = res.signal ? 128 + (os.constants.signals[res.signal] ?? 0) : 1;
+  const code = res.status ?? killed;
   return {
-    code: res.status ?? 128 + (res.signal ? 1 : 0),
-    stdout: res.stdout.toString("latin1"),
-    stderr: res.stderr.toString("latin1"),
+    code: res.error && code === 0 ? 1 : code,
+    stdout: res.stdout?.toString("latin1") ?? "",
+    stderr: (res.stderr?.toString("latin1") ?? "") + (res.error ? `${res.error.message}\n` : ""),
   };
 };
 

@@ -147,12 +147,16 @@ export const COMMANDS: readonly Command[] = [
 export const usage = (command: Command): string =>
   `Usage: /${command.name} ${command.argumentHint}`;
 
-// The output shows plan paths relative to the repository's docs/plans (`shorten`), so one without a
-// leading / or ~ is read back from there. A leading @ is the prompt's file mention, not part of the
-// path.
-const absolute = (text: string, plansRoot: string) => {
+// The output shows plan paths relative to the repository's docs/plans (`shorten`), so a bare
+// relative path is read back from there. One under docs/plans/ is relative to the repository's root,
+// and one under ./ or ../ to the caller's directory. A leading @ is the prompt's file mention, not
+// part of the path.
+const absolute = (text: string, plansRoot: string, cwd: string) => {
   const file = text.replace(/^@/, "");
-  return /^[/~]/.test(file) ? file : `${plansRoot}/${file}`;
+  if (/^[/~]/.test(file)) return file;
+  if (/^\.\.?\//.test(file)) return `${cwd}/${file}`;
+  if (file.startsWith("docs/plans/")) return `${plansRoot.slice(0, -"docs/plans".length)}${file}`;
+  return `${plansRoot}/${file}`;
 };
 
 /**
@@ -171,18 +175,23 @@ const shorten = (text: string, plansRoot: string, home: string): string => {
 
 /**
  * Runs one command on its argument text. `plansRoot` gives the main root's docs/plans, or "" outside
- * a repository; `devStack` runs dev-stack.ts on an argv in the caller's directory.
+ * a repository; `devStack` runs dev-stack.ts on an argv in `cwd`, the caller's directory.
  */
 export const runCommand = (
   command: Command,
   args: string,
-  io: { plansRoot: () => string; home: string; devStack: (argv: string[]) => StackRun },
+  io: {
+    cwd: string;
+    plansRoot: () => string;
+    home: string;
+    devStack: (argv: string[]) => StackRun;
+  },
 ): CommandResult => {
   const parsed = command.parse(args.trim());
   if ("usage" in parsed) return { text: usage(command) };
   const root = io.plansRoot();
   const [sub, plan, ...rest] = parsed.argv;
-  const argv = [sub, root ? absolute(plan, root) : plan, ...rest];
+  const argv = [sub, root ? absolute(plan, root, io.cwd) : plan, ...rest];
   try {
     const ran = io.devStack(argv);
     const out = ran.stdout.trimEnd();

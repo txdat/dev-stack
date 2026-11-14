@@ -175,23 +175,61 @@ const continuesPhase = (ctx: ExtensionContext, skill: string, args: string): boo
 };
 
 /**
+ * The text Pi's edit tool writes: each oldText matched once in the original file, and all of them
+ * applied together, never one on another's output. Undefined where this does not model Pi
+ * exactly: a file Pi cannot read or holding a BOM or a CR, or an oldText that is empty, missing,
+ * repeated, or overlapping another, which Pi refuses or matches fuzzily.
+ */
+const piEdited = (file: string, edits: readonly { oldText: string; newText: string }[]) => {
+  let content: string;
+  try {
+    content = fs.readFileSync(file, "utf8");
+  } catch {
+    return undefined;
+  }
+  if (content.startsWith("\uFEFF") || content.includes("\r")) return undefined;
+  const lf = (text: string) => text.replace(/\r\n?/g, "\n");
+  const found: { at: number; end: number; text: string }[] = [];
+  for (const e of edits) {
+    const old = lf(e.oldText);
+    const at = old === "" ? -1 : content.indexOf(old);
+    if (at < 0 || content.split(old).length > 2) return undefined;
+    found.push({ at, end: at + old.length, text: lf(e.newText) });
+  }
+  found.sort((x, y) => x.at - y.at);
+  let out = "";
+  let pos = 0;
+  for (const f of found) {
+    if (f.at < pos) return undefined;
+    out += content.slice(pos, f.at) + f.text;
+    pos = f.end;
+  }
+  return out + content.slice(pos);
+};
+
+/**
  * The Claude-shaped PreToolUse input for a bash, edit, or write call, or undefined for every other
- * tool. Pi's edit tool applies all of a call's edits, so it is the MultiEdit shape: the guard
- * judges the whole call.
+ * tool. An edit is judged as the Write of the text Pi writes (piEdited); where that is not
+ * modelled, as a MultiEdit of its edits, which the guard applies one after another.
  */
 const guardInput = (event: ToolCallEvent, cwd: string): HookInput | undefined => {
   const base = { hook_event_name: "PreToolUse", tool_use_id: event.toolCallId };
   if (isToolCallEventType("bash", event))
     return { ...base, tool_name: "Bash", tool_input: { command: event.input.command } };
-  if (isToolCallEventType("edit", event))
+  if (isToolCallEventType("edit", event)) {
+    const file = resolveToCwd(event.input.path, cwd);
+    const content = piEdited(file, event.input.edits);
+    if (content !== undefined)
+      return { ...base, tool_name: "Write", tool_input: { file_path: file, content } };
     return {
       ...base,
       tool_name: "Edit",
       tool_input: {
-        file_path: resolveToCwd(event.input.path, cwd),
+        file_path: file,
         edits: event.input.edits.map((e) => ({ old_string: e.oldText, new_string: e.newText })),
       },
     };
+  }
   if (isToolCallEventType("write", event))
     return {
       ...base,
@@ -267,7 +305,8 @@ export default function devExtension(pi: ExtensionAPI) {
         {
           hook_event_name: "PreToolUse",
           tool_name: "Skill",
-          tool_input: { skill: slug, arguments: args },
+          // The read resolved to this plugin's skill, so it is named as Claude Code names one.
+          tool_input: { skill: `dev:${slug}`, arguments: args },
         },
         ctx.cwd,
       );

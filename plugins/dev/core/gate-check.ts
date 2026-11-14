@@ -43,30 +43,28 @@ const GATED = ["review-feature", "execute-feature", "review-code", "create-pr"];
 const SLUG_RE =
   "create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explore|fix-bug|review-code|review-feature|review-infra|review-system";
 
-/** The dev phase a skill name or slash command names; "" for none. */
+/**
+ * The dev phase a skill name or slash command names; "" for none. Only this plugin's forms name
+ * one: `dev:<name>` or `dev-<name>`, as Claude Code names a plugin skill, and Pi's `skill:<name>`,
+ * each optionally after a `/`. The name must end there, or at the arguments of a command, so a
+ * bare `review-code` or a longer `dev-review-codebase` is another source's skill.
+ */
 export const skillSlug = (name: string): string => {
-  const raw = (name.startsWith("/") ? name.slice(1) : name)
-    .replace(/_/g, "-")
-    .replace(/^skill:/i, "");
-  const m =
-    new RegExp(`^dev[:-](${SLUG_RE})$`, "i").exec(raw) ??
-    new RegExp(`dev[:-](${SLUG_RE})`, "i").exec(raw);
-  if (m?.[1]) return asciiLower(m[1]);
-  const w = new RegExp(`(^|[ \\t\\n\\v\\f\\r/])(${SLUG_RE})([ \\t\\n\\v\\f\\r]|$)`, "i").exec(raw);
-  return asciiLower(w?.[2] ?? "");
+  const m = new RegExp(
+    `^[ \\t\\n\\v\\f\\r]*/?(?:skill:(?:dev[:-])?|dev[:-])(${SLUG_RE})(?:[^a-z0-9_-]|$)`,
+    "i",
+  ).exec(name.replace(/_/g, "-"));
+  return asciiLower(m?.[1] ?? "");
 };
 
 /**
  * The skill a call invokes. Only a leading slash command invokes one from a prompt; prose that
- * mentions one is never gated. Claude Code types a plugin skill as /dev:<name>, Pi as
- * /skill:<name>; a bare /<name> is another plugin's or the user's own command and is never gated.
+ * mentions one is never gated.
  */
 const rawSkill = (input: HookInput, event: string): string => {
   if (event === "UserPromptSubmit") {
-    const m = /^[ \t\n\v\f\r]*\/((?:skill:(?:dev[-:])?|dev[-:])[a-z_-]+)(?:[^a-z0-9_-]|$)/i.exec(
-      str(input["prompt"]) ?? "",
-    );
-    return m?.[1] ?? "";
+    const prompt = str(input["prompt"]) ?? "";
+    return /^[ \t\n\v\f\r]*\//.test(prompt) ? prompt : "";
   }
   const t = input["tool_input"];
   const command = (v: Json | undefined): string | undefined => {
