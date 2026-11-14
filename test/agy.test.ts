@@ -148,7 +148,11 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   assert.match(skill, /^model: gemini-4-argon$/m);
 
   const agent = read(path.join(out, "agents/planner.md"));
-  assert.match(agent, /^tools:\n\s+- Read/m);
+  assert.match(
+    agent,
+    /^tools:\n {2}- read_file\n {2}- run_command\n {2}- manage_task\n {2}- edit_file\n {2}- write_file\nsubagent: true\nmainAgent: false$/m,
+  );
+  assert.doesNotMatch(agent, /^ {2}- (Read|Grep|Glob|Bash|Skill|Edit|Write)$/m);
 
   const rule = read(path.join(out, "rules/CORE.md"));
   assert.ok(rule.startsWith("---\ntrigger: manual\n---\n"));

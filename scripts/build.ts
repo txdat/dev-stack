@@ -21,7 +21,48 @@ const AGY_MODELS: Record<string, string> = {
   haiku: "gemini-4-hydrogen",
   sonnet: "gemini-4-hydrogen",
   opus: "gemini-4-argon",
-  fable: "gemini-4-carbon",
+};
+
+// Antigravity's native tool for each Claude Code grant, as its plugin import maps them. A grant with
+// no native tool, such as Skill, is dropped: agy surfaces a skill as a read of its SKILL.md.
+const AGY_TOOLS: Record<string, readonly string[]> = {
+  Read: ["read_file"],
+  Glob: ["read_file"],
+  Grep: ["read_file"],
+  Edit: ["edit_file"],
+  MultiEdit: ["edit_file"],
+  Write: ["write_file"],
+  Bash: ["run_command", "manage_task"],
+  WebSearch: ["search_web"],
+  WebFetch: ["search_web"],
+};
+
+/** The distinct native tools for a Claude Code `tools:` list, in AGY_TOOLS order. */
+const agyTools = (list: string): string[] => {
+  const tools: string[] = [];
+  const grants = list
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s !== "");
+  for (const grant of grants)
+    for (const tool of AGY_TOOLS[grant] ?? []) if (!tools.includes(tool)) tools.push(tool);
+  return tools;
+};
+
+/**
+ * An agent file's frontmatter as Antigravity reads it: the `tools` grant list as native names, and
+ * the flags that keep it a subagent.
+ */
+const adaptAgent = (text: string): string => {
+  const mapped = text.replace(/^tools:\s*(.+)$/m, (_line, list: string) => {
+    const tools = agyTools(list);
+    return `tools:\n${tools.map((t) => `  - ${t}`).join("\n")}`;
+  });
+  if (/^subagent:/m.test(mapped)) return mapped;
+  const end = mapped.indexOf("\n---", 4);
+  return end === -1
+    ? mapped
+    : `${mapped.slice(0, end)}\nsubagent: true\nmainAgent: false${mapped.slice(end)}`;
 };
 
 /** Whether `p` is strictly inside `dir`. */
@@ -74,13 +115,7 @@ const adaptForAgy = (work: string): void => {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
     const file = path.join(agentsDir, entry.name);
     const text = fs.readFileSync(file, "utf8");
-    const next = text.replace(/^tools:\s*(.+)$/m, (_line, list: string) => {
-      const items = list
-        .split(",")
-        .map((s) => s.trim())
-        .filter((s) => s !== "");
-      return `tools:\n${items.map((t) => `  - ${t}`).join("\n")}`;
-    });
+    const next = adaptAgent(text);
     if (next !== text) fs.writeFileSync(file, next);
   }
 
