@@ -1582,6 +1582,18 @@ test("record guard: Bash, Edit, and Write calls", () => {
     "resume after a separator and a quoted path is caught",
   );
   blocks(bashGuard(`true\ndev-stack.sh resume ${P}`), resume, "resume on a later line is caught");
+  const viaCommand = `node ${PLUGIN}/bin/dev-stack-command.ts`;
+  blocks(
+    bashGuard(`${viaCommand} dev-stack-resume ${P}`),
+    resume,
+    "resume through the command CLI",
+  );
+  blocks(
+    bashGuard(`cd /tmp && ${viaCommand} 'dev-stack-reopen' '${P}'`),
+    "dev-stack.ts reopen is the user's alone",
+    "reopen through the command CLI",
+  );
+  passes(bashGuard(`${viaCommand} dev-stack-next ${P}; cat ${LOG}`), "its reads pass");
   passes(
     bashGuard(
       "grep -n 'dev-stack.sh resume' README.md; echo 'ask the user to run dev-stack.sh reopen'",

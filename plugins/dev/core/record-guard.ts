@@ -33,10 +33,11 @@ const SP = "[ \\t\\n\\v\\f\\r]";
 const NSP = "[^ \\t\\n\\v\\f\\r]";
 
 // dev-stack resume or reopen in command position: at the start, after a separator or newline, or
-// after a runner such as bash or env. A mention inside an argument, such as a grep pattern or a
-// message, passes.
+// after a runner such as bash or env; also dev-stack-command.ts dev-stack-resume or -reopen, the
+// same writes as the Claude Code module runs them. A mention inside an argument, such as a grep
+// pattern or a message, passes.
 const USER_RE = new RegExp(
-  `(^|[;&|(]|\\n)${SP}*((bash|sh|exec|env|command|sudo|time|nohup|node)${SP}+|[A-Za-z_][A-Za-z0-9_]*=${NSP}*${SP}+)*['"]?[^ \\t\\n\\v\\f\\r;&|'"]*dev-stack(\\.(sh|ts))?['"]?${SP}+(resume|reopen)([^A-Za-z0-9_-]|$)`,
+  `(^|[;&|(]|\\n)${SP}*((bash|sh|exec|env|command|sudo|time|nohup|node)${SP}+|[A-Za-z_][A-Za-z0-9_]*=${NSP}*${SP}+)*['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack(\\.(sh|ts))?['"]?${SP}+|dev-stack-command\\.ts['"]?${SP}+['"]?dev-stack-)(resume|reopen)([^A-Za-z0-9_-]|$)`,
 );
 
 // A stack log path under a repository's docs/plans (a worktree's log/ directory is not one): under
@@ -56,7 +57,7 @@ const WRITE_RE = new RegExp(
 
 /** `node <path>/<dev CLI>.ts` in command position. */
 const DEV_CLI_RE = new RegExp(
-  `(^|[;&|(\\n])${SP}*node${SP}+['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack|dev-publish|dev-check|dev-utils|dev-worktree|handoff-path)\\.ts['"]?`,
+  `(^|[;&|(\\n])${SP}*node${SP}+['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack-command|dev-stack|dev-publish|dev-check|dev-utils|dev-worktree|handoff-path)\\.ts['"]?`,
   "g",
 );
 
