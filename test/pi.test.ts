@@ -289,6 +289,19 @@ test("tool_call: an edit to a CRLF or BOM plan is judged as the text Pi writes",
       undefined,
       `${dir}: a Tip change`,
     );
+    // Pi matches every edit in the original file, so this swap changes the spec.
+    const swapped = (await fire("tool_call", {
+      toolName: "edit",
+      toolCallId: `${dir}4`,
+      input: {
+        path: plan,
+        edits: [
+          { oldText: "AC-1 — outcome", newText: "TC-1 — scenario" },
+          { oldText: "TC-1 — scenario", newText: "AC-1 — outcome" },
+        ],
+      },
+    })) as { reason: string } | undefined;
+    assert.match(swapped?.reason ?? "", /frozen/, `${dir}: a swap of two spec lines`);
   }
 });
 

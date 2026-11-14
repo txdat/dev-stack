@@ -153,8 +153,9 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
     const cur = readBytes(real);
     if (cur === undefined) return;
     text = applyEdits(cur, t);
-    // Pi and Claude Code match an edit against the file with its line breaks read as LF. Where
-    // only that matches, both sides are compared with LF line breaks.
+    // Pi matches an edit against the file with its line breaks read as LF; pi/dev.ts sends such an
+    // edit here where it cannot model Pi's result. Where only that matches, both sides are
+    // compared with LF line breaks.
     if (text === undefined && cur.includes("\r")) {
       text = applyEdits(lf(cur), t, lf);
       lib.loadText(OLD_LF, lf(cur));
