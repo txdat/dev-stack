@@ -5,7 +5,7 @@
 // bin/dev-stack-command.ts runs a command. commands.ts holds what the Pi extension shares.
 
 import type { EngineInterface as Engine, Register } from "claude-code";
-import { COMMANDS, RULE_FILES, rulesText, usage } from "./commands.ts";
+import { COMMANDS, mayNamePhase, RULE_FILES, rulesText, usage } from "./commands.ts";
 
 /** hook.ts's verdict: a refusal, a post-check report, or a pass; `error` when it could not run. */
 type Verdict = { deny: string } | { report: string } | { error: string } | Record<string, never>;
@@ -107,6 +107,8 @@ export const register: Register = (on) => {
       agentId?: string;
       requestMeta?: unknown;
     };
+    // Only a gated phase needs the gate; any other skill runs without starting node.
+    if (tool === "Skill" && !mayNamePhase(args)) return next(e);
     const tool_use_id = id ?? `dev-${Date.now()}-${++untracked}`;
     const pre = await hook($, {
       hook_event_name: "PreToolUse",

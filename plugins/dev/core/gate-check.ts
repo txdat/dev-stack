@@ -17,6 +17,7 @@
 // so a stack publishes together. Plans live in the main root's docs/plans, untracked
 // (plan-lib.ts); Git checks run in the main root, and proof checks in the plan's worktree.
 
+import { GATED_PHASES } from "../hooks/commands.ts";
 import { asciiLower, b, stripNewlines, utf8 } from "./bytes.ts";
 import { Exit } from "./cli.ts";
 import {
@@ -39,7 +40,6 @@ export type GateResult = { block: string } | { postBlock: string } | undefined;
 
 const EM = b("—");
 const ARROW = b("→");
-const GATED = ["review-feature", "execute-feature", "review-code", "create-pr"];
 const SLUG_RE =
   "create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explore|fix-bug|review-code|review-feature|review-infra|review-system";
 
@@ -125,7 +125,7 @@ export const gateCheck = (input: HookInput, ctx: GateCtx): GateResult => {
   }
   const slug = skillSlug(rawSkill(input, event));
   // Everything else is ungated and runs outside a Git repository too.
-  if (!GATED.includes(slug)) return undefined;
+  if (!GATED_PHASES.includes(slug)) return undefined;
   return phaseGate(slug, hookText(input), false, ctx);
 };
 
@@ -134,7 +134,7 @@ export const isPhaseCall = (input: HookInput): boolean => {
   try {
     const tool = str(input["tool_name"]) ?? "";
     if (["Bash", "Edit", "Write", "MultiEdit"].includes(tool)) return false;
-    return GATED.includes(skillSlug(rawSkill(input, str(input["hook_event_name"]) ?? "")));
+    return GATED_PHASES.includes(skillSlug(rawSkill(input, str(input["hook_event_name"]) ?? "")));
   } catch {
     return false;
   }
