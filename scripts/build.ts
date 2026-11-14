@@ -1,5 +1,6 @@
 // Builds the installable plugin: plugins/dev compiled to JavaScript, with its rules, skills,
-// agents, and manifests copied beside the output. The marketplace and the Pi package point at it.
+// agents, and manifests copied beside the output. The marketplace, the Pi package, and the DSH
+// bundle point at it.
 // It builds into a sibling directory and swaps it in only when every step succeeded, so a failed
 // or running build never leaves a partial plugin at the output.
 // Usage: node scripts/build.ts [--out <dir>]   (default dist/dev)

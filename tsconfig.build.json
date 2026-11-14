@@ -7,5 +7,5 @@
     "rootDir": "plugins/dev",
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["plugins/dev/bin", "plugins/dev/core", "plugins/dev/pi"]
+  "include": ["plugins/dev/bin", "plugins/dev/core", "plugins/dev/dsh", "plugins/dev/pi"]
 }

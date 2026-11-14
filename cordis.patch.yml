@@ -1,0 +1,6 @@
+# The dev-stack bundle for DeepSeek Harness: one Host plugin that loads the dev workflow — the
+# rules as a prompt section, the skills, the /dev-stack-* commands, and the phase gate — into every
+# session of the profile it is selected in. `dist/dev/dsh/index.js` is the built plugin.
+- insert:
+    - id: dev-stack
+      name: "dev-stack"

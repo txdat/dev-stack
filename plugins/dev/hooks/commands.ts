@@ -1,6 +1,7 @@
-// What the Claude Code module and the Pi extension share: the gated phases, the rules text, and the
-// /dev-stack-* commands' table, parsing, and output shaping. No Node and no engine API: each adapter supplies
-// its own IO, so the engine module, the Pi extension, and bin/dev-stack-command.ts import it alike.
+// What the Claude Code module, the Pi extension, and the DSH Host plugin share: the gated phases, the
+// rules text, and the /dev-stack-* commands' table, parsing, and output shaping. No Node and no engine
+// API: each adapter supplies its own IO, so the engine module, the Pi extension, the DSH plugin, and
+// bin/dev-stack-command.ts import it alike.
 
 type Sub = "next" | "stack" | "check" | "review" | "stop" | "resume" | "reopen";
 
