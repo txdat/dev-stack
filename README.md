@@ -4,12 +4,14 @@ A plan-backed development workflow for Claude Code, Pi, and DeepSeek Harness (DS
 
 ## Install
 
+Pre-install `npm install && npm run build`
+
 | Harness | Install | Skills |
 | ------- | ------- | ------ |
-| Claude Code | `npm install && npm run build`, then `claude plugin marketplace add ~/work/dev-stack` and `/plugin install dev@dev-stack` | `/dev:<skill>` |
-| Pi | `npm install && npm run build`, then `pi install ~/work/dev-stack` | `/dev:<skill>` (registered, so Pi lists it) or `/skill:<skill>` |
-| DSH | `npm install && npm run build`, then install this checkout as a linked bundle: `plugin_manager` action `install_bundle` with the checkout's absolute path | `dev-<skill>`, as the session skill catalog shows |
-| Antigravity (`agy`) | `npm install && npm run build`, then `agy plugin install ~/work/dev-stack/dist/dev-agy` | `<skill>` (from the `dev` plugin) |
+| Claude Code | `claude plugin marketplace add ~/work/dev-stack` and `/plugin install dev@dev-stack` | `/dev:<skill>` |
+| Pi | `pi install ~/work/dev-stack` | `/dev:<skill>` (registered, so Pi lists it) or `/skill:<skill>` |
+| DSH | install this checkout as a linked bundle: `plugin_manager` action `install_bundle` with the checkout's absolute path | `dev-<skill>`, as the session skill catalog shows |
+| Antigravity (`agy`) | `agy plugin install ~/work/dev-stack/dist/dev-agy` | `<skill>` (from the `dev` plugin) |
 
 `dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code copies the plugin into its cache, so reinstall it through `/plugin` after a rebuild; Pi loads `dist/dev` in place, so `/reload` picks up a rebuild. For development, `CLAUDE_CODE_PLUGIN_DIRS=~/work/dev-stack/dist/dev claude` loads the built plugin from the checkout; restart the session after `npm run build`. DSH links the checkout, so it runs `dist/dev/dsh/index.js` in place; rebuild and restart the session after changing the plugin.
 
