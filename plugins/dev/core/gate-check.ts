@@ -17,6 +17,7 @@
 // so a stack publishes together. Plans live in the main root's docs/plans, untracked
 // (plan-lib.ts); Git checks run in the main root, and proof checks in the plan's worktree.
 
+import { GATED_PHASES } from "../hooks/commands.ts";
 import { asciiLower, b, stripNewlines, utf8 } from "./bytes.ts";
 import { Exit } from "./cli.ts";
 import {
@@ -39,7 +40,6 @@ export type GateResult = { block: string } | { postBlock: string } | undefined;
 
 const EM = b("—");
 const ARROW = b("→");
-const GATED = ["review-feature", "execute-feature", "review-code", "create-pr"];
 const SLUG_RE =
   "create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explore|fix-bug|review-code|review-feature|review-infra|review-system";
 
@@ -103,30 +103,29 @@ const hookText = (input: HookInput): string => {
 
 /**
  * Checks one hook call. A gated phase fails closed: an unexpected error blocks. The record guard
- * and post check fail open: an error passes.
+ * fails open: its error is thrown, and the caller passes the call with a warning. The post check
+ * reports its own failure beside anything it restored.
  */
 export const gateCheck = (input: HookInput, ctx: GateCtx): GateResult => {
   const tool = str(input["tool_name"]) ?? "";
   const event = str(input["hook_event_name"]) ?? "";
   if (tool === "Bash" && event.startsWith("PostToolUse")) {
-    try {
-      const report = bashPostCheck(input, ctx);
-      return report === undefined ? undefined : { postBlock: report };
-    } catch {
-      return undefined;
-    }
+    const report = bashPostCheck(input, ctx);
+    return report === undefined ? undefined : { postBlock: report };
   }
+  // Any other error from the guard is thrown: the caller passes the call with a warning.
   if (tool === "Bash" || tool === "Edit" || tool === "Write" || tool === "MultiEdit") {
     try {
       recordGuard(tool, input, ctx);
     } catch (e) {
       if (e instanceof Block) return { block: e.reason };
+      throw e;
     }
     return undefined;
   }
   const slug = skillSlug(rawSkill(input, event));
   // Everything else is ungated and runs outside a Git repository too.
-  if (!GATED.includes(slug)) return undefined;
+  if (!GATED_PHASES.includes(slug)) return undefined;
   return phaseGate(slug, hookText(input), false, ctx);
 };
 
@@ -135,7 +134,7 @@ export const isPhaseCall = (input: HookInput): boolean => {
   try {
     const tool = str(input["tool_name"]) ?? "";
     if (["Bash", "Edit", "Write", "MultiEdit"].includes(tool)) return false;
-    return GATED.includes(skillSlug(rawSkill(input, str(input["hook_event_name"]) ?? "")));
+    return GATED_PHASES.includes(skillSlug(rawSkill(input, str(input["hook_event_name"]) ?? "")));
   } catch {
     return false;
   }
@@ -218,19 +217,30 @@ class Gate {
 
   // ── plan resolution ──────────────────────────────────────────────────
 
-  /** Exactly one plan path, which must resolve: a typo or foreign path blocks. */
+  /**
+   * Exactly one plan path, which must resolve: a typo or foreign path blocks. A relative mention,
+   * such as `12_x/pr1.spec.md` in a listing Pi passes with the whole message, is ignored when an
+   * exact path resolves; alone, it blocks.
+   */
   resolvePlan(): void {
     const named: string[] = [];
     const format = this.lib.planFormat;
+    const notFound = (mention: string): never =>
+      block(
+        `Named plan not found: ${mention}. Pass the full path of an existing ${format} of this repository.`,
+      );
+    let relative: string | undefined;
     for (const mention of planMentions(this.text)) {
       if (mention === "") continue;
       const doc = this.lib.canonicalPlan(mention);
-      if (doc === undefined)
-        block(
-          `Named plan not found: ${mention}. Pass the full path of an existing ${format} of this repository.`,
-        );
+      if (doc === undefined) {
+        if (mention.startsWith("/") || mention.startsWith("~/")) notFound(mention);
+        relative ??= mention;
+        continue;
+      }
       if (!named.includes(doc)) named.push(doc);
     }
+    if (named.length === 0 && relative !== undefined) notFound(relative);
     if (named.length === 0)
       block(
         `${this.slug} operates on a plan and none was named. Pass its exact path: ${this.slug} ${format}. A slug or the only plan in a directory does not resolve. No plan yet ${ARROW} run design-feature first.`,
@@ -443,13 +453,14 @@ class Gate {
    * precede the first proof. Topological order, so a repair merged forward reads as one line of
    * history whatever its dates. A merge commit implements nothing, so it never completes the
    * proof; a test(update) commit, a revised plan's test change, is neither proof nor
-   * implementation (../rules/plan.md#verification).
+   * implementation (../rules/plan.md#verification). Returns "none" when base..tip holds no proof
+   * commit and "order" when the proof is out of sequence.
    */
-  proofSequenceOk(base: string, re: RegExp | undefined, tip = "HEAD"): boolean {
+  proofSequence(base: string, re: RegExp | undefined, tip = "HEAD"): "ok" | "none" | "order" {
     if (re === undefined) {
       // A config plan needs only a commit of its own.
       const r = git(["log", "--format=%H", "--no-merges", `${base}..${tip}`], { cwd: this.tree });
-      return r.code === 0 && r.stdout !== "";
+      return r.code === 0 && r.stdout !== "" ? "ok" : "none";
     }
     const r = git(
       ["log", "--format=%s", "--topo-order", "--no-merges", "--reverse", `${base}..${tip}`],
@@ -457,7 +468,7 @@ class Gate {
         cwd: this.tree,
       },
     );
-    if (r.code !== 0) return false;
+    if (r.code !== 0) return "none";
     const subjects = r.stdout.split("\n");
     if (subjects[subjects.length - 1] === "") subjects.pop();
     let proofs = 0;
@@ -476,7 +487,7 @@ class Gate {
       if (!seen) bad = true;
       waiting = false;
     }
-    return !(proofs < 1 || waiting || bad);
+    return proofs < 1 ? "none" : waiting || bad ? "order" : "ok";
   }
 
   /** Plan's reviewed SHA holds its proof after base, as review-code checked. */
@@ -487,7 +498,7 @@ class Gate {
       kind.re === undefined
         ? "implementation commit"
         : `${kind.what} commit followed by implementation`;
-    if (base === "" || !this.proofSequenceOk(base, kind.re, green))
+    if (base === "" || this.proofSequence(base, kind.re, green) !== "ok")
       block(
         `Plan ${plan}'s reviewed SHA ${green} has no ${what} after ${base || "its PR target"}; run review-code on it (rules/plan.md#verification).`,
       );
@@ -603,20 +614,12 @@ class Gate {
         `The PR target '${target}' is missing or is not an ancestor of '${branch}'. If a repair landed on the parent plan's branch, merge it forward first (rules/plan.md#worktree).`,
       );
     const kind = this.proofKind(this.plan);
-    let count: number;
-    if (kind.re !== undefined) {
-      const re = kind.re;
-      const r = git(["log", "--format=%s", `${base}..HEAD`], { cwd: this.tree });
-      count = r.stdout.split("\n").filter((l) => re.test(l)).length;
-    } else {
-      const r = git(["log", "--format=%H", "--no-merges", `${base}..HEAD`], { cwd: this.tree });
-      count = r.stdout.split("\n").filter((l) => l !== "").length;
-    }
-    if (count < 1)
+    const proof = this.proofSequence(base, kind.re);
+    if (proof === "none")
       block(
         `Found no ${kind.what} commit between ${target} and ${branch} (rules/plan.md#verification).`,
       );
-    if (!this.proofSequenceOk(base, kind.re))
+    if (proof === "order")
       block(
         `Proof is out of sequence: each ${kind.what} commit needs at least one implementation commit after it, and nothing may come before the first (rules/plan.md#verification).`,
       );

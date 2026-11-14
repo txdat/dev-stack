@@ -104,6 +104,30 @@ export const writeBytes = (p: string, bytes: string, mode?: number): void => {
 };
 
 /**
+ * Replaces p with a byte string through one rename, so no reader sees it half written. p keeps
+ * its mode, or the mode of the file a symlink at p names; a new file gets 0o600. A failure throws
+ * and leaves p as it was.
+ */
+export const replaceBytes = (p: string, bytes: string): void => {
+  let mode = 0o600;
+  try {
+    mode = fs.statSync(P(p)).mode & 0o7777;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+  const tmp = `${p}.${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    fs.writeFileSync(P(tmp), Buffer.from(bytes, "latin1"), { mode, flag: "wx" });
+    // The umask may have narrowed the mode at creation.
+    fs.chmodSync(P(tmp), mode);
+    fs.renameSync(P(tmp), P(p));
+  } catch (e) {
+    fs.rmSync(P(tmp), { force: true });
+    throw e;
+  }
+};
+
+/**
  * `realpath -m`: links resolved where components exist, `..` applied after resolving. A relative
  * `p` resolves against `cwd`, the caller's directory.
  */

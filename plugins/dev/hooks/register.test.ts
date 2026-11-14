@@ -257,6 +257,17 @@ test("a Skill call is gated on its skill and args; an Edit gets no post check", 
   expect(calls.hooks.map((h) => h.input["hook_event_name"])).toEqual(["PreToolUse"]);
 });
 
+test("a Skill call that cannot name a gated phase starts no hook", async ($, on) => {
+  const calls = engine(on);
+  on("tool.call", () => ({ result: {} as never }));
+  await $.tool.call({ tool: "Skill", skill: "dev:explore", args: "the gate" });
+  await $.tool.call({ tool: "Skill", skill: "other:review" });
+  expect(calls.hooks.length).toBe(0);
+  await $.tool.call({ tool: "Skill", skill: "DEV:Review_Code", args: PLAN });
+  await $.tool.call({ tool: "Skill", skill: "dev:run-stack", args: "then create-pr" });
+  expect(calls.hooks.length).toBe(2);
+});
+
 test("other tools pass unchecked", async ($, on) => {
   const calls = engine(on);
   on("tool.call", () => ({ result: {} as never }));

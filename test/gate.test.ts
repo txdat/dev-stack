@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { b } from "../plugins/dev/core/bytes.ts";
+import { byteEnv } from "../plugins/dev/core/cli.ts";
 import { gateCheck } from "../plugins/dev/core/gate-check.ts";
 import type { HookInput } from "../plugins/dev/core/hook-input.ts";
 import { PlanLib } from "../plugins/dev/core/plan-lib.ts";
@@ -279,6 +280,19 @@ test("plan resolution", () => {
     "not found",
     "a relative path does not resolve",
   );
+  passes(
+    runGate(
+      repo,
+      "dev-execute-feature",
+      `${P}\nNext: 12_gate/pr2.spec.md, after 12_gate/pr1.spec.md`,
+    ),
+    "a relative mention beside an exact path is ignored",
+  );
+  blocks(
+    runGate(repo, "dev-execute-feature", `${P} /other/repo/12_gate/pr1.spec.md`),
+    "not found: /other/repo/12_gate/pr1.spec.md",
+    "an absolute path that does not resolve blocks beside one that does",
+  );
   blocks(
     runGate(repo, "dev-execute-feature", "/other/repo/12_gate/pr1.spec.md"),
     "not found",
@@ -489,14 +503,77 @@ test("a crash while checking a phase blocks", () => {
     r !== undefined && "block" in r && r.block.includes("gate-check.ts failed (boom)"),
     JSON.stringify(r),
   );
-  // The record guard fails open.
-  assert.equal(
-    gateCheck(
-      { hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "true" } },
-      ctx,
-    ),
-    undefined,
+  // The record guard fails open: its error reaches the caller, which passes the call with a
+  // warning, never a silent pass.
+  assert.throws(
+    () =>
+      gateCheck(
+        {
+          hook_event_name: "PreToolUse",
+          tool_name: "Bash",
+          tool_use_id: "crash0",
+          tool_input: { command: "true" },
+        },
+        ctx,
+      ),
+    /boom/,
   );
+});
+
+test("a post check that fails says so, and its snapshot is cleared", () => {
+  useRepo();
+  writePlan(P, "approved");
+  const input = (event: string) => ({
+    hook_event_name: event,
+    tool_name: "Bash",
+    tool_use_id: "crash1",
+    tool_input: { command: "true" },
+  });
+  passes(call(input("PreToolUse")), "the snapshot is taken");
+  // The snapshot directory resolves as before; the plan check then fails reading HOME.
+  const real = byteEnv({ ...process.env, ...ENV });
+  const env = new Proxy(real, {
+    get: (t, k: string) => {
+      if (k === "HOME") throw new Error("boom");
+      return t[k];
+    },
+  });
+  const r = gateCheck(input("PostToolUse"), { cwd: b(repo), env });
+  assert.ok(
+    r !== undefined && "postBlock" in r && r.postBlock.includes("failed (boom)"),
+    JSON.stringify(r),
+  );
+  assert.equal(
+    call(input("PostToolUse")),
+    "",
+    "the snapshot was cleared, so nothing compares again",
+  );
+});
+
+test("nested Pi call ids keep their own snapshots", () => {
+  useRepo();
+  writePlan(P, "approved");
+  const approved = read(P);
+  const rollback = `sed -i 's/^Status: approved/Status: planning/' ${P}`;
+  const bash = (event: string, id: string) =>
+    call({
+      hook_event_name: event,
+      tool_name: "Bash",
+      tool_use_id: id,
+      tool_input: { command: rollback },
+    });
+  // "X/1/1" and "X/11" read alike once "/" is dropped; the second snapshot, taken after the
+  // rollback, would then stand in for the first.
+  passes(bash("PreToolUse", "X/1/1"), "first snapshot");
+  exec(["bash", "-c", rollback], { cwd: repo });
+  passes(bash("PreToolUse", "X/11"), "second snapshot, after the rollback");
+  passes(bash("PostToolUse", "X/11"), "the second call changed nothing");
+  blocks(
+    bash("PostToolUse", "X/1/1"),
+    "never returns below approved",
+    "the first call still has its own snapshot",
+  );
+  assert.equal(read(P), approved);
 });
 
 test("worktree and root", () => {

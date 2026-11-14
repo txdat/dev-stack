@@ -175,21 +175,75 @@ const continuesPhase = (ctx: ExtensionContext, skill: string, args: string): boo
 };
 
 /**
- * The text Pi's edit tool writes: each oldText matched once in the original file, and all of them
- * applied together, never one on another's output. Undefined where this does not model Pi
- * exactly: a file Pi cannot read or holding a BOM or a CR, or an oldText that is empty, missing,
- * repeated, or overlapping another, which Pi refuses or matches fuzzily.
+ * Line ending of the line holding `offset`, as Pi's edit reads it: its own LF or CRLF, or that of
+ * the line before for an unterminated last line; a lone CR only in a file without any LF.
+ */
+const lineEndingAt = (content: string, offset: number): string => {
+  let lineFeed = content.indexOf("\n", offset);
+  if (lineFeed === -1) lineFeed = content.lastIndexOf("\n", offset);
+  if (lineFeed === -1) return content.includes("\r") ? "\r" : "\n";
+  return content[lineFeed - 1] === "\r" ? "\r\n" : "\n";
+};
+
+type Replacement = { at: number; end: number; text: string };
+
+/**
+ * Pi's splice of replacements matched in the LF-normalized text into the original, which it does
+ * not export (`applyReplacementsToOriginal`): text outside them keeps its bytes, and a line break
+ * in new text takes the line ending where its range starts.
+ */
+const spliceOriginal = (original: string, replacements: readonly Replacement[]): string => {
+  // Only CRLF changes length when normalized: the LF of the n-th CRLF, at original offset p, is at
+  // p - n in the normalized text.
+  let crlfBefore = 0;
+  let nextCrlf = original.indexOf("\r\n");
+  const toOriginal = (offset: number): number => {
+    while (nextCrlf !== -1 && nextCrlf - crlfBefore < offset) {
+      crlfBefore++;
+      nextCrlf = original.indexOf("\r\n", nextCrlf + 2);
+    }
+    return offset + crlfBefore;
+  };
+  const parts: string[] = [];
+  let endsWithCr = false;
+  const push = (part: string): void => {
+    if (part.length === 0) return;
+    // A CR before a seam and an LF after it would merge into one CRLF; Pi adds an LF to keep both.
+    if (endsWithCr && part[0] === "\n") parts.push("\n");
+    parts.push(part);
+    endsWithCr = part[part.length - 1] === "\r";
+  };
+  let position = 0;
+  for (const r of replacements) {
+    const start = toOriginal(r.at);
+    push(original.slice(position, start));
+    const ending = lineEndingAt(original, start);
+    push(ending === "\n" ? r.text : r.text.replaceAll("\n", ending));
+    position = toOriginal(r.end);
+  }
+  push(original.slice(position));
+  return parts.join("");
+};
+
+/**
+ * The text Pi's edit tool writes: each oldText matched once in the file with its BOM dropped and
+ * its line breaks read as LF, all of them applied together, never one on another's output, and
+ * spliced into the original as Pi splices them, BOM kept. Undefined where this does not model Pi
+ * exactly: a file Pi cannot read, or an oldText that is empty, missing, repeated, or overlapping
+ * another, which Pi refuses or matches fuzzily.
  */
 const piEdited = (file: string, edits: readonly { oldText: string; newText: string }[]) => {
-  let content: string;
+  let raw: string;
   try {
-    content = fs.readFileSync(file, "utf8");
+    raw = fs.readFileSync(file, "utf8");
   } catch {
     return undefined;
   }
-  if (content.startsWith("\uFEFF") || content.includes("\r")) return undefined;
+  const bom = raw.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const body = raw.slice(bom.length);
   const lf = (text: string) => text.replace(/\r\n?/g, "\n");
-  const found: { at: number; end: number; text: string }[] = [];
+  const content = lf(body);
+  const found: Replacement[] = [];
   for (const e of edits) {
     const old = lf(e.oldText);
     const at = old === "" ? -1 : content.indexOf(old);
@@ -204,7 +258,8 @@ const piEdited = (file: string, edits: readonly { oldText: string; newText: stri
     out += content.slice(pos, f.at) + f.text;
     pos = f.end;
   }
-  return out + content.slice(pos);
+  out += content.slice(pos);
+  return bom + (content === body ? out : spliceOriginal(body, found));
 };
 
 /**
@@ -353,6 +408,11 @@ export default function devExtension(pi: ExtensionAPI) {
       ctx.ui.notify(reason, "warning");
       return { content: [...event.content, { type: "text" as const, text: reason }] };
     }
+    if (v !== undefined && "error" in v)
+      ctx.ui.notify(
+        `[dev] the plan check after bash failed, its changes went unchecked: ${v.error}`,
+        "warning",
+      );
     return;
   });
 
@@ -366,6 +426,11 @@ export default function devExtension(pi: ExtensionAPI) {
       ctx.cwd,
     );
     if (v !== undefined && "postBlock" in v) ctx.ui.notify(`[dev] ${utf8(v.postBlock)}`, "warning");
+    else if (v !== undefined && "error" in v)
+      ctx.ui.notify(
+        `[dev] the plan check after bash failed, its changes went unchecked: ${v.error}`,
+        "warning",
+      );
   });
 
   // `next`, `list`, and `check` only read. `review`, `stop`, `resume`, and `reopen` record a

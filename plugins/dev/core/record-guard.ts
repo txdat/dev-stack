@@ -20,6 +20,7 @@ import {
   P,
   readBytes,
   realpathM,
+  replaceBytes,
   stat,
 } from "./sys.ts";
 import { tryMainRoot } from "./utils.ts";
@@ -88,11 +89,21 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
 
 // ── edit tools, before they run ──────────────────────────────────────
 
-/** The cache key the simulated plan text is held under; no path contains a NUL. */
+/** The cache keys the simulated plan texts are held under; no path contains a NUL. */
 const NEW = "\u0000new";
+const OLD_LF = "\u0000old";
 
-/** Edit's or MultiEdit's replacements applied as literal strings; undefined when one cannot apply. */
-const applyEdits = (text: string, t: Json | undefined): string | undefined => {
+const lf = (text: string): string => text.replace(/\r\n?/g, "\n");
+
+/**
+ * Edit's or MultiEdit's replacements applied as literal strings, each string passed through
+ * `norm` first; undefined when one cannot apply.
+ */
+const applyEdits = (
+  text: string,
+  t: Json | undefined,
+  norm = (x: string) => x,
+): string | undefined => {
   const edits = member(t, "edits");
   const list: (Json | undefined)[] =
     edits === undefined || edits === null || edits === false
@@ -110,8 +121,8 @@ const applyEdits = (text: string, t: Json | undefined): string | undefined => {
     const oldS = pick("old_string") ?? "";
     const newS = pick("new_string") ?? "";
     if (typeof oldS !== "string" || typeof newS !== "string") return undefined;
-    const o = str(oldS) as string;
-    const n = str(newS) as string;
+    const o = norm(str(oldS) as string);
+    const n = norm(str(newS) as string);
     const parts = out.split(o);
     if (o === "" || parts.length < 2) return undefined;
     out = pick("replace_all") ? parts.join(n) : `${parts[0]}${n}${parts.slice(1).join(o)}`;
@@ -132,19 +143,30 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
   // The plan's own repository root serves: no Git call follows.
   const lib = libFor(m[1], ctx);
   let text: string | undefined;
+  // The plan text the new one is compared with.
+  let old = real;
   if (tool === "Write") {
     const c = member(t, "content");
     text = c === undefined || c === null ? "" : (str(c) ?? undefined);
   } else {
     if (!isFile(real)) return;
     const cur = readBytes(real);
-    text = cur === undefined ? undefined : applyEdits(cur, t);
+    if (cur === undefined) return;
+    text = applyEdits(cur, t);
+    // Pi matches an edit against the file with its line breaks read as LF; pi/dev.ts sends such an
+    // edit here where it cannot model Pi's result. Where only that matches, both sides are
+    // compared with LF line breaks.
+    if (text === undefined && cur.includes("\r")) {
+      text = applyEdits(lf(cur), t, lf);
+      lib.loadText(OLD_LF, lf(cur));
+      old = OLD_LF;
+    }
   }
   if (text === undefined) return;
   lib.loadText(NEW, text);
   // Raw Status values: a reviewed plan whose Tip comes later ranks reviewed.
   const newStatus = lib.fieldOr(NEW, "Status");
-  const oldStatus = isFile(real) ? lib.fieldOr(real, "Status") : "";
+  const oldStatus = isFile(real) ? lib.fieldOr(old, "Status") : "";
   if (oldStatus === "published")
     block(`Plan ${real} is published; no phase resumes or edits it (rules/plan.md#sequence).`);
   if (newStatus === "approved" && oldStatus !== "approved")
@@ -168,7 +190,7 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
     block(
       `Plan ${real} is '${oldStatus}'; an approved plan's Status never returns to planning or to an unknown value. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.ts reopen.`,
     );
-  if (lib.spec(NEW) !== lib.spec(real))
+  if (lib.spec(NEW) !== lib.spec(old))
     block(
       `Plan ${real} is '${oldStatus}' and frozen: after approval only its Status and Tip lines change. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.ts reopen.`,
     );
@@ -204,7 +226,12 @@ const rmrf = (p: string): boolean => {
  * directory must be the user's own.
  */
 const snapDir = (input: HookInput, ctx: GateCtx): string | undefined => {
-  const id = (str(input["tool_use_id"]) ?? "").replace(/[^A-Za-z0-9_-]/g, "");
+  // Each other byte becomes "." and two hex digits, and "." appears nowhere else, so distinct ids,
+  // such as Pi's nested "X/1/1" and "X/11", never share a directory.
+  const id = (str(input["tool_use_id"]) ?? "").replace(
+    /[^A-Za-z0-9_-]/g,
+    (c) => `.${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+  );
   if (id === "") return undefined;
   const uid = process.getuid?.() ?? 0;
   const base = `${ctx.env["XDG_RUNTIME_DIR"] || ctx.env["TMPDIR"] || "/tmp"}/dev-gate-check-${uid}`;
@@ -367,19 +394,35 @@ const LOG_VERBS = [/: stop /, /: review /, /: code-review /, /: approve /, /: au
 export const bashPostCheck = (input: HookInput, ctx: GateCtx): string | undefined => {
   const snap = snapDir(input, ctx);
   if (snap === undefined || !isFile(`${snap}/.complete`)) return undefined;
+  const msgs: string[] = [];
+  let failed = "";
   try {
-    return postCheck(snap, ctx);
+    postCheck(snap, ctx, msgs);
+  } catch (e) {
+    failed = e instanceof Error ? e.message : String(e);
   } finally {
     rmrf(snap);
   }
+  // What was restored before a failure is still reported, and the failure with it.
+  const report =
+    msgs.length === 0
+      ? []
+      : [
+          `A shell command changed plans in a way only dev-stack.ts or the user may (rules/plan.md#changes):\n${msgs.map((m) => `- ${m}`).join("\n")}\nChange Status and Tip with the Edit tool; any other change goes where rules/plan.md#changes says, or the user reopens the plan with dev-stack.ts reopen.`,
+        ];
+  if (failed !== "")
+    report.push(
+      `The plan check after this shell command failed (${failed}) before it compared every plan; plans it did not reach went unchecked. Tell the user.`,
+    );
+  return report.length === 0 ? undefined : report.join("\n");
 };
 
-const postCheck = (snap: string, ctx: GateCtx): string | undefined => {
+/** Compares the plans with the snapshot, restoring what the command may not change; adds to msgs. */
+const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
   const scope = stripNewlines(readBytes(`${snap}/.scope`) ?? "");
   const base = `${scope}/docs/plans`;
   const files = `${snap}/files`;
   const lib = libFor(scope, ctx);
-  const msgs: string[] = [];
   const undone: string[] = [];
   const all = uniqSorted([...planFiles(files, 2), ...planFiles(base, 2)]);
 
@@ -578,20 +621,9 @@ const postCheck = (snap: string, ctx: GateCtx): string | undefined => {
     if (content === newB) continue;
     try {
       if (!hasOld && content === "") fs.rmSync(P(now), { force: true });
-      else {
-        // One rename replaces the log, or a symlink standing at its path, so no moment leaves it
-        // missing; the log keeps its mode.
-        const tmp = `${base}/${d}/log.gate.${Math.random().toString(36).slice(2, 8)}`;
-        const mode = fs.statSync(P(now)).mode & 0o7777;
-        try {
-          fs.writeFileSync(P(tmp), P(content), { mode });
-          fs.chmodSync(P(tmp), mode);
-          fs.renameSync(P(tmp), P(now));
-        } catch (e) {
-          rmrf(tmp);
-          throw e;
-        }
-      }
+      // One rename replaces the log, or a symlink standing at its path, so no moment leaves it
+      // missing.
+      else replaceBytes(now, content);
     } catch {
       msgs.push(`${now}: ${fail}`);
       continue;
@@ -617,9 +649,6 @@ const postCheck = (snap: string, ctx: GateCtx): string | undefined => {
       msgs.push(`${p}: a link to a plan that could not be replaced with a copy; tell the user.`);
     }
   }
-
-  if (msgs.length === 0) return undefined;
-  return `A shell command changed plans in a way only dev-stack.ts or the user may (rules/plan.md#changes):\n${msgs.map((m) => `- ${m}`).join("\n")}\nChange Status and Tip with the Edit tool; any other change goes where rules/plan.md#changes says, or the user reopens the plan with dev-stack.ts reopen.`;
 };
 
 /**

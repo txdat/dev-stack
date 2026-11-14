@@ -11,7 +11,7 @@ import { type Command, type Ctx, Exit, fail, guard, Output } from "./cli.ts";
 import { gateCheck, gateDesign } from "./gate-check.ts";
 import type { GateCtx } from "./hook-input.ts";
 import { heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
-import { dirname, git, globNames, isFile, isLink, P, readBytes } from "./sys.ts";
+import { dirname, git, globNames, isFile, isLink, P, readBytes, replaceBytes } from "./sys.ts";
 import { mainRoot } from "./utils.ts";
 
 const USAGE = [
@@ -392,12 +392,9 @@ class Stack {
         return `${to === "-" ? `dropped pr${m[1]}` : `pr${to}`}${rest}\n`;
       })
       .join("");
-    const tmp = `${log}.${Math.random().toString(36).slice(2, 8)}`;
     try {
-      fs.writeFileSync(P(tmp), P(out), { mode: 0o600 });
-      fs.renameSync(P(tmp), P(log));
+      replaceBytes(log, out);
     } catch {
-      fs.rmSync(P(tmp), { force: true });
       fail(`Cannot write the log of ${dir}.`);
     }
   }
@@ -510,14 +507,9 @@ class Stack {
       if (!body && row.startsWith("## ")) body = true;
       if (body || !row.startsWith("Stacks On:")) out += `${row}\n`;
     }
-    const tmp = `${plan}.${Math.random().toString(36).slice(2, 8)}`;
     try {
-      const mode = fs.statSync(P(plan)).mode & 0o7777;
-      fs.writeFileSync(P(tmp), P(out), { mode });
-      fs.chmodSync(P(tmp), mode);
-      fs.renameSync(P(tmp), P(plan));
+      replaceBytes(plan, out);
     } catch {
-      fs.rmSync(P(tmp), { force: true });
       fail(`Cannot write the header of ${plan}.`);
     }
   }

@@ -1,5 +1,5 @@
-// What the Claude Code module and the Pi extension share: the rules text and the /dev-stack-*
-// commands' table, parsing, and output shaping. No Node and no engine API: each adapter supplies
+// What the Claude Code module and the Pi extension share: the gated phases, the rules text, and the
+// /dev-stack-* commands' table, parsing, and output shaping. No Node and no engine API: each adapter supplies
 // its own IO, so the engine module, the Pi extension, and bin/dev-stack-command.ts import it alike.
 
 type Sub = "next" | "stack" | "check" | "review" | "stop" | "resume" | "reopen";
@@ -23,6 +23,23 @@ export type CommandResult = { text: string; note?: string };
 
 /** dev-stack.ts's exit code and output, as UTF-8 text. */
 export type StackRun = { code: number; stdout: string; stderr: string };
+
+/** The phases the gate checks before they load (core/gate-check.ts). */
+export const GATED_PHASES: readonly string[] = [
+  "review-feature",
+  "execute-feature",
+  "review-code",
+  "create-pr",
+];
+
+/**
+ * Whether a Skill call's input could name a gated phase: it holds a phase's name, in any case and
+ * with `_` for `-`. A call that cannot is passed without running the gate.
+ */
+export const mayNamePhase = (input: unknown): boolean => {
+  const text = JSON.stringify(input ?? null).replace(/_/g, "-");
+  return GATED_PHASES.some((p) => new RegExp(p, "i").test(text));
+};
 
 // ── rules ──────────────────────────────────────────────────────────────
 

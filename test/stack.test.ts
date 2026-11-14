@@ -628,7 +628,9 @@ test("renumber and drop", () => {
   ok("review", k(1), "ready");
   ok("approve", k(1));
   ok("review", k(2), "needs-changes");
+  fs.chmodSync(`${K}/log`, 0o640);
   ok("renumber", k(1), "3=4", "2=3");
+  assert.equal(fs.statSync(`${K}/log`).mode & 0o777, 0o640, "the log keeps its mode");
   assert.ok(
     fs.existsSync(k(3)) && fs.existsSync(k(4)) && !fs.existsSync(k(2)),
     String(fs.readdirSync(K)),
@@ -657,7 +659,9 @@ test("renumber and drop", () => {
   writePlan(`${D}/pr1.spec.md`, "planning", "feat/d1");
   writePlan(`${D}/pr2.spec.md`, "planning", "feat/d2", "pr1");
   writePlan(`${D}/pr3.spec.md`, "planning", "feat/d3", "pr1");
+  fs.chmodSync(`${D}/pr2.spec.md`, 0o640);
   const out = ok("drop", `${D}/pr1.spec.md`);
+  assert.equal(fs.statSync(`${D}/pr2.spec.md`).mode & 0o777, 0o640, "the new root keeps its mode");
   assert.ok(out.endsWith(`; ${D}/pr2.spec.md is the root`), out);
   assert.ok(
     !/^Stacks On:/m.test(read(`${D}/pr2.spec.md`)) && hasLine(`${D}/pr3.spec.md`, "Stacks On: pr2"),
