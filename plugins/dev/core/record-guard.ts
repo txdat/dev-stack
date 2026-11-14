@@ -204,7 +204,12 @@ const rmrf = (p: string): boolean => {
  * directory must be the user's own.
  */
 const snapDir = (input: HookInput, ctx: GateCtx): string | undefined => {
-  const id = (str(input["tool_use_id"]) ?? "").replace(/[^A-Za-z0-9_-]/g, "");
+  // Each other byte becomes "." and two hex digits, and "." appears nowhere else, so distinct ids,
+  // such as Pi's nested "X/1/1" and "X/11", never share a directory.
+  const id = (str(input["tool_use_id"]) ?? "").replace(
+    /[^A-Za-z0-9_-]/g,
+    (c) => `.${c.charCodeAt(0).toString(16).padStart(2, "0")}`,
+  );
   if (id === "") return undefined;
   const uid = process.getuid?.() ?? 0;
   const base = `${ctx.env["XDG_RUNTIME_DIR"] || ctx.env["TMPDIR"] || "/tmp"}/dev-gate-check-${uid}`;
@@ -367,19 +372,35 @@ const LOG_VERBS = [/: stop /, /: review /, /: code-review /, /: approve /, /: au
 export const bashPostCheck = (input: HookInput, ctx: GateCtx): string | undefined => {
   const snap = snapDir(input, ctx);
   if (snap === undefined || !isFile(`${snap}/.complete`)) return undefined;
+  const msgs: string[] = [];
+  let failed = "";
   try {
-    return postCheck(snap, ctx);
+    postCheck(snap, ctx, msgs);
+  } catch (e) {
+    failed = e instanceof Error ? e.message : String(e);
   } finally {
     rmrf(snap);
   }
+  // What was restored before a failure is still reported, and the failure with it.
+  const report =
+    msgs.length === 0
+      ? []
+      : [
+          `A shell command changed plans in a way only dev-stack.ts or the user may (rules/plan.md#changes):\n${msgs.map((m) => `- ${m}`).join("\n")}\nChange Status and Tip with the Edit tool; any other change goes where rules/plan.md#changes says, or the user reopens the plan with dev-stack.ts reopen.`,
+        ];
+  if (failed !== "")
+    report.push(
+      `The plan check after this shell command failed (${failed}) before it compared every plan; plans it did not reach went unchecked. Tell the user.`,
+    );
+  return report.length === 0 ? undefined : report.join("\n");
 };
 
-const postCheck = (snap: string, ctx: GateCtx): string | undefined => {
+/** Compares the plans with the snapshot, restoring what the command may not change; adds to msgs. */
+const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
   const scope = stripNewlines(readBytes(`${snap}/.scope`) ?? "");
   const base = `${scope}/docs/plans`;
   const files = `${snap}/files`;
   const lib = libFor(scope, ctx);
-  const msgs: string[] = [];
   const undone: string[] = [];
   const all = uniqSorted([...planFiles(files, 2), ...planFiles(base, 2)]);
 
@@ -617,9 +638,6 @@ const postCheck = (snap: string, ctx: GateCtx): string | undefined => {
       msgs.push(`${p}: a link to a plan that could not be replaced with a copy; tell the user.`);
     }
   }
-
-  if (msgs.length === 0) return undefined;
-  return `A shell command changed plans in a way only dev-stack.ts or the user may (rules/plan.md#changes):\n${msgs.map((m) => `- ${m}`).join("\n")}\nChange Status and Tip with the Edit tool; any other change goes where rules/plan.md#changes says, or the user reopens the plan with dev-stack.ts reopen.`;
 };
 
 /**

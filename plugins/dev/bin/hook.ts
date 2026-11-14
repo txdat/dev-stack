@@ -3,8 +3,9 @@
 // pass. A PreToolUse Bash call gets the serial-test check, then the record guard. `--gate` and
 // `--serial` run one check alone.
 //
-// Every error is caught: on a phase-gate call it denies, on a guard or serial-check call it passes.
-// Input that is not a JSON object exits 1, which an adapter reports as a check that could not run.
+// Every error is caught: on a phase-gate call it denies; on a guard or serial-check call it passes
+// and exits 1, as input that is not a JSON object does, which an adapter reports as a check that
+// could not run.
 
 import * as fs from "node:fs";
 import { processCtx } from "../core/cli.ts";
@@ -39,6 +40,11 @@ if (input === undefined) {
           block: `hook.ts failed (${why}) before reaching a verdict; this blocks rather than passing.`,
         }),
       );
+    else {
+      // A guard or serial check that failed passes the call; exit 1 makes the adapter warn.
+      process.stderr.write(`hook.ts: ${why}\n`);
+      process.exitCode = 1;
+    }
   }
 }
 

@@ -103,24 +103,23 @@ const hookText = (input: HookInput): string => {
 
 /**
  * Checks one hook call. A gated phase fails closed: an unexpected error blocks. The record guard
- * and post check fail open: an error passes.
+ * fails open: its error is thrown, and the caller passes the call with a warning. The post check
+ * reports its own failure beside anything it restored.
  */
 export const gateCheck = (input: HookInput, ctx: GateCtx): GateResult => {
   const tool = str(input["tool_name"]) ?? "";
   const event = str(input["hook_event_name"]) ?? "";
   if (tool === "Bash" && event.startsWith("PostToolUse")) {
-    try {
-      const report = bashPostCheck(input, ctx);
-      return report === undefined ? undefined : { postBlock: report };
-    } catch {
-      return undefined;
-    }
+    const report = bashPostCheck(input, ctx);
+    return report === undefined ? undefined : { postBlock: report };
   }
+  // Any other error from the guard is thrown: the caller passes the call with a warning.
   if (tool === "Bash" || tool === "Edit" || tool === "Write" || tool === "MultiEdit") {
     try {
       recordGuard(tool, input, ctx);
     } catch (e) {
       if (e instanceof Block) return { block: e.reason };
+      throw e;
     }
     return undefined;
   }

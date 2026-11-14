@@ -353,6 +353,11 @@ export default function devExtension(pi: ExtensionAPI) {
       ctx.ui.notify(reason, "warning");
       return { content: [...event.content, { type: "text" as const, text: reason }] };
     }
+    if (v !== undefined && "error" in v)
+      ctx.ui.notify(
+        `[dev] the plan check after bash failed, its changes went unchecked: ${v.error}`,
+        "warning",
+      );
     return;
   });
 
@@ -366,6 +371,11 @@ export default function devExtension(pi: ExtensionAPI) {
       ctx.cwd,
     );
     if (v !== undefined && "postBlock" in v) ctx.ui.notify(`[dev] ${utf8(v.postBlock)}`, "warning");
+    else if (v !== undefined && "error" in v)
+      ctx.ui.notify(
+        `[dev] the plan check after bash failed, its changes went unchecked: ${v.error}`,
+        "warning",
+      );
   });
 
   // `next`, `list`, and `check` only read. `review`, `stop`, `resume`, and `reopen` record a
