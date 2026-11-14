@@ -1,0 +1,8 @@
+{
+  // Code that runs inside the Claude Code plugin engine: no Node. types/claude-code.d.ts is a copy
+  // of the engine's API types (Claude Code writes a fresh one into .claude-plugin/types on load).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "types": [] },
+  "include": ["types/claude-code.d.ts", "plugins/dev/hooks", "plugins/dev/core"],
+  "exclude": ["plugins/dev/hooks/*.test.ts"]
+}

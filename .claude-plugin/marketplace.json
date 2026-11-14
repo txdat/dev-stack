@@ -1,0 +1,11 @@
+{
+  "name": "dev-stack",
+  "owner": { "name": "txdat" },
+  "plugins": [
+    {
+      "name": "dev",
+      "source": "./plugins/dev",
+      "description": "Plan-backed dev workflow: skills, agents, phase gates, rules, and /dev-stack-* commands"
+    }
+  ]
+}

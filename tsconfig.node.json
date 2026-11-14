@@ -1,0 +1,6 @@
+{
+  // Code that runs under Node 24 or Pi: CLIs, the Node IO adapter, the Pi extension, and tests.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "types": ["node"] },
+  "include": ["plugins/dev/bin", "plugins/dev/node", "plugins/dev/pi", "plugins/dev/core", "test"]
+}

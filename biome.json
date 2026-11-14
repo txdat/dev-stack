@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/.claude-plugin/types",
+      "!types/claude-code.d.ts",
+      "!plugins/dev/ref",
+      "!**/*.md"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },
+  "linter": { "enabled": true },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["plugins/dev/core/**", "plugins/dev/hooks/**"],
+      "linter": { "rules": { "correctness": { "noNodejsModules": "error" } } }
+    }
+  ]
+}
