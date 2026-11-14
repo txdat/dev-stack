@@ -11,7 +11,7 @@ A plan-backed development workflow for Claude Code and Pi: skills, subagents, ph
 
 For development, `CLAUDE_CODE_PLUGIN_DIRS=~/work/dev-stack/plugins/dev claude` loads the plugin from the checkout and reloads it on edit.
 
-The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/dev/rules/CODING.md) into the system prompt (Claude: `prompt.compose`; Pi: `before_agent_start`) and defines `$DEV_LIB` there as the plugin's absolute install root. No `CLAUDE.md` or `AGENTS.md` symlink is needed.
+The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/dev/rules/CODING.md) into the context (Claude: a `prompt.context` block, which subagents also receive; Pi: `before_agent_start`) and defines `$DEV_LIB` there as the plugin's absolute install root. No `CLAUDE.md` or `AGENTS.md` symlink is needed.
 
 ## Layout
 
@@ -22,11 +22,11 @@ plugins/dev/                      the plugin; self-contained, since Claude copie
   skills/<name>/SKILL.md          skills
   agents/<name>.md                subagents (Claude); Pi's main agent reads them directly
   rules/                          CORE.md, CODING.md, plan.md, frontend-design.md
-  core/                           the workflow logic: plans, stacks, gates; no Node APIs
-  bin/                            Node CLIs over core (`node $DEV_LIB/bin/<name>.ts`)
-  node/                           Node IO for core, used by bin/ and pi/
-  hooks/                          Claude Code plugin module: rules, gates, commands
-  pi/                             Pi extension: rules, gates, commands
+  core/                           the workflow logic: plans, stacks, gates (Node, synchronous)
+  bin/                            CLIs over core (`node $DEV_LIB/bin/<name>.ts`); bin/hook.ts is the gate
+  hooks/                          Claude Code plugin module (no Node): rules, and gates and commands
+                                  that run bin/ through $.process.run
+  pi/                             Pi extension: rules, gates, and commands, calling core in-process
 test/                             node --test suites
 ```
 

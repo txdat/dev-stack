@@ -15,7 +15,7 @@
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "overrides": [
     {
-      "includes": ["plugins/dev/core/**", "plugins/dev/hooks/**"],
+      "includes": ["plugins/dev/hooks/**"],
       "linter": { "rules": { "correctness": { "noNodejsModules": "error" } } }
     }
   ]

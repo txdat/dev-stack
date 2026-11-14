@@ -58,10 +58,11 @@ Write rules in English only, whatever language the request uses.
 All code is TypeScript that Node 24, Claude Code, and Pi run directly, without a build:
 
 - Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers.
-- `core/` holds the workflow logic and imports no Node module, so the Claude plugin module can run it in-process; its IO comes through an interface that `hooks/` implements over the engine's `$` and `node/` over Node. Biome's `noNodejsModules` and `tsconfig.engine.json` enforce this.
+- `core/` holds the workflow logic as synchronous Node. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`; Pi's extension imports core directly. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
 - Core functions never call `process.exit` or `chdir`, take the working directory as an argument, and keep no module-level cache. CLIs write with `process.stdout.write` and set `process.exitCode`.
 - Plans are read as bytes (latin1) and matched with ASCII-only classes, never `\s` or locale-aware case folding, so hashes and parsing match the original bash under `LC_ALL=C`.
-- The gate fails closed on a phase it gates; the record guard and the serial-test check fail open.
+- The gate fails closed on a phase it gates; the record guard and the serial-test check fail open. `bin/hook.ts` catches every error: on a phase-gate event it denies, on a guard or serial-check event it passes. An adapter that cannot run it at all (node missing, timeout, unreadable output) passes the call with a visible warning, as a failed Claude Code hook does.
+- Core writes byte strings (`core/bytes.ts`): files are read and written as latin1, and `git hash-object` gets bytes, never a UTF-8 re-encoding of them.
 
 The gate reads plan header fields and IDs, never prose. A change to the plan schema, statuses, or stack rules in [plan.md](plugins/dev/rules/plan.md) needs matching changes in `core/` and `test/`.
 
