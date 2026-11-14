@@ -423,7 +423,7 @@ class Stack {
     const moves: [string, string][] = [];
     for (const pair of pairs) {
       const m = /^([1-9][0-9]*)=([1-9][0-9]*)$/.exec(pair);
-      if (!m?.[1] || !m[2]) return usage();
+      if (!m?.[1] || !m[2]) usage();
       const [, oldN, newN] = m as unknown as [string, string, string];
       if (!isFile(`${dir}/pr${oldN}.spec.md`)) fail(`No plan pr${oldN} in ${dir}.`);
       if (to.has(oldN)) fail(`pr${oldN} is renumbered twice.`);
