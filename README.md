@@ -7,7 +7,7 @@ A plan-backed development workflow for Claude Code and Pi: skills, subagents, ph
 | Harness | Install | Skills |
 | ------- | ------- | ------ |
 | Claude Code | `npm install && npm run build`, then `claude plugin marketplace add ~/work/dev-stack` and `/plugin install dev@dev-stack` | `/dev:<skill>` |
-| Pi | `npm install && npm run build`, then `pi install ~/work/dev-stack` | `/dev:<skill>` (an alias the extension rewrites) or `/skill:<skill>` |
+| Pi | `npm install && npm run build`, then `pi install ~/work/dev-stack` | `/dev:<skill>` (registered, so Pi lists it) or `/skill:<skill>` |
 
 `dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code copies the plugin into its cache, so reinstall it through `/plugin` after a rebuild; Pi loads `dist/dev` in place, so `/reload` picks up a rebuild. For development, `CLAUDE_CODE_PLUGIN_DIRS=~/work/dev-stack/dist/dev claude` loads the built plugin from the checkout; restart the session after `npm run build`.
 

@@ -1,6 +1,7 @@
 /**
  * The dev plugin's Pi extension: the rules in the system prompt, the phase gates, record guard,
- * and serial-test check, and the /dev-stack-* commands, calling core in-process.
+ * and serial-test check, the /dev:<skill> commands, and the /dev-stack-* commands, calling core
+ * in-process.
  *
  * Pi has no Skill tool: it loads a skill by reading its SKILL.md, or expands a typed
  * `/skill:<name>` itself. So `tool_call` on `read` of `<root>/skills/<slug>/SKILL.md` and the
@@ -55,6 +56,31 @@ const realpath = (p: string): string => {
 };
 
 const SKILLS = realpath(path.join(ROOT, "skills"));
+
+/** This install's skills, each with the description its SKILL.md gives, for the /dev:<name> commands. */
+const skills = (): { slug: string; description: string }[] => {
+  let names: string[];
+  try {
+    names = fs.readdirSync(SKILLS).sort();
+  } catch {
+    return [];
+  }
+  const found: { slug: string; description: string }[] = [];
+  for (const slug of names) {
+    let text: string;
+    try {
+      text = fs.readFileSync(path.join(SKILLS, slug, "SKILL.md"), "utf8");
+    } catch {
+      continue;
+    }
+    const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? "";
+    const said = (/^description:[ \t]*(.*)$/m.exec(front)?.[1] ?? "")
+      .trim()
+      .replace(/^"(.*)"$/, "$1");
+    found.push({ slug, description: said === "" ? `Run the dev skill ${slug}` : said });
+  }
+  return found;
+};
 
 /** The rules, read from this install. */
 const rules = (): string =>
@@ -326,9 +352,9 @@ export default function devExtension(pi: ExtensionAPI) {
   });
 
   // A typed /skill:<name> loads a phase without a read: the gate decides on the prompt, and a
-  // blocked prompt never reaches the agent.
-  // `/dev:<name>`, as Claude Code types a plugin skill, is rewritten to Pi's `/skill:<name>` for
-  // this plugin's own skills; Pi skill names cannot hold a colon.
+  // blocked prompt never reaches the agent. A `/dev:<name>` that Pi did not dispatch as the
+  // registered command below, such as one typed with leading whitespace, is rewritten to Pi's
+  // `/skill:<name>` for this plugin's own skills; Pi skill names cannot hold a colon.
   pi.on("input", async (event, ctx) => {
     const alias = /^(\s*)\/dev:([a-z0-9-]+)(?=\s|$)/i.exec(event.text);
     const name = alias?.[2]?.toLowerCase();
@@ -445,6 +471,22 @@ export default function devExtension(pi: ExtensionAPI) {
         "warning",
       );
   });
+
+  // `/dev:<name>`, as Claude Code names a plugin skill, is a real command, so Pi lists it in the
+  // command menu. Its handler sends Pi the skill command, so the input gate above checks the phase
+  // and Pi expands the SKILL.md exactly as for a typed `/skill:<name>`. Mid-run it queues after the
+  // turn, which is what Pi does with a message submitted while it is streaming.
+  for (const { slug, description } of skills())
+    pi.registerCommand(`dev:${slug}`, {
+      description,
+      handler: async (args) => {
+        const rest = args.trim();
+        pi.sendUserMessage(`/skill:${slug}${rest === "" ? "" : ` ${rest}`}`, {
+          expandPromptTemplates: true,
+          deliverAs: "followUp",
+        });
+      },
+    });
 
   // `next`, `list`, and `check` only read. `review`, `stop`, `resume`, and `reopen` record a
   // decision of the user's, so each waits for the turn to end: a running turn reads the plan and

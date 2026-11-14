@@ -13,15 +13,32 @@ import { exec, PLUGIN, planText, read, repo, run, tmp, withEnv, write } from "./
 type Handler = (event: unknown, ctx: unknown) => unknown;
 let branch: unknown[] = [];
 const handlers = new Map<string, Handler>();
-const commands = new Map<string, { handler: (args: string, ctx: unknown) => Promise<void> }>();
+const commands = new Map<
+  string,
+  { description?: string; handler: (args: string, ctx: unknown) => Promise<void> }
+>();
 const sent: { customType: string; content: string; display: boolean }[] = [];
+type SentUser = {
+  text: string;
+  options?: { expandPromptTemplates?: boolean; deliverAs?: string } | undefined;
+};
+const sentUser: SentUser[] = [];
 const fakePi = {
   on: (name: string, h: Handler) => handlers.set(name, h),
   registerCommand: (
     name: string,
-    opts: { handler: (args: string, ctx: unknown) => Promise<void> },
+    opts: { description?: string; handler: (args: string, ctx: unknown) => Promise<void> },
   ) => commands.set(name, opts),
   sendMessage: (m: { customType: string; content: string; display: boolean }) => sent.push(m),
+  // A user message goes back through the input handlers before Pi expands it, so a forwarded
+  // skill command is gated exactly as a typed one.
+  sendUserMessage: async (
+    text: string,
+    options?: { expandPromptTemplates?: boolean; deliverAs?: string } | undefined,
+  ) => {
+    sentUser.push({ text, options });
+    if (options?.expandPromptTemplates) await handlers.get("input")?.({ text }, ctx);
+  },
   // A custom entry joins the active branch, as Pi's session manager appends it.
   appendEntry: (customType: string, data: unknown) =>
     branch.push({ type: "custom", customType, data }),
@@ -115,6 +132,50 @@ test("input: the /dev: alias and the gate on typed skills", async () => {
   assert.equal(await fire("input", { text: "/skill:explore x" }), undefined);
   assert.equal(await fire("input", { text: `please /dev:review-feature ${P}` }), undefined);
   assert.equal(await fire("input", { text: "hello" }), undefined);
+});
+
+test("/dev:<skill> commands: one per skill, described by its SKILL.md", () => {
+  const slugs = fs
+    .readdirSync(path.join(PLUGIN, "skills"), { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  assert.deepEqual(
+    [...commands.keys()].filter((n) => n.startsWith("dev:")).sort(),
+    slugs.map((slug) => `dev:${slug}`),
+  );
+  for (const slug of slugs) {
+    const said = commands.get(`dev:${slug}`)?.description ?? "";
+    const front = read(`${PLUGIN}/skills/${slug}/SKILL.md`);
+    const want = /^description:[ \t]*"(.*)"$/m.exec(front)?.[1] ?? "";
+    assert.ok(want.length > 0, `no description in ${slug}/SKILL.md`);
+    assert.equal(said, want, `dev:${slug}`);
+  }
+});
+
+test("/dev:<skill> forwards to Pi's skill command, arguments and all", async () => {
+  sentUser.length = 0;
+  await commands.get("dev:explore")?.handler("  where is auth ", ctx);
+  assert.deepEqual(sentUser, [
+    {
+      text: "/skill:explore where is auth",
+      options: { expandPromptTemplates: true, deliverAs: "followUp" },
+    },
+  ]);
+  // Without arguments the skill still loads.
+  sentUser.length = 0;
+  await commands.get("dev:explore")?.handler("", ctx);
+  assert.equal(sentUser[0]?.text, "/skill:explore");
+});
+
+test("/dev:<skill> cannot bypass the gate the forwarded skill command runs", async () => {
+  sentUser.length = 0;
+  notes = [];
+  // The forwarded user message re-enters the input handlers, whose gate refuses the phase.
+  await commands.get("dev:review-feature")?.handler(P, ctx);
+  assert.equal(sentUser[0]?.text, `/skill:review-feature ${P}`);
+  assert.equal(notes[0]?.[1], "error");
+  assert.match(notes[0]?.[0] ?? "", /^\[dev\] .*already auto-approved/);
 });
 
 test("tool_call: reading a gated skill's SKILL.md runs its gate", async () => {
@@ -355,7 +416,7 @@ test("tool_result and tool_execution_end: a shell rollback is restored and repor
 });
 
 test("/dev-stack-* commands run dev-stack in-process", async () => {
-  assert.deepEqual([...commands.keys()].sort(), [
+  assert.deepEqual([...commands.keys()].filter((n) => n.startsWith("dev-stack-")).sort(), [
     "dev-stack-check",
     "dev-stack-list",
     "dev-stack-next",
