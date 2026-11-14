@@ -134,6 +134,17 @@ export const gateCheck = (input: HookInput, ctx: GateCtx): GateResult => {
   return phaseGate(slug, hookText(input), false, ctx);
 };
 
+/** Whether a call invokes a gated phase, so an error in checking it blocks. */
+export const isPhaseCall = (input: HookInput): boolean => {
+  try {
+    const tool = str(input["tool_name"]) ?? "";
+    if (["Bash", "Edit", "Write", "MultiEdit"].includes(tool)) return false;
+    return GATED.includes(skillSlug(rawSkill(input, str(input["hook_event_name"]) ?? "")));
+  } catch {
+    return false;
+  }
+};
+
 /** design-feature's stack check: the review-feature gate without its parent-approval and stop checks. */
 export const gateDesign = (plan: string, ctx: GateCtx): GateResult =>
   phaseGate("review-feature", plan, true, ctx);

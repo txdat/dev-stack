@@ -45,6 +45,12 @@ const WRITE_RE = new RegExp(
   "s",
 );
 
+/** `node <path>/<dev CLI>.ts` in command position. */
+const DEV_CLI_RE = new RegExp(
+  `(^|[;&|(\\n])${SP}*node${SP}+['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack|dev-publish|dev-check|dev-utils|dev-worktree|handoff-path)\\.ts['"]?`,
+  "g",
+);
+
 const shellGuard = (input: HookInput, ctx: GateCtx): void => {
   const cmd = str(member(input["tool_input"], "command")) ?? "";
   const user = USER_RE.exec(cmd);
@@ -63,7 +69,10 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
       )
       .join("\n"),
   );
-  if (REDIR_RE.test(probe) || (LOG_RE.test(probe) && WRITE_RE.test(probe))) block(LOG_BLOCK);
+  // The dev CLIs run under node write the log only through dev-stack, so node in that position is
+  // no writing tool; node -e and other scripts still are.
+  const tools = probe.replace(DEV_CLI_RE, "$1");
+  if (REDIR_RE.test(probe) || (LOG_RE.test(probe) && WRITE_RE.test(tools))) block(LOG_BLOCK);
   snapshotPlans(input, ctx);
 };
 

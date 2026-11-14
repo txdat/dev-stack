@@ -21,7 +21,7 @@ export const serialCheck = (input: HookInput): string | undefined => {
   const cmd = str(member(input["tool_input"], "command")) ?? "";
   for (const [runner, flag] of SERIAL_FLAG)
     if (hasWord(cmd, runner) && !hasWord(cmd, flag))
-      return `This command names ${runner} without ${flag}. Run tests serially (CODING.md#tests): add ${flag}, after -- for npm (npm test -- ${flag}).`;
+      return `This command names ${runner} without ${flag}. Run tests serially (rules/CODING.md#tests): add ${flag}, after -- for npm (npm test -- ${flag}).`;
   return undefined;
 };
 

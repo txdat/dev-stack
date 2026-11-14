@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import { processCtx } from "../core/cli.ts";
-import { claudeVerdict, gateCheck, gateDesign } from "../core/gate-check.ts";
+import { claudeVerdict, gateCheck, gateDesign, isPhaseCall } from "../core/gate-check.ts";
 import type { HookInput } from "../core/hook-input.ts";
 import { claudeSerialDeny, serialCheck } from "../core/serial-check.ts";
 
@@ -27,11 +27,23 @@ if (mode === "--design") {
       input = parsed as HookInput;
   } catch {}
   if (input !== undefined) {
-    const serial =
-      mode !== "--gate" && input["hook_event_name"] === "PreToolUse"
-        ? serialCheck(input)
-        : undefined;
-    if (serial !== undefined) write(claudeSerialDeny(serial));
-    else if (mode !== "--serial") write(claudeVerdict(input, gateCheck(input, ctx)));
+    try {
+      run(input);
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      if (mode !== "--serial" && isPhaseCall(input))
+        write(
+          claudeVerdict(input, {
+            block: `hook.ts failed (${why}) before reaching a verdict; this blocks rather than passing.`,
+          }),
+        );
+    }
   }
+}
+
+function run(input: HookInput): void {
+  const serial =
+    mode !== "--gate" && input["hook_event_name"] === "PreToolUse" ? serialCheck(input) : undefined;
+  if (serial !== undefined) write(claudeSerialDeny(serial));
+  else if (mode !== "--serial") write(claudeVerdict(input, gateCheck(input, ctx)));
 }
