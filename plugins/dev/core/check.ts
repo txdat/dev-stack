@@ -4,9 +4,9 @@
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { b, stripNewlines, utf8 } from "./bytes.ts";
+import { b, rowsOf, stripNewlines, utf8 } from "./bytes.ts";
 import { type Command, Exit, Output } from "./cli.ts";
-import { git, isDir, isFile, readable, readBytes } from "./sys.ts";
+import { type Env, exitCode, git, isDir, isFile, readable, readBytes, spawnEnv } from "./sys.ts";
 
 const USAGE =
   "usage: dev-check.ts proof <commit> [--test path] [--stub path] | artifacts <base> [head] | pcs <plan> [--cwd dir] [PC-<n> ...]";
@@ -34,9 +34,9 @@ const BODYLESS = new RegExp(
 const hereLines = (text: string): string[] => stripNewlines(text).split("\n");
 
 /** Added lines of a commit's diff for one path: `sed -n 's/^+\([^+]\)/\1/p'`. */
-const additions = (cwd: string, commit: string, path: string): string =>
+const additions = (cwd: string, env: Env, commit: string, path: string): string =>
   stripNewlines(
-    git(["show", "--format=", "--unified=0", commit, "--", path], { cwd })
+    git(["show", "--format=", "--unified=0", commit, "--", path], { cwd, env })
       .stdout.split("\n")
       .filter((l) => /^\+[^+]/.test(l))
       .map((l) => `${l.slice(1)}\n`)
@@ -46,10 +46,10 @@ const additions = (cwd: string, commit: string, path: string): string =>
 const TEST_DIRS =
   /^(test|tests|spec|specs|__tests__|fixtures|testdata)\/|\/(test|tests|spec|specs|__tests__|fixtures|testdata)\//i;
 
-const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
+const proof = (cwd: string, env: Env, argv: readonly string[], o: Output): Out2 => {
   if (argv.length < 2) usage();
   const commit = argv[1] as string;
-  if (git(["rev-parse", "--verify", `${commit}^{commit}`], { cwd }).code !== 0)
+  if (git(["rev-parse", "--verify", `${commit}^{commit}`], { cwd, env }).code !== 0)
     block(`unknown proof commit: ${commit}`);
   const tests: string[] = [];
   const stubs: string[] = [];
@@ -62,7 +62,7 @@ const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
     else usage();
   }
   let found = false;
-  const tree = git(["diff-tree", "--no-commit-id", "--name-only", "-r", commit], { cwd });
+  const tree = git(["diff-tree", "--no-commit-id", "--name-only", "-r", commit], { cwd, env });
   for (const path of tree.stdout.split("\n")) {
     if (path === "") continue;
     found = true;
@@ -72,8 +72,8 @@ const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
       // --test exempts a path that does not look like a test, so it is the one way past the
       // non-test-path block below. Require the claim to be backed by test code: the commit adds a
       // test declaration, or the file held one before the commit.
-      const added = hereLines(additions(cwd, commit, path));
-      const before = git(["show", `${commit}^:${path}`], { cwd });
+      const added = hereLines(additions(cwd, env, commit, path));
+      const before = git(["show", `${commit}^:${path}`], { cwd, env });
       const beforeLines = before.code === 0 ? before.stdout.split("\n") : [];
       if (!added.some((l) => TEST_DECL.test(l)) && !beforeLines.some((l) => TEST_DECL.test(l)))
         block(
@@ -82,7 +82,7 @@ const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
       continue;
     }
     if (!stubs.includes(path)) block(`proof touches non-test path: ${path}`);
-    const added = hereLines(additions(cwd, commit, path));
+    const added = hereLines(additions(cwd, env, commit, path));
     // Throwing expression bodies are the permitted stub form (../rules/plan.md#verification).
     if (added.filter((l) => !THROWING.test(l)).some((l) => VALUE.test(l)))
       block(`stub contains value implementation: ${path}`);
@@ -100,18 +100,18 @@ const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
   return { code: 0 };
 };
 
-const artifacts = (cwd: string, argv: readonly string[], o: Output): Out2 => {
+const artifacts = (cwd: string, env: Env, argv: readonly string[], o: Output): Out2 => {
   if (argv.length < 2 || argv.length > 3) usage();
   const base = argv[1] as string;
   if (base === "") block("invalid ref: empty base");
-  if (git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`], { cwd }).code !== 0)
+  if (git(["rev-parse", "--verify", "--quiet", `${base}^{commit}`], { cwd, env }).code !== 0)
     block(`invalid ref: ${base}`);
   const end = argv[2] || "HEAD";
-  if (git(["rev-parse", "--verify", "--quiet", `${end}^{commit}`], { cwd }).code !== 0)
+  if (git(["rev-parse", "--verify", "--quiet", `${end}^{commit}`], { cwd, env }).code !== 0)
     block(`invalid ref: ${end}`);
   const range = `${base}..${end}`;
   const added = hereLines(
-    git(["diff", range], { cwd })
+    git(["diff", range], { cwd, env })
       .stdout.split("\n")
       .filter((l) => !l.startsWith("+++ ") && l.startsWith("+"))
       .map((l) => `${l}\n`)
@@ -138,8 +138,7 @@ export const planPcs = (text: string): [string, string][] => {
   const out: [string, string][] = [];
   let fenced = false;
   let sec: string | undefined;
-  const rows = text.split("\n");
-  if (rows[rows.length - 1] === "") rows.pop();
+  const rows = rowsOf(text);
   for (const row of rows) {
     if (/^[ \t\n\v\f\r]*(```|~~~)/.test(row)) {
       fenced = !fenced;
@@ -168,13 +167,14 @@ export const planPcs = (text: string): [string, string][] => {
 };
 
 /** Runs a Check as `timeout 120 bash -c "$cmd" </dev/null 2>&1` does: status and merged output. */
-const runCheck = (cmd: string, cwd: string): { code: number; out: string } => {
+const runCheck = (cmd: string, cwd: string, env: Env): { code: number; out: string } => {
   const dir = fs.mkdtempSync(`${os.tmpdir()}/dev-check-`);
   const file = `${dir}/out`;
   const fd = fs.openSync(file, "w");
   try {
     const r = spawnSync("bash", ["-c", utf8(cmd)], {
       cwd: utf8(cwd),
+      env: spawnEnv(env),
       stdio: ["ignore", fd, fd],
       timeout: 120_000,
       killSignal: "SIGTERM",
@@ -182,16 +182,13 @@ const runCheck = (cmd: string, cwd: string): { code: number; out: string } => {
     fs.closeSync(fd);
     const out = readBytes(file) ?? "";
     const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
-    // As bash reports them: 127 when bash cannot start, 128 plus the number for a signal.
-    const killed = r.signal ? 128 + (os.constants.signals[r.signal] ?? 0) : 1;
-    const code = timedOut ? 124 : r.error && !r.pid ? 127 : (r.status ?? killed);
-    return { code, out };
+    return { code: timedOut ? 124 : exitCode(r), out };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 };
 
-const pcs = (cwd0: string, argv: readonly string[], o: Output): Out2 => {
+const pcs = (cwd0: string, env: Env, argv: readonly string[], o: Output): Out2 => {
   if (argv.length < 2) usage();
   const plan = argv[1] as string;
   let cwd = ".";
@@ -225,7 +222,7 @@ const pcs = (cwd0: string, argv: readonly string[], o: Output): Out2 => {
       failed = true;
       continue;
     }
-    const r = runCheck(cmd, abs(cwd));
+    const r = runCheck(cmd, abs(cwd), env);
     if (r.code === 0) o.out(`PASS ${id}: ${cmd}\n`);
     else {
       failed = true;
@@ -251,11 +248,11 @@ export const devCheck: Command = (ctx) => {
     const sub = ctx.argv[0];
     const r =
       sub === "proof"
-        ? proof(ctx.cwd, ctx.argv, o)
+        ? proof(ctx.cwd, ctx.env, ctx.argv, o)
         : sub === "artifacts"
-          ? artifacts(ctx.cwd, ctx.argv, o)
+          ? artifacts(ctx.cwd, ctx.env, ctx.argv, o)
           : sub === "pcs"
-            ? pcs(ctx.cwd, ctx.argv, o)
+            ? pcs(ctx.cwd, ctx.env, ctx.argv, o)
             : usage();
     return o.done(r.code);
   } catch (e) {

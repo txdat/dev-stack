@@ -4,10 +4,19 @@
 // never after. Methods return values and status; callers decide how to fail. All text is byte
 // strings (bytes.ts).
 
-import { b, byteCompare, lines, stripNewlines, trimSpace, versionCompare } from "./bytes.ts";
+import {
+  b,
+  byteCompare,
+  lines,
+  rowsOf,
+  stripNewlines,
+  trimSpace,
+  versionCompare,
+} from "./bytes.ts";
 import {
   basename,
   dirname,
+  type Env,
   git,
   globNames,
   isDir,
@@ -66,8 +75,7 @@ type Parsed = { head: string; stacks: string; spec: string };
 /** One plan file as the header reader sees it (dev-plan-lib.sh PLAN_AWK). */
 const parsePlan = (text: string): Parsed | undefined => {
   if (text === "") return undefined;
-  const rows = text.split("\n");
-  if (rows[rows.length - 1] === "") rows.pop();
+  const rows = rowsOf(text);
   let head = "";
   let line = "";
   let spec = "";
@@ -121,18 +129,19 @@ export class PlanLib {
   private worktreeList: string | undefined;
   private localBranches: string | undefined;
 
+  /** The caller's environment, which git runs under. */
+  readonly env: Env;
+
   /**
-   * `repoRoot`, `home`, `worktreesRoot`, and `cwd` are byte strings; worktreesRoot is
-   * AI_WORKTREES_ROOT, and a relative one resolves against `cwd`, the caller's directory.
+   * The plans of `repoRoot`, as the caller at `ctx` sees them, all byte strings: HOME, and
+   * AI_WORKTREES_ROOT, where a relative one resolves against `ctx.cwd`, come from `ctx.env`.
    */
-  constructor(
-    repoRoot: string,
-    env: { home: string; worktreesRoot?: string | undefined; cwd: string },
-  ) {
+  constructor(repoRoot: string, ctx: { cwd: string; env: Env }) {
     this.repoRoot = repoRoot;
-    this.home = env.home;
-    this.worktreesRoot = realpathM(env.worktreesRoot || `${env.home}/work/wt`, env.cwd);
-    this.repoPlans = realpathM(`${repoRoot}/docs/plans`, env.cwd);
+    this.env = ctx.env;
+    this.home = ctx.env["HOME"] ?? "";
+    this.worktreesRoot = realpathM(ctx.env["AI_WORKTREES_ROOT"] || `${this.home}/work/wt`, ctx.cwd);
+    this.repoPlans = realpathM(`${repoRoot}/docs/plans`, ctx.cwd);
     const format = `${this.repoPlans}/<issue>_<slug>/pr<N>.spec.md`;
     this.planFormat = format.startsWith(`${this.home}/`)
       ? `~/${format.slice(this.home.length + 1)}`
@@ -151,13 +160,16 @@ export class PlanLib {
     return PLAN_REL_RE.test(real.slice(this.repoPlans.length + 1)) ? real : undefined;
   }
 
-  /** Whether Git ignores docs/plans in the main root. */
+  private ignored: boolean | undefined;
+
+  /** Whether Git ignores docs/plans in the main root; asked once per PlanLib. */
   plansIgnored(): boolean {
-    return (
+    this.ignored ??=
       git(["check-ignore", "-q", "--no-index", "--", "docs/plans/0_x/pr1.spec.md"], {
         cwd: this.repoRoot,
-      }).code === 0
-    );
+        env: this.env,
+      }).code === 0;
+    return this.ignored;
   }
 
   /** A plan path as shown to people: relative to this repository's plans. */
@@ -199,9 +211,12 @@ export class PlanLib {
     const files = globNames(dir, "pr", ".spec.md").sort((x, y) => versionCompare(x, y));
     this.planFiles.set(dir, files);
     this.load(files.filter((f) => isFile(f) && readable(f)));
-    const wt = git(["worktree", "list", "--porcelain"], { cwd: this.repoRoot });
+    const wt = git(["worktree", "list", "--porcelain"], { cwd: this.repoRoot, env: this.env });
     this.worktreeList = wt.code === 0 ? stripNewlines(wt.stdout) : "";
-    const br = git(["for-each-ref", "--format=%(refname)", "refs/heads"], { cwd: this.repoRoot });
+    const br = git(["for-each-ref", "--format=%(refname)", "refs/heads"], {
+      cwd: this.repoRoot,
+      env: this.env,
+    });
     this.localBranches = br.code === 0 ? stripNewlines(br.stdout) : "";
   }
 
@@ -238,8 +253,7 @@ export class PlanLib {
     if (!this.field(plan, "Status")) return false;
     const text = readBytes(plan);
     if (text === undefined) return false;
-    const rows = text.split("\n");
-    if (rows[rows.length - 1] === "") rows.pop();
+    const rows = rowsOf(text);
     const val = new Map<string, string>();
     for (const [k, v] of pairs) val.set(k, v);
     const scan = (emit: (row: string, key: string | undefined) => void): void => {
@@ -331,7 +345,9 @@ export class PlanLib {
     if (!isDir(dir) || dir === this.repoRoot) return false;
     let list = this.worktreeList;
     if (list === undefined)
-      list = stripNewlines(git(["worktree", "list", "--porcelain"], { cwd: this.repoRoot }).stdout);
+      list = stripNewlines(
+        git(["worktree", "list", "--porcelain"], { cwd: this.repoRoot, env: this.env }).stdout,
+      );
     return `\n${list}\n`.includes(`\nworktree ${dir}\n`);
   }
 
@@ -339,7 +355,10 @@ export class PlanLib {
     if (this.localBranches !== undefined)
       return `\n${this.localBranches}\n`.includes(`\nrefs/heads/${name}\n`);
     return (
-      git(["show-ref", "--verify", "-q", `refs/heads/${name}`], { cwd: this.repoRoot }).code === 0
+      git(["show-ref", "--verify", "-q", `refs/heads/${name}`], {
+        cwd: this.repoRoot,
+        env: this.env,
+      }).code === 0
     );
   }
 
@@ -405,7 +424,7 @@ export class PlanLib {
     return (
       pg !== "" &&
       g !== "" &&
-      git(["merge-base", "--is-ancestor", pg, g], { cwd: this.repoRoot }).code === 0
+      git(["merge-base", "--is-ancestor", pg, g], { cwd: this.repoRoot, env: this.env }).code === 0
     );
   }
 
@@ -417,7 +436,7 @@ export class PlanLib {
   /** git hash-object of a byte string. */
   hashObject(text: string): string {
     return stripNewlines(
-      git(["hash-object", "--stdin"], { cwd: this.repoRoot, input: text }).stdout,
+      git(["hash-object", "--stdin"], { cwd: this.repoRoot, env: this.env, input: text }).stdout,
     );
   }
 
@@ -458,8 +477,7 @@ export class PlanLib {
     const text = readBytes(stackLog(plan));
     if (text === undefined) return [];
     const prefix = `pr${planNumber(plan)}: `;
-    const rows = text.split("\n");
-    if (rows[rows.length - 1] === "") rows.pop();
+    const rows = rowsOf(text);
     return rows.filter((r) => r.startsWith(prefix)).map((r) => r.slice(prefix.length));
   }
 
@@ -472,6 +490,7 @@ export class PlanLib {
     if (branch !== "") {
       const r = git(["rev-parse", "--verify", "-q", `refs/heads/${branch}^{commit}`], {
         cwd: this.repoRoot,
+        env: this.env,
       });
       tip = r.code === 0 ? stripNewlines(r.stdout) : `${stripNewlines(r.stdout)}-`;
     }

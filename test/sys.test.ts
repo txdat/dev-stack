@@ -8,13 +8,34 @@ import { test } from "node:test";
 import { replaceBytes, run } from "../plugins/dev/core/sys.ts";
 
 test("run: exit codes of a command that cannot start, is killed, or fails", () => {
-  const missing = run(["dev-test-no-such-command"]);
+  const missing = run(["dev-test-no-such-command"], { env: {} });
   assert.equal(missing.code, 127);
   assert.match(missing.stderr, /ENOENT/);
-  assert.equal(run(["sh", "-c", "kill -9 $$"]).code, 137, "128 + SIGKILL");
-  assert.equal(run(["sh", "-c", "kill -15 $$"]).code, 143, "128 + SIGTERM");
-  const failed = run(["sh", "-c", "echo out; echo err >&2; exit 3"]);
+  assert.equal(run(["sh", "-c", "kill -9 $$"], { env: {} }).code, 137, "128 + SIGKILL");
+  assert.equal(run(["sh", "-c", "kill -15 $$"], { env: {} }).code, 143, "128 + SIGTERM");
+  const failed = run(["sh", "-c", "echo out; echo err >&2; exit 3"], { env: {} });
   assert.deepEqual(failed, { code: 3, stdout: "out\n", stderr: "err\n" });
+});
+
+test("run: the child gets the caller's env over this process's", () => {
+  process.env["DEV_TEST_KEPT"] = "kept";
+  process.env["DEV_TEST_UNSET"] = "set";
+  try {
+    const ran = run(
+      [
+        "sh",
+        "-c",
+        'printf "%s|%s|" "$DEV_TEST_KEPT" "$DEV_TEST_NEW"; printenv DEV_TEST_UNSET || printf unset',
+      ],
+      {
+        env: { DEV_TEST_NEW: "new", DEV_TEST_UNSET: undefined },
+      },
+    );
+    assert.equal(ran.stdout, "kept|new|unset");
+  } finally {
+    delete process.env["DEV_TEST_KEPT"];
+    delete process.env["DEV_TEST_UNSET"];
+  }
 });
 
 test("replaceBytes: keeps the mode, follows no link, and leaves the file on failure", () => {

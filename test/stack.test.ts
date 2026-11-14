@@ -107,7 +107,8 @@ const expectNext = (want: string) => {
   assert.equal(got.join(" "), want);
 };
 
-const lib = () => new PlanLib(b(REPO), { home: b(ROOT), worktreesRoot: b(WTROOT), cwd: b(REPO) });
+const lib = () =>
+  new PlanLib(b(REPO), { cwd: b(REPO), env: { HOME: b(ROOT), AI_WORKTREES_ROOT: b(WTROOT) } });
 
 test("stack lists the stack from its root", () => {
   writePlan(R, "planning", "feat/root");
@@ -145,6 +146,14 @@ test("check", () => {
   const saved = read(exclude);
   write(exclude, "");
   fails("does not ignore docs/plans", "check", R);
+  // Git runs under the caller's env, as core reads it: here its global config ignores the plans.
+  write(`${ROOT}/ignore-plans`, "/docs/plans/\n");
+  write(`${ROOT}/gitconfig`, `[core]\n\texcludesFile = ${ROOT}/ignore-plans\n`);
+  assert.equal(
+    st(["check", R], { env: { GIT_CONFIG_GLOBAL: `${ROOT}/gitconfig` } }).code,
+    0,
+    "git did not run under the caller's GIT_CONFIG_GLOBAL",
+  );
   write(exclude, saved);
 
   replaceLine(S, /^ {2}Proves: AC-1$/m, "  Proves: AC-9");
@@ -201,6 +210,26 @@ test("check", () => {
   setStatus(R, "planning");
   assert.ok(design("", { cwd: REPO, env: ENV }).includes("none was named"));
   assert.ok(skillGate("dev-review-feature", C).includes("needs it 'approved'"));
+
+  // A gate that crashes blocks each plan without stopping the check. The command's own check
+  // that Git ignores the plans runs first; each gate's runs after it.
+  const plansIgnored = PlanLib.prototype.plansIgnored;
+  let calls = 0;
+  PlanLib.prototype.plansIgnored = () => {
+    if (calls++ === 0) return true;
+    throw new Error("boom");
+  };
+  try {
+    out = fails("", "check", R);
+  } finally {
+    PlanLib.prototype.plansIgnored = plansIgnored;
+  }
+  for (const p of [R, C, S, G])
+    assert.ok(
+      out.includes(`BLOCK ${p}\ngate-check.ts failed (boom) before reaching a verdict`),
+      out,
+    );
+  ok("check", R);
 });
 
 test("next and review verdicts", () => {

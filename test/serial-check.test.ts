@@ -108,8 +108,8 @@ test("a deny has Claude Code's PreToolUse shape", () => {
   assertDeny(claudeSerialDeny(reason as string));
 });
 
-test("bin/hook.ts --serial denies, passes other tools, and reports unreadable input", () => {
-  const hook = (input: string) => cli("hook", ["--serial"], { cwd: PLUGIN, input });
+test("bin/hook.ts denies, passes other tools, and reports unreadable input", () => {
+  const hook = (input: string) => cli("hook", [], { cwd: PLUGIN, input });
   const denied = hook(
     JSON.stringify({
       hook_event_name: "PreToolUse",

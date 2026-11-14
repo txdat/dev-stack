@@ -35,11 +35,13 @@ export const handoffPath: Command = (ctx) => {
       return fail("No session id: supply one as an argument or set CLAUDE_CODE_SESSION_ID.", 2);
     }
     // The main root, never a linked worktree: create-pr's cleanup removes those.
-    const root = tryMainRoot(ctx.cwd);
+    const root = tryMainRoot(ctx.cwd, ctx.env);
     if (root === undefined) fail("Not in a Git repository: a handoff lives in its docs/handoff.");
     if (
-      git(["check-ignore", "-q", "--no-index", "--", `docs/handoff/${id}.md`], { cwd: root })
-        .code !== 0
+      git(["check-ignore", "-q", "--no-index", "--", `docs/handoff/${id}.md`], {
+        cwd: root,
+        env: ctx.env,
+      }).code !== 0
     )
       fail(
         `Git does not ignore docs/handoff in ${root}, so a handoff could be committed. Add /docs/handoff/ to the global excludes file (git config core.excludesFile) or to .git/info/exclude.`,

@@ -4,9 +4,9 @@
 
 import { spawnSync } from "node:child_process";
 import { b, utf8 } from "./bytes.ts";
-import { type Ran, type RunOptions, run } from "./sys.ts";
+import { type Env, type Ran, type RunOptions, run } from "./sys.ts";
 
-export type Env = Readonly<Record<string, string | undefined>>;
+export type { Env } from "./sys.ts";
 
 export type Ctx = { argv: readonly string[]; env: Env; cwd: string };
 
@@ -138,7 +138,7 @@ export const main = (command: Command): void => {
 export const sh = (
   o: Output,
   argv: readonly string[],
-  opts: RunOptions & { stdout?: "out" | "err" | "drop" | "keep" } = {},
+  opts: RunOptions & { stdout?: "out" | "err" | "drop" | "keep" },
 ): Ran => {
   const { stdout = "out", ...rest } = opts;
   const r = run(argv, rest);

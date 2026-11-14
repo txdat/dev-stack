@@ -88,18 +88,15 @@ export const register: Register = (on) => {
     return { ...ctx, blocks: [...ctx.blocks, { name: "devRules", text: rules.text }] };
   });
 
-  // A Bash call's pre and post checks share a snapshot keyed by its tool_use_id; a call without
-  // one gets a key of its own, so its post check still compares.
-  let untracked = 0;
-
   // Before a Skill, Bash, Edit, Write, or MultiEdit call: the phase gate, the record guard, and for
   // Bash the serial-test check. After a Bash call, run or not, the post check compares the plans
   // with the snapshot its pre check took and reports what it restored.
   on("tool.call", async ($, e, next) => {
     if (!GUARDED.has(e.tool)) return next(e);
+    // A Bash call's pre and post checks share a snapshot keyed by its tool_use_id.
     const {
       tool,
-      tool_use_id: id,
+      tool_use_id,
       agentId: _agent,
       requestMeta: _meta,
       ...args
@@ -109,7 +106,6 @@ export const register: Register = (on) => {
     };
     // Only a gated phase needs the gate; any other skill runs without starting node.
     if (tool === "Skill" && !mayNamePhase(args)) return next(e);
-    const tool_use_id = id ?? `dev-${Date.now()}-${++untracked}`;
     const pre = await hook($, {
       hook_event_name: "PreToolUse",
       tool_name: tool,
@@ -139,7 +135,14 @@ export const register: Register = (on) => {
     }
     return ran;
   }).catch(($, e, next) => {
-    warn($, e.tool, "the tool.call hook threw");
+    // A gated phase fails closed: a Skill call that could name one and never reached `next` is
+    // refused. The guard and the serial-test check fail open.
+    if (!next.called && e.tool === "Skill") {
+      const { tool: _tool, tool_use_id: _id, ...args } = e;
+      if (mayNamePhase(args))
+        return { deny: `dev: the phase gate failed (${next.error.kind}) before a verdict` };
+    }
+    warn($, e.tool, `the tool.call hook failed (${next.error.kind})`);
     return next(e);
   });
 
@@ -152,7 +155,11 @@ export const register: Register = (on) => {
     if ("error" in v) warn($, prompt.trim().split(/\s/)[0] ?? "the prompt", v.error);
     return next(e);
   }).catch(($, e, next) => {
-    warn($, "the prompt", "the prompt.submit hook threw");
+    // A typed slash command that could name a gated phase is dropped rather than loaded ungated.
+    const prompt = e.command ? `/${e.command.name} ${e.command.args}` : e.text;
+    if (!next.called && /^\s*\//.test(prompt) && mayNamePhase(prompt))
+      return { drop: `dev: the phase gate failed (${next.error.kind}) before a verdict` };
+    warn($, "the prompt", `the prompt.submit hook failed (${next.error.kind})`);
     return next(e);
   });
 

@@ -347,3 +347,47 @@ test("a typed phase command is dropped when its gate blocks; other prompts never
   expect(calls.hooks.length).toBe(1);
   expect(entered).toBe(1);
 });
+
+// hook.ts's deny reason is a number, so the hook answers a shape the engine refuses: the hook fails
+// before it called next, and its .catch answers in its place.
+const badDeny: Ran = {
+  exitCode: 0,
+  stdout: JSON.stringify({
+    hookSpecificOutput: { permissionDecision: "deny", permissionDecisionReason: 5 },
+  }),
+  stderr: "",
+};
+
+test("a phase gate that fails before a verdict refuses the Skill; a failed guard passes", async ($, on) => {
+  engine(on, undefined, () => badDeny);
+  const ran: string[] = [];
+  on("tool.call", (_, e) => {
+    ran.push(e.tool);
+    return {
+      result: (e.tool === "Bash" ? { stdout: "", stderr: "", interrupted: false } : {}) as never,
+    };
+  });
+  const out = await $.tool.call({ tool: "Skill", skill: "dev:execute-feature", args: PLAN });
+  expect(out.text ?? out.deny).toContain("the phase gate failed");
+  expect(ran).toEqual([]);
+  await $.tool.call({ tool: "Bash", command: "ls" });
+  expect(ran).toEqual(["Bash"]);
+});
+
+test("a typed phase command whose gate fails before a verdict is dropped", async ($, on) => {
+  engine(on, undefined, () => badDeny);
+  let entered = 0;
+  on("prompt.submit", (_, e) => {
+    entered++;
+    return { text: e.text };
+  });
+  const origin = { kind: "composer" } as const;
+  const dropped = await $.prompt.submit({
+    text: `/dev:review-feature ${PLAN}`,
+    command: { name: "dev:review-feature", args: PLAN },
+    wait: false,
+    origin,
+  });
+  expect(dropped.drop).toContain("the phase gate failed");
+  expect(entered).toBe(0);
+});

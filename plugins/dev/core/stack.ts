@@ -6,10 +6,9 @@
 // they record an approval the user set by hand; the rest only read.
 
 import * as fs from "node:fs";
-import { b, byteCompare, utf8 } from "./bytes.ts";
+import { b, byteCompare, rowsOf } from "./bytes.ts";
 import { type Command, type Ctx, Exit, fail, guard, Output } from "./cli.ts";
-import { gateCheck, gateDesign } from "./gate-check.ts";
-import type { GateCtx } from "./hook-input.ts";
+import { gateIndexed } from "./gate-check.ts";
 import { heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
 import { dirname, git, globNames, isFile, isLink, P, readBytes, replaceBytes } from "./sys.ts";
 import { mainRoot } from "./utils.ts";
@@ -71,17 +70,11 @@ const REOPEN_HINT =
 class Stack {
   readonly lib: PlanLib;
   readonly o: Output;
-  readonly gate: GateCtx;
   plan = "";
 
   constructor(root: string, ctx: Ctx, o: Output) {
     this.o = o;
-    this.lib = new PlanLib(root, {
-      home: ctx.env["HOME"] ?? "",
-      worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
-      cwd: ctx.cwd,
-    });
-    this.gate = { cwd: root, env: ctx.env };
+    this.lib = new PlanLib(root, ctx);
   }
 
   // ── plans ────────────────────────────────────────────────────────────
@@ -275,7 +268,7 @@ class Stack {
     const key = this.keyOf(plan);
     const r = git(
       ["rev-parse", "--verify", "-q", `refs/heads/${this.lib.fieldOr(plan, "Branch")}^{commit}`],
-      { cwd: this.lib.repoRoot },
+      { cwd: this.lib.repoRoot, env: this.lib.env },
     );
     const tip = r.code === 0 ? r.stdout.replace(/\n+$/, "") : "-";
     const { round, limit } = this.lib.roundBudget(plan, "code-review");
@@ -381,8 +374,7 @@ class Stack {
     if (!isFile(log)) return;
     const text = readBytes(log);
     if (text === undefined) fail(`Cannot write the log of ${dir}.`);
-    const rows = text.split("\n");
-    if (rows[rows.length - 1] === "") rows.pop();
+    const rows = rowsOf(text);
     const out = rows
       .map((row) => {
         const m = /^pr([0-9]+): /.exec(row);
@@ -499,8 +491,7 @@ class Stack {
   unstack(plan: string): void {
     const text = readBytes(plan);
     if (text === undefined) fail(`Cannot write the header of ${plan}.`);
-    const rows = text.split("\n");
-    if (rows[rows.length - 1] === "") rows.pop();
+    const rows = rowsOf(text);
     let body = false;
     let out = "";
     for (const row of rows) {
@@ -570,7 +561,7 @@ class Stack {
         );
         continue;
       }
-      const res = gateDesign(plan, this.gate);
+      const res = gateIndexed("review-feature", plan, this.lib, true);
       if (res === undefined) {
         this.o.out(`PASS ${plan}\n`);
         continue;
@@ -583,14 +574,7 @@ class Stack {
 
   /** The gate's reason for running skill on plan; "" when it passes. */
   gateReason(skill: string, plan: string): string {
-    const res = gateCheck(
-      {
-        hook_event_name: "PreToolUse",
-        tool_name: "Skill",
-        tool_input: { skill: `dev:${skill}`, args: utf8(plan) },
-      },
-      this.gate,
-    );
+    const res = gateIndexed(skill, plan, this.lib);
     return res === undefined ? "" : "block" in res ? res.block : res.postBlock;
   }
 
@@ -808,7 +792,7 @@ export const devStack: Command = (ctx) => {
           (cmd === "next" && (third === "--tab" || third === "--tree" || third === "--md")))) ||
       (n >= 3 && cmd === "renumber");
     if (!ok) usage();
-    const root = mainRoot(ctx.cwd, o);
+    const root = mainRoot(ctx.cwd, ctx.env, o);
     const s = new Stack(root, ctx, o);
     const need3 = (): string => (n === 3 ? (third as string) : usage());
     switch (cmd) {

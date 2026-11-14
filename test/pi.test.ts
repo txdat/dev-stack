@@ -183,6 +183,23 @@ test("tool_call: reading the skill of the phase in progress again is not gated",
   assert.equal(await read("review-feature", "p1"), undefined, "no plan named continues it");
   branch = [phase("review-feature", ["12_pi/pr1.spec.md"]), ...userSaid(`review ${P}`)];
   assert.equal(await read("review-feature", "p2"), undefined, "the same plan continues it");
+  // A plan stopped since the phase was entered blocks its skill read again, named or not.
+  stack("stop", P, "Failed fixes: 3/3 — x");
+  for (const said of ["go on", `review ${P}`]) {
+    branch = [phase("review-feature", ["12_pi/pr1.spec.md"]), ...userSaid(said)];
+    assert.match(
+      ((await read("review-feature", "p2s")) as { reason: string } | undefined)?.reason ?? "",
+      /is stopped: Failed fixes: 3\/3/,
+      `a stopped plan blocks a continued phase (${said})`,
+    );
+  }
+  stack("resume", P);
+  // So does a plan that is no longer there.
+  branch = [phase("review-feature", ["12_pi/pr7.spec.md"]), ...userSaid("go on")];
+  assert.match(
+    ((await read("review-feature", "p2m")) as { reason: string } | undefined)?.reason ?? "",
+    /is no longer in/,
+  );
   branch = [phase("review-feature", ["12_pi/pr9.spec.md"]), ...userSaid(`review ${P}`)];
   assert.match(
     ((await read("review-feature", "p3")) as { reason: string }).reason,

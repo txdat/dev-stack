@@ -81,7 +81,8 @@ const graphN = (n: number) => {
   );
 };
 
-const lib = () => new PlanLib(b(repo), { home: b(TMP), worktreesRoot: b(WTROOT), cwd: b(repo) });
+const lib = () =>
+  new PlanLib(b(repo), { cwd: b(repo), env: { HOME: b(TMP), AI_WORKTREES_ROOT: b(WTROOT) } });
 const edit = (file: string, f: (text: string) => string) => write(file, f(read(file)));
 const sub = (file: string, re: RegExp, by: string) => edit(file, (t) => t.replace(re, by));
 const insertAfter = (file: string, re: RegExp, line: string) =>
@@ -385,7 +386,7 @@ test("hook input shapes", () => {
     `/Dev-review-feature ${P}`,
   ])
     blocks(promptGate(repo, prompt), "already approved", prompt);
-  const typed = cli("hook", ["--gate"], {
+  const typed = cli("hook", [], {
     cwd: repo,
     env: ENV,
     input: JSON.stringify({
@@ -449,11 +450,27 @@ test("hook input shapes", () => {
     );
   for (const prompt of [`/dev-review-codebase ${P}`, `/dev:create-pr-draft ${P}`])
     passes(promptGate(repo, prompt), `${prompt.split(" ")[0]} is a longer name, not a phase`);
-  for (const skill of ["review-feature", "create-pr", "dev:review-feature-notes", "x:review-code"])
+  for (const skill of ["dev:review-feature-notes", "x:review-code", "review-feature-notes"])
     passes(
       call({ hook_event_name: "PreToolUse", tool_name: "Skill", tool_input: { skill, args: P } }),
       `a Skill call to ${skill}, not this plugin's, is not gated`,
     );
+  // Claude Code resolves a bare skill name to this plugin's skill, as the agents and run-stack
+  // invoke a phase.
+  for (const skill of ["review-feature", "Review_Feature", " /review-feature "])
+    blocks(
+      call({ hook_event_name: "PreToolUse", tool_name: "Skill", tool_input: { skill, args: P } }),
+      "already approved",
+      `a Skill call to the bare name '${skill}' is gated`,
+    );
+  passes(
+    call({
+      hook_event_name: "PreToolUse",
+      tool_name: "Read",
+      tool_input: { skill: "review-feature", args: P },
+    }),
+    "a bare phase name outside the Skill tool is not an invocation",
+  );
   for (const prompt of [`/review-feature ${P}`, `/create-pr ${P}`, `/other:review-code ${P}`])
     passes(promptGate(repo, prompt), `${prompt.split(" ")[0]}, not this plugin's, is not gated`);
   passes(
@@ -574,6 +591,39 @@ test("nested Pi call ids keep their own snapshots", () => {
     "the first call still has its own snapshot",
   );
   assert.equal(read(P), approved);
+});
+
+test("unchanged plans share a write-once snapshot store entry", async () => {
+  useRepo();
+  writePlan(P, "published");
+  const published = read(P);
+  const rewrite = `sed -i 's/^# Gate test/# Rewritten/' ${P}`;
+  const bash = (event: string, id: string) =>
+    call({
+      hook_event_name: event,
+      tool_name: "Bash",
+      tool_use_id: id,
+      tool_input: { command: rewrite },
+    });
+  const runtime = process.env["XDG_RUNTIME_DIR"] || process.env["TMPDIR"] || "/tmp";
+  const snapOf = (id: string) =>
+    fs.statSync(`${runtime}/dev-gate-check-${process.getuid?.()}/${id}/files/12_gate/pr1.spec.md`);
+  const tag = Math.random().toString(36).slice(2);
+  // A plan changed within the timestamp margin may change again at the same ctime: it is copied.
+  passes(bash("PreToolUse", `racy${tag}`), "racy snapshot");
+  assert.equal(snapOf(`racy${tag}`).nlink, 1, "a racy plan is copied, not stored");
+  passes(bash("PostToolUse", `racy${tag}`), "nothing changed");
+  await new Promise((r) => setTimeout(r, 2100));
+  passes(bash("PreToolUse", `a${tag}`), "first snapshot stores the plan");
+  passes(bash("PreToolUse", `b${tag}`), "second snapshot links the stored entry");
+  assert.equal(snapOf(`a${tag}`).ino, snapOf(`b${tag}`).ino, "both link one entry");
+  exec(["bash", "-c", rewrite], { cwd: repo });
+  passes(bash("PreToolUse", `c${tag}`), "a snapshot after the rewrite");
+  assert.notEqual(snapOf(`c${tag}`).ino, snapOf(`a${tag}`).ino, "a changed plan is copied anew");
+  passes(bash("PostToolUse", `c${tag}`), "nothing changed since the third snapshot");
+  blocks(bash("PostToolUse", `a${tag}`), "it is published and changed", "the first call");
+  assert.equal(read(P), published, "restored from the stored bytes");
+  passes(bash("PostToolUse", `b${tag}`), "already restored");
 });
 
 test("worktree and root", () => {
@@ -1638,7 +1688,7 @@ test("record guard: Bash, Edit, and Write calls", () => {
     "dev-stack.ts reopen is the user's alone",
     "or reopen",
   );
-  const denied = cli("hook", ["--gate"], {
+  const denied = cli("hook", [], {
     cwd: repo,
     env: ENV,
     input: JSON.stringify({
@@ -1693,6 +1743,21 @@ test("record guard: Bash, Edit, and Write calls", () => {
     logOnly,
     "node -e writing the log",
   );
+  passes(
+    bashGuard(`cd /tmp && node '${PLUGIN}/bin/dev-stack.ts' next ${P} && cat ${LOG}`),
+    "a quoted dev CLI path after cd is no log write",
+  );
+  // Only this plugin's own bin/ is trusted: a lookalike name or a copy elsewhere is any script.
+  const fake = fs.mkdtempSync(`${TMP}/fakebin.`);
+  for (const script of [
+    `${fake}/my-dev-stack.ts`,
+    `${fake}/dev-stack.tsx`,
+    `${fake}/dev-utils.ts.js`,
+    `${fake}/dev-stack.ts`,
+    `${PLUGIN}/bin/../core/dev-stack.ts`,
+    "$DEV_LIB/bin/dev-stack.ts",
+  ])
+    blocks(bashGuard(`node ${script} ${LOG}`), logOnly, `node ${script} writing the log`);
   blocks(
     bashGuard(`node "$DEV_LIB/bin/dev-stack.ts" resume ${P}`),
     resume,

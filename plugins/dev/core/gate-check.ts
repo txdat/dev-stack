@@ -18,7 +18,7 @@
 // (plan-lib.ts); Git checks run in the main root, and proof checks in the plan's worktree.
 
 import { GATED_PHASES } from "../hooks/commands.ts";
-import { asciiLower, b, stripNewlines, utf8 } from "./bytes.ts";
+import { asciiLower, b, rowsOf, stripNewlines, utf8 } from "./bytes.ts";
 import { Exit } from "./cli.ts";
 import {
   Block,
@@ -47,7 +47,8 @@ const SLUG_RE =
  * The dev phase a skill name or slash command names; "" for none. Only this plugin's forms name
  * one: `dev:<name>` or `dev-<name>`, as Claude Code names a plugin skill, and Pi's `skill:<name>`,
  * each optionally after a `/`. The name must end there, or at the arguments of a command, so a
- * bare `review-code` or a longer `dev-review-codebase` is another source's skill.
+ * longer `dev-review-codebase` is another source's skill. A bare `review-code` is gated only as
+ * the Skill tool's whole skill name (`toolSkill`).
  */
 export const skillSlug = (name: string): string => {
   const m = new RegExp(
@@ -56,6 +57,24 @@ export const skillSlug = (name: string): string => {
   ).exec(name.replace(/_/g, "-"));
   return asciiLower(m?.[1] ?? "");
 };
+
+/**
+ * The phase a Skill tool call names by its bare name, such as `review-code`: Claude Code resolves a
+ * bare name to this plugin's skill when no other source has one, so the gate treats it as this
+ * plugin's, and another source's skill of a phase's name is gated too. "" for none.
+ */
+const toolSkill = (input: HookInput): string => {
+  if (str(input["tool_name"]) !== "Skill") return "";
+  const skill = str(member(input["tool_input"], "skill")) ?? "";
+  const m = new RegExp(`^[ \\t\\n\\v\\f\\r]*/?(${SLUG_RE})[ \\t\\n\\v\\f\\r]*$`, "i").exec(
+    skill.replace(/_/g, "-"),
+  );
+  return asciiLower(m?.[1] ?? "");
+};
+
+/** The phase a call invokes; "" for none. */
+const phaseOf = (input: HookInput, event: string): string =>
+  skillSlug(rawSkill(input, event)) || toolSkill(input);
 
 /**
  * The skill a call invokes. Only a leading slash command invokes one from a prompt; prose that
@@ -123,7 +142,7 @@ export const gateCheck = (input: HookInput, ctx: GateCtx): GateResult => {
     }
     return undefined;
   }
-  const slug = skillSlug(rawSkill(input, event));
+  const slug = phaseOf(input, event);
   // Everything else is ungated and runs outside a Git repository too.
   if (!GATED_PHASES.includes(slug)) return undefined;
   return phaseGate(slug, hookText(input), false, ctx);
@@ -134,7 +153,7 @@ export const isPhaseCall = (input: HookInput): boolean => {
   try {
     const tool = str(input["tool_name"]) ?? "";
     if (["Bash", "Edit", "Write", "MultiEdit"].includes(tool)) return false;
-    return GATED_PHASES.includes(skillSlug(rawSkill(input, str(input["hook_event_name"]) ?? "")));
+    return GATED_PHASES.includes(phaseOf(input, str(input["hook_event_name"]) ?? ""));
   } catch {
     return false;
   }
@@ -144,9 +163,40 @@ export const isPhaseCall = (input: HookInput): boolean => {
 export const gateDesign = (plan: string, ctx: GateCtx): GateResult =>
   phaseGate("review-feature", plan, true, ctx);
 
-const phaseGate = (slug: string, text: string, design: boolean, ctx: GateCtx): GateResult => {
+/**
+ * The gate of phase `slug`, or with `design` gateDesign's check, on `plan` of a stack `lib` has
+ * indexed: dev-stack.ts check and next gate each plan of one stack through the same lib, so the
+ * repository, its worktrees, and the stack's plans are read once. Nothing may change the plans
+ * between the index and the gate.
+ */
+export const gateIndexed = (slug: string, plan: string, lib: PlanLib, design = false): GateResult =>
+  verdict(() => new Gate(slug, plan, design, { cwd: lib.repoRoot, env: lib.env }, lib).run());
+
+/**
+ * The gate for a phase skill read again mid-phase, such as after compaction, on the plans it was
+ * entered on, each as `<issue>_<slug>/pr<N>.spec.md`: their Status may have moved past the entry
+ * status, so only the checks that hold for the whole phase run. A plan published, frozen, or
+ * stopped since blocks; create-pr publishes its plans, so a published one passes it.
+ */
+export const gateContinue = (slug: string, plans: readonly string[], ctx: GateCtx): GateResult =>
+  verdict(() => {
+    const gate = new Gate(slug, "", false, ctx);
+    for (const ref of plans) {
+      const plan = gate.lib.canonicalPlan(`${gate.lib.repoPlans}/${ref}`);
+      if (plan === undefined || !isFile(plan))
+        block(`Plan ${ref}, which ${slug} was entered on, is no longer in ${gate.lib.repoPlans}.`);
+      gate.plan = plan;
+      gate.loadPlan(slug === "create-pr");
+    }
+  });
+
+const phaseGate = (slug: string, text: string, design: boolean, ctx: GateCtx): GateResult =>
+  verdict(() => new Gate(slug, text, design, ctx).run());
+
+/** A gate run's verdict; an unexpected error blocks. */
+const verdict = (run: () => void): GateResult => {
   try {
-    new Gate(slug, text, design, ctx).run();
+    run();
     return undefined;
   } catch (e) {
     if (e instanceof Block) return { block: e.reason };
@@ -174,13 +224,23 @@ class Gate {
   status = "";
   parentPlan = "";
 
-  constructor(slug: string, text: string, design: boolean, ctx: GateCtx) {
+  /** Whether `lib` already indexed the plan's stack, as a caller that passes its own lib did. */
+  readonly indexed: boolean;
+
+  constructor(slug: string, text: string, design: boolean, ctx: GateCtx, lib?: PlanLib) {
     this.slug = slug;
     this.text = text;
     this.design = design;
+    this.indexed = lib !== undefined;
+    if (lib !== undefined) {
+      this.root = lib.repoRoot;
+      this.tree = lib.repoRoot;
+      this.lib = lib;
+      return;
+    }
     let root: string;
     try {
-      root = mainRoot(ctx.cwd);
+      root = mainRoot(ctx.cwd, ctx.env);
     } catch (e) {
       if (!(e instanceof Exit)) throw e;
       block(
@@ -189,11 +249,7 @@ class Gate {
     }
     this.root = root;
     this.tree = root;
-    this.lib = new PlanLib(root, {
-      home: ctx.env["HOME"] ?? "",
-      worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
-      cwd: ctx.cwd,
-    });
+    this.lib = new PlanLib(root, ctx);
   }
 
   run(): void {
@@ -202,7 +258,7 @@ class Gate {
       block(
         `Git does not ignore docs/plans in ${this.root}, so a plan could be committed. Add /docs/plans/ to the global excludes file (git config core.excludesFile) or to .git/info/exclude (rules/plan.md#artifact).`,
       );
-    this.lib.indexStack(this.plan);
+    if (!this.indexed) this.lib.indexStack(this.plan);
     this.loadPlan();
     this.requireOneRoot();
     if (this.slug === "review-feature") this.reviewFeature();
@@ -254,11 +310,12 @@ class Gate {
     this.plan = plan;
   }
 
-  loadPlan(): void {
+  loadPlan(publishedPasses = false): void {
     const plan = this.plan;
     if (isLink(plan))
       block(`Plan ${plan} is a symlink; a plan is a regular file (rules/plan.md#artifact).`);
     this.status = this.lib.status(plan);
+    if (publishedPasses && this.status === "published") return;
     // Before anything else: a published record ends delivery.
     if (this.status === "published")
       block(
@@ -296,7 +353,10 @@ class Gate {
   /** The plan's worktree is on its Branch. */
   requireHead(): void {
     const branch = this.field(this.plan, "Branch");
-    const r = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: this.tree });
+    const r = git(["symbolic-ref", "--quiet", "--short", "HEAD"], {
+      cwd: this.tree,
+      env: this.lib.env,
+    });
     const head = r.code === 0 ? stripNewlines(r.stdout) : "";
     if (head !== branch)
       block(
@@ -399,7 +459,8 @@ class Gate {
       );
     if (
       branch === "" ||
-      git(["check-ref-format", "--branch", branch], { cwd: this.root }).code !== 0
+      git(["check-ref-format", "--branch", branch], { cwd: this.root, env: this.lib.env }).code !==
+        0
     )
       block(
         `Plan header has 'Branch: ${branch}'; set it to the valid, new branch this plan's PR comes from (rules/plan.md#schema).`,
@@ -410,7 +471,10 @@ class Gate {
 
   /** A commit in the plan's tree, or undefined. */
   treeSha(ref: string): string | undefined {
-    const r = git(["rev-parse", "--verify", "-q", `${ref}^{commit}`], { cwd: this.tree });
+    const r = git(["rev-parse", "--verify", "-q", `${ref}^{commit}`], {
+      cwd: this.tree,
+      env: this.lib.env,
+    });
     return r.code === 0 ? stripNewlines(r.stdout) : undefined;
   }
 
@@ -425,13 +489,14 @@ class Gate {
       const sha =
         this.treeSha(`refs/remotes/origin/${target}`) ?? this.treeSha(`refs/heads/${target}`);
       if (sha === undefined) return undefined;
-      const r = git(["merge-base", sha, "HEAD"], { cwd: this.tree });
+      const r = git(["merge-base", sha, "HEAD"], { cwd: this.tree, env: this.lib.env });
       return r.code === 0 ? stripNewlines(r.stdout) : undefined;
     }
     const sha =
       this.treeSha(`refs/heads/${target}`) ?? this.treeSha(`refs/remotes/origin/${target}`);
     if (sha === undefined) return undefined;
-    return git(["merge-base", "--is-ancestor", sha, "HEAD"], { cwd: this.tree }).code === 0
+    return git(["merge-base", "--is-ancestor", sha, "HEAD"], { cwd: this.tree, env: this.lib.env })
+      .code === 0
       ? sha
       : undefined;
   }
@@ -459,18 +524,18 @@ class Gate {
   proofSequence(base: string, re: RegExp | undefined, tip = "HEAD"): "ok" | "none" | "order" {
     if (re === undefined) {
       // A config plan needs only a commit of its own.
-      const r = git(["log", "--format=%H", "--no-merges", `${base}..${tip}`], { cwd: this.tree });
+      const r = git(["log", "--format=%H", "--no-merges", `${base}..${tip}`], {
+        cwd: this.tree,
+        env: this.lib.env,
+      });
       return r.code === 0 && r.stdout !== "" ? "ok" : "none";
     }
     const r = git(
       ["log", "--format=%s", "--topo-order", "--no-merges", "--reverse", `${base}..${tip}`],
-      {
-        cwd: this.tree,
-      },
+      { cwd: this.tree, env: this.lib.env },
     );
     if (r.code !== 0) return "none";
-    const subjects = r.stdout.split("\n");
-    if (subjects[subjects.length - 1] === "") subjects.pop();
+    const subjects = rowsOf(r.stdout);
     let proofs = 0;
     let waiting = false;
     let seen = false;
@@ -645,7 +710,10 @@ class Gate {
       this.treeSha(`refs/remotes/origin/${baseName}`) ?? this.treeSha(`refs/heads/${baseName}`);
     let base = "";
     if (target !== undefined) {
-      const r = git(["merge-base", target, this.lib.greenOf(this.plan)], { cwd: this.tree });
+      const r = git(["merge-base", target, this.lib.greenOf(this.plan)], {
+        cwd: this.tree,
+        env: this.lib.env,
+      });
       base = r.code === 0 ? stripNewlines(r.stdout) : "";
     }
     this.requireReviewedProof(this.plan, base);
