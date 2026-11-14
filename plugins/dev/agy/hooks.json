@@ -1,0 +1,34 @@
+{
+  "dev-rules": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node ./bin/agy-hook.js"
+      }
+    ]
+  },
+  "dev-gate": {
+    "PreToolUse": [
+      {
+        "matcher": "run_command|edit_file|write_file|read_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./bin/agy-hook.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ./bin/agy-hook.js"
+          }
+        ]
+      }
+    ]
+  }
+}
