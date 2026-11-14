@@ -14,7 +14,7 @@
   },
   "pi": {
     "extensions": [
-      "./plugins/dev/pi/*.ts"
+      "./plugins/dev/pi/dev.ts"
     ],
     "skills": [
       "./plugins/dev/skills"
