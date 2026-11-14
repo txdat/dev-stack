@@ -4,7 +4,6 @@
 // never after. Methods return values and status; callers decide how to fail. All text is byte
 // strings (bytes.ts).
 
-import * as fs from "node:fs";
 import { b, byteCompare, lines, stripNewlines, trimSpace, versionCompare } from "./bytes.ts";
 import {
   basename,
