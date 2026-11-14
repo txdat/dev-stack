@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## What this repository is
 
-The `dev` plugin for Claude Code and Pi: rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
+The `dev` plugin for Claude Code, Pi, and DeepSeek Harness (DSH): rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
 
 Edits to this repository are direct edits, not plan-backed work. See [plan.md — Scope](plugins/dev/rules/plan.md#scope).
 
@@ -13,7 +13,7 @@ Edits to this repository are direct edits, not plan-backed work. See [plan.md �
 - **Each policy has one owner.** Each file owns the policy it states. Other files link to it as `[file — Section](path#anchor)` instead of paraphrasing it. A copied rule drifts from its source. Before adding a rule, find the file that already owns that topic and edit it there.
 - **Links resolve from the source file's directory.** Files under `plugins/dev/` ship as their build, `dist/dev/`, which loads without the rest of the checkout, so their links must resolve inside `dist/dev/`. There, CLIs and modules are `.js`: rules, skills, agents, manifests, and user-facing messages name `bin/<name>.js`, never the `.ts` source.
 - **Headings and paths are load-bearing.** Before renaming a heading, a file, or a `bin/` CLI, grep for links in `plugins/dev/` (agents cite anchors such as `CORE.md#work`) and for anchors and paths in `core/` block messages (they cite anchors such as `rules/plan.md#schema`).
-- **Rules must be harness-neutral.** Claude Code and Pi both read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool".
+- **Rules must be harness-neutral.** Claude Code, Pi, and DSH read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool", "where the harness has one".
 - **Style:** terse, declarative, and imperative, without filler or rigid templates. Word choice follows [Wording](#wording).
 - **Skill files** start with frontmatter (`name`, `description`, and optional `model` and `effort`), then `# /<name> — <summary>`, and stay short. Agent files carry `name`, `description`, and `tools`.
 
@@ -55,10 +55,10 @@ Write rules in English only, whatever language the request uses.
 
 ## Code
 
-All code is TypeScript. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace and the Pi package load `dist/dev/`. Tests run the `.ts` sources under Node 24, and `test/dist.test.ts` checks a fresh build.
+All code is TypeScript. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Node 24, and `test/dist.test.ts` checks a fresh build.
 
 - Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers; the build rewrites them to `.js`.
-- `core/` holds the workflow logic as synchronous Node. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`; Pi's extension imports core directly. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
+- `core/` holds the workflow logic as synchronous Node. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`; Pi's extension and the DSH Host plugin in `dsh/` import core directly. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
 - Core functions never call `process.exit` or `chdir`, take the working directory as an argument, and keep no module-level cache. CLIs write with `process.stdout.write` and set `process.exitCode`.
 - Plans are read as bytes (latin1) and matched with ASCII-only classes, never `\s` or locale-aware case folding, so hashes and parsing match the original bash under `LC_ALL=C`.
 - The gate fails closed on a phase it gates; the record guard and the serial-test check fail open. `bin/hook.ts` catches every error: on a phase-gate event it denies, on a guard or serial-check event it passes. An adapter that cannot run it at all (node missing, timeout, unreadable output) passes the call with a visible warning, as a failed Claude Code hook does.

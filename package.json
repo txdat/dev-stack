@@ -2,6 +2,7 @@
   "name": "dev-stack",
   "private": true,
   "type": "module",
+  "description": "Plan-backed dev workflow for Claude Code, Pi, and DeepSeek Harness: rules, skills, phase gates, and /dev-stack-* commands",
   "engines": {
     "node": ">=24"
   },
@@ -21,6 +22,24 @@
       "./dist/dev/skills"
     ]
   },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "exports": {
+    ".": "./dist/dev/dsh/index.js",
+    "./icon": "./icon.svg",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    ".claude-plugin",
+    "cordis.patch.yml",
+    "dist/dev",
+    "icon.svg",
+    "locale",
+    "README.md"
+  ],
   "devDependencies": {
     "@biomejs/biome": "2.6.7",
     "@earendil-works/pi-coding-agent": "1.5.2",
