@@ -14,7 +14,7 @@
 import { execFile } from "node:child_process";
 import * as os from "node:os";
 import * as path from "node:path";
-import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
 type Verdict = { deny: true; reason: string } | { deny: false; error?: string };
 

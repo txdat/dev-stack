@@ -40,10 +40,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  isBashToolResult,
-  isToolCallEventType,
   type ExtensionAPI,
   type ExtensionContext,
+  isBashToolResult,
+  isToolCallEventType,
   type ToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
 
