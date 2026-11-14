@@ -347,16 +347,23 @@ export default function devExtension(pi: ExtensionAPI) {
 
   // A typed /skill:<name> loads a phase without a read: the gate decides on the prompt, and a
   // blocked prompt never reaches the agent.
+  // `/dev:<name>`, as Claude Code types a plugin skill, is rewritten to Pi's `/skill:<name>` for
+  // this plugin's own skills; Pi skill names cannot hold a colon.
   pi.on("input", async (event, ctx) => {
-    if (!/^\s*\/skill:/i.test(event.text)) return;
-    const v = check({ hook_event_name: "UserPromptSubmit", prompt: event.text }, ctx.cwd);
+    const alias = /^(\s*)\/dev:([a-z0-9-]+)(?=\s|$)/.exec(event.text);
+    const text =
+      alias?.[2] !== undefined && fs.existsSync(path.join(SKILLS, alias[2], "SKILL.md"))
+        ? `${alias[1]}/skill:${alias[2]}${event.text.slice(alias[0].length)}`
+        : event.text;
+    if (!/^\s*\/skill:/i.test(text)) return;
+    const v = check({ hook_event_name: "UserPromptSubmit", prompt: text }, ctx.cwd);
     if (v !== undefined && "block" in v) {
       ctx.ui.notify(`[dev] ${utf8(v.block)}`, "error");
       return { action: "handled" };
     }
     if (v !== undefined && "error" in v)
-      ctx.ui.notify(`[dev] the gate failed, ${event.text} loaded ungated: ${v.error}`, "warning");
-    return;
+      ctx.ui.notify(`[dev] the gate failed, ${text} loaded ungated: ${v.error}`, "warning");
+    return text === event.text ? undefined : { action: "transform", text };
   });
 
   pi.on("tool_call", async (event, ctx) => {

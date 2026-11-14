@@ -7,7 +7,7 @@ A plan-backed development workflow for Claude Code and Pi: skills, subagents, ph
 | Harness | Install | Skills |
 | ------- | ------- | ------ |
 | Claude Code | `claude plugin marketplace add ~/work/dev-stack`, then `/plugin install dev@dev-stack` | `/dev:<skill>` |
-| Pi | `pi install ~/work/dev-stack` | `/skill:<skill>` |
+| Pi | `pi install ~/work/dev-stack` | `/dev:<skill>` (an alias the extension rewrites) or `/skill:<skill>` |
 
 For development, `CLAUDE_CODE_PLUGIN_DIRS=~/work/dev-stack/plugins/dev claude` loads the plugin from the checkout and reloads it on edit.
 
