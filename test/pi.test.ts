@@ -11,6 +11,7 @@ import devExtension from "../plugins/dev/pi/dev.ts";
 import { exec, PLUGIN, planText, read, repo, run, tmp, withEnv, write } from "./helpers.ts";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
+let branch: unknown[] = [];
 const handlers = new Map<string, Handler>();
 const commands = new Map<string, { handler: (args: string, ctx: unknown) => Promise<void> }>();
 const sent: { customType: string; content: string; display: boolean }[] = [];
@@ -21,6 +22,9 @@ const fakePi = {
     opts: { handler: (args: string, ctx: unknown) => Promise<void> },
   ) => commands.set(name, opts),
   sendMessage: (m: { customType: string; content: string; display: boolean }) => sent.push(m),
+  // A custom entry joins the active branch, as Pi's session manager appends it.
+  appendEntry: (customType: string, data: unknown) =>
+    branch.push({ type: "custom", customType, data }),
 };
 devExtension(fakePi as never);
 
@@ -51,7 +55,6 @@ stack("review", P, "ready");
 stack("approve", P);
 
 let notes: [string, string][] = [];
-let branch: unknown[] = [];
 const ctx = {
   cwd: REPO,
   ui: { notify: (m: string, level: string) => notes.push([m, level]) },
@@ -101,8 +104,14 @@ test("input: the /dev: alias and the gate on typed skills", async () => {
     action: "transform",
     text: "  /skill:explore",
   });
+  assert.deepEqual(await fire("input", { text: "/DEV:Explore x" }), {
+    action: "transform",
+    text: "/skill:explore x",
+  });
   // A name that is not one of this plugin's skills passes through untouched.
   assert.equal(await fire("input", { text: "/dev:nosuch x" }), undefined);
+  // Another package's skill, though its name reads as a phase, is not gated.
+  assert.equal(await fire("input", { text: `/skill:dev-review-feature ${P}` }), undefined);
   assert.equal(await fire("input", { text: "/skill:explore x" }), undefined);
   assert.equal(await fire("input", { text: `please /dev:review-feature ${P}` }), undefined);
   assert.equal(await fire("input", { text: "hello" }), undefined);
@@ -156,6 +165,40 @@ test("tool_call: reading a gated skill's SKILL.md runs its gate", async () => {
       input: { path: `${PLUGIN}/skills/explore/SKILL.md` },
     }),
     undefined,
+  );
+  branch = [];
+});
+
+test("tool_call: reading the skill of the phase in progress again is not gated", async () => {
+  const skill = (name: string) => `${PLUGIN}/skills/${name}/SKILL.md`;
+  const read = (name: string, id: string) =>
+    fire("tool_call", { toolName: "read", toolCallId: id, input: { path: skill(name) } });
+  const phase = (name: string, plans: string[]) => ({
+    type: "custom",
+    customType: "dev-phase",
+    data: { skill: name, plans },
+  });
+  // review-feature was entered on this plan, which has since moved past it.
+  branch = [phase("review-feature", ["12_pi/pr1.spec.md"]), ...userSaid("go on")];
+  assert.equal(await read("review-feature", "p1"), undefined, "no plan named continues it");
+  branch = [phase("review-feature", ["12_pi/pr1.spec.md"]), ...userSaid(`review ${P}`)];
+  assert.equal(await read("review-feature", "p2"), undefined, "the same plan continues it");
+  branch = [phase("review-feature", ["12_pi/pr9.spec.md"]), ...userSaid(`review ${P}`)];
+  assert.match(
+    ((await read("review-feature", "p3")) as { reason: string }).reason,
+    /already auto-approved/,
+    "another plan enters the phase",
+  );
+  // Entering another skill records it, so review-feature is entered again, and gated.
+  branch = [phase("review-feature", ["12_pi/pr1.spec.md"]), ...userSaid("go on")];
+  assert.equal(await read("explore", "p4"), undefined);
+  assert.deepEqual(branch.at(-1), phase("explore", []));
+  assert.equal(await read("explore", "p5"), undefined);
+  assert.equal(branch.length, 3, "a repeated entry is recorded once");
+  assert.match(
+    ((await read("review-feature", "p6")) as { reason: string }).reason,
+    /none was named/,
+    "after another skill, review-feature is an entry, gated",
   );
   branch = [];
 });

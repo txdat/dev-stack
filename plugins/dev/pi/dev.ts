@@ -29,19 +29,22 @@ import {
   type ToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
 import { b, utf8 } from "../core/bytes.ts";
-import type { Env } from "../core/cli.ts";
+import { byteEnv } from "../core/cli.ts";
 import { type GateResult, gateCheck, isPhaseCall } from "../core/gate-check.ts";
 import type { GateCtx, HookInput } from "../core/hook-input.ts";
 import { serialCheck } from "../core/serial-check.ts";
-import { devStack } from "../core/stack.ts";
-import { tryMainRoot } from "../core/utils.ts";
+import { stackCommand } from "../core/stack-command.ts";
+import { COMMANDS, RULE_FILES, RULES_MARK, rulesText } from "../hooks/commands.ts";
 
 type Message = { role?: string; content?: unknown };
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const HOME = process.env["HOME"] ?? "";
 const PLAN_MENTION = /pr\d+\.spec\.md/;
-const RULES_MARK = "$DEV_LIB is ";
+// A plan as `<issue>_<slug>/pr<N>.spec.md`, the same plan however its path is written.
+const PLAN_REF = /[^\s/]+\/pr\d+\.spec\.md/g;
+// The custom session entry recording each skill the agent entered.
+const PHASE_ENTRY = "dev-phase";
 
 const realpath = (p: string): string => {
   try {
@@ -53,25 +56,21 @@ const realpath = (p: string): string => {
 
 const SKILLS = realpath(path.join(ROOT, "skills"));
 
-/** The rules with $DEV_LIB, the plugin's install root, which they and the skills cite. */
-const rules = (): string => {
-  let text = `${RULES_MARK}${ROOT}: the dev plugin's install root. Run its CLIs as node $DEV_LIB/bin/<name>.ts.`;
-  for (const name of ["CORE.md", "CODING.md"]) {
-    const file = path.join(ROOT, "rules", name);
-    try {
-      text += `\n\nContents of ${file}:\n\n${fs.readFileSync(file, "utf8")}`;
-    } catch (error) {
-      text += `\n\n${file} could not be read (${String(error)}); read it with the read tool.`;
-    }
-  }
-  return text;
-};
+/** The rules, read from this install. */
+const rules = (): string =>
+  rulesText(
+    ROOT,
+    RULE_FILES.map((name) => {
+      try {
+        return fs.readFileSync(path.join(ROOT, "rules", name), "utf8");
+      } catch (error) {
+        return { error: String(error) };
+      }
+    }),
+    "the read tool",
+  );
 
-const gateCtx = (cwd: string): GateCtx => {
-  const env: Record<string, string | undefined> = {};
-  for (const [k, v] of Object.entries(process.env)) env[k] = v === undefined ? undefined : b(v);
-  return { cwd: b(cwd), env: env as Env };
-};
+const gateCtx = (cwd: string): GateCtx => ({ cwd: b(cwd), env: byteEnv(process.env) });
 
 /** gateCheck with an error turned into a block on a phase call and a pass elsewhere. */
 const check = (input: HookInput, cwd: string): GateResult | { error: string } => {
@@ -149,6 +148,32 @@ const skillArguments = (ctx: ExtensionContext, callId: string, last?: Message): 
   return PLAN_MENTION.test(said) ? said : prompt;
 };
 
+type PhaseEntry = { skill: string; plans: string[] };
+
+const plansIn = (text: string): string[] => [...new Set(text.match(PLAN_REF) ?? [])].sort();
+
+/** The latest skill entered on the active branch, as `phaseEntered` recorded it. */
+const latestPhase = (ctx: ExtensionContext): PhaseEntry | undefined => {
+  const branch = ctx.sessionManager.getBranch();
+  for (let i = branch.length - 1; i >= 0; i--) {
+    const e = branch[i];
+    if (e?.type === "custom" && e.customType === PHASE_ENTRY) return e.data as PhaseEntry;
+  }
+  return undefined;
+};
+
+/**
+ * Whether reading `skill` continues the phase entered last rather than entering one: the latest
+ * skill entered is `skill`, and `args` names no plan or the same plans. Pi reads a SKILL.md again
+ * mid-phase, such as after compaction, when the plan's status has already moved on.
+ */
+const continuesPhase = (ctx: ExtensionContext, skill: string, args: string): boolean => {
+  const last = latestPhase(ctx);
+  if (last?.skill !== skill) return false;
+  const plans = plansIn(args);
+  return plans.length === 0 || plans.join("\n") === last.plans.join("\n");
+};
+
 /**
  * The Claude-shaped PreToolUse input for a bash, edit, or write call, or undefined for every other
  * tool. Pi's edit tool applies all of a call's edits, so it is the MultiEdit shape: the guard
@@ -176,167 +201,25 @@ const guardInput = (event: ToolCallEvent, cwd: string): HookInput | undefined =>
   return undefined;
 };
 
-// ── /dev-stack-* commands ──────────────────────────────────────────────
-
-type Sub = "next" | "stack" | "check" | "review" | "stop" | "resume" | "reopen";
-type Parsed = { argv: [sub: Sub, plan: string, ...rest: string[]] } | { usage: true };
-type Command = {
-  name: string;
-  description: string;
-  argumentHint: string;
-  parse: (text: string) => Parsed;
-  // Set for a write: what the model reads after it succeeds, so a later run-stack turn knows of
-  // the user's decision.
-  write?: { note: (argv: string[]) => string };
-};
-
-// Every plan path ends in .spec.md, so anything else, such as an unknown trailing flag, is a
-// usage error. A plan path with spaces stays whole.
-const isPlan = (text: string) => /\.spec\.md$/.test(text);
-const PLAN_THEN_REST = /^(.*?\.spec\.md)(?:\s+(.*))?$/s;
-const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const planOnly =
-  (sub: Sub) =>
-  (text: string): Parsed =>
-    isPlan(text) ? { argv: [sub, text] } : { usage: true };
-
-const COMMANDS: Command[] = [
-  {
-    name: "dev-stack-next",
-    description: "Show each plan's next action in a stack (dev-stack.ts next)",
-    argumentHint: "<root spec file> [--tab|--tree|--md]",
-    parse: (text) => {
-      const VIEW = /(?:^|\s)(--tab|--tree|--md)$/;
-      const view = text.match(VIEW)?.[1];
-      const spec = text.replace(VIEW, "").trim();
-      if (!isPlan(spec)) return { usage: true };
-      return { argv: view ? ["next", spec, view] : ["next", spec] };
-    },
-  },
-  {
-    name: "dev-stack-list",
-    description: "List a stack's plans, parents first (dev-stack.ts stack)",
-    argumentHint: "<root spec file>",
-    parse: planOnly("stack"),
-  },
-  {
-    name: "dev-stack-check",
-    description:
-      "Run the review-feature gate on every plan in a stack, minus the parent-approval and stop checks (dev-stack.ts check)",
-    argumentHint: "<root spec file>",
-    parse: planOnly("check"),
-  },
-  {
-    name: "dev-stack-review",
-    description: "Record a review-feature verdict on a plan (dev-stack.ts review)",
-    argumentHint: "<spec file> ready|needs-changes",
-    parse: (text) => {
-      const [, plan, verdict] = text.match(/^(.*\S)\s+(ready|needs-changes)$/s) ?? [];
-      return plan && verdict && isPlan(plan)
-        ? { argv: ["review", plan, verdict] }
-        : { usage: true };
-    },
-    write: {
-      note: ([, plan, verdict]) =>
-        `The user recorded the review-feature verdict ${verdict} on ${plan} with dev-stack.ts review.`,
-    },
-  },
-  {
-    name: "dev-stack-stop",
-    description: "Record why a plan stopped in its stack's log (dev-stack.ts stop)",
-    argumentHint: "<spec file> <reason>",
-    parse: (text) => {
-      const [, plan, reason] = text.match(PLAN_THEN_REST) ?? [];
-      return plan && reason?.trim() ? { argv: ["stop", plan, reason.trim()] } : { usage: true };
-    },
-    write: {
-      note: ([, plan, reason]) => `The user stopped ${plan} with dev-stack.ts stop: ${reason}`,
-    },
-  },
-  {
-    name: "dev-stack-resume",
-    description:
-      "Clear a plan's stop so run-stack continues it (dev-stack.ts resume; only the user runs it)",
-    argumentHint: "<spec file>",
-    parse: planOnly("resume"),
-    write: {
-      note: ([, plan]) =>
-        `The user cleared the stop on ${plan} with dev-stack.ts resume; for a "Failed fixes" stop at its limit this raises the limit by three attempts, and for a review round limit three more rounds.`,
-    },
-  },
-  {
-    name: "dev-stack-reopen",
-    description:
-      "Return an approved plan, and every plan above it that is approved or later, to planning (dev-stack.ts reopen; only the user runs it)",
-    argumentHint: "<spec file>",
-    parse: planOnly("reopen"),
-    write: {
-      note: ([, plan]) =>
-        `The user reopened ${plan} with dev-stack.ts reopen: it and every plan above it that was approved or later are back in planning, to revise and review again.`,
-    },
-  },
-];
-
-/**
- * Plan paths show relative to the main root's docs/plans, written absolute or under ~. The format
- * hint in "Plan must be <root>/<issue>_..." keeps its prefix: it names the repository's plans,
- * never a plan, so a path followed by <issue> is left whole. Outside a repository nothing is
- * shortened.
- */
-const shorten = (text: string, root: string): string => {
-  if (!root) return text;
-  const forms = [root];
-  if (HOME && root.startsWith(`${HOME}/`)) forms.push(`~${root.slice(HOME.length)}`);
-  const prefix = new RegExp(`(?:${forms.map(escapeRegExp).join("|")})/(?![^\\s]*<issue>)`, "g");
-  return text.replace(prefix, "");
-};
-
-// A plan typed as the output shows it is read back from the repository's docs/plans. A leading @
-// is the prompt's file mention, not part of the path.
-const absolute = (text: string, root: string) => {
-  const file = text.replace(/^@/, "");
-  return /^[/~]/.test(file) ? file : `${root}/${file}`;
-};
-
-const runCommand = (
-  command: Command,
-  args: string,
-  cwd: string,
-): { text: string; note?: string } => {
-  const usage = `Usage: /${command.name} ${command.argumentHint}`;
-  const parsed = command.parse(args);
-  if ("usage" in parsed) return { text: usage };
-  const main = tryMainRoot(b(cwd));
-  const root = main === undefined ? "" : `${utf8(main)}/docs/plans`;
-  const [sub, plan, ...rest] = parsed.argv;
-  const argv = [sub, root ? absolute(plan, root) : plan, ...rest];
-  try {
-    const { env } = gateCtx(cwd);
-    const ran = devStack({ argv: argv.map(b), env, cwd: b(cwd) });
-    const out = utf8(ran.stdout).trimEnd();
-    if (ran.code === 0) {
-      const note = command.write?.note(argv);
-      return { text: shorten(out, root) || "(no output)", ...(note ? { note } : {}) };
-    }
-    if (ran.code === 2) return { text: usage };
-    // check prints its PASS/BLOCK report on stdout and exits 1; other failures use stderr.
-    const err = [out, utf8(ran.stderr).trimEnd()].filter(Boolean).join("\n");
-    const hint = /Plan must be|main working-tree root|pass the stack's root/.test(err)
-      ? "\nRun it from the plan's repository; next, list, and check take the root plan (lowest pr<N>)."
-      : "";
-    return { text: shorten(err || `dev-stack.ts exited ${ran.code}`, root) + hint };
-  } catch (error) {
-    return { text: `dev-stack.ts failed: ${String((error as Error)?.message ?? error)}` };
-  }
-};
-
 // ── extension ──────────────────────────────────────────────────────────
 
 export default function devExtension(pi: ExtensionAPI) {
+  // Read once; a failed read is retried on the next prompt.
+  let rulesCache: string | undefined;
   pi.on("before_agent_start", async (event) => {
     if (event.systemPrompt.includes(RULES_MARK + ROOT)) return;
-    return { systemPrompt: `${event.systemPrompt}\n\n${rules()}` };
+    const text = rulesCache ?? rules();
+    if (!text.includes("could not be read (")) rulesCache = text;
+    return { systemPrompt: `${event.systemPrompt}\n\n${text}` };
   });
+
+  /** Records that the agent entered `skill`, unless it is already the latest entry. */
+  const phaseEntered = (ctx: ExtensionContext, skill: string, args: string): void => {
+    const entry: PhaseEntry = { skill, plans: plansIn(args) };
+    const last = latestPhase(ctx);
+    if (last?.skill === entry.skill && last.plans.join("\n") === entry.plans.join("\n")) return;
+    pi.appendEntry(PHASE_ENTRY, entry);
+  };
 
   // Pi persists an assistant message at message_end; keep it in case a call runs before the
   // session lists it.
@@ -350,12 +233,15 @@ export default function devExtension(pi: ExtensionAPI) {
   // `/dev:<name>`, as Claude Code types a plugin skill, is rewritten to Pi's `/skill:<name>` for
   // this plugin's own skills; Pi skill names cannot hold a colon.
   pi.on("input", async (event, ctx) => {
-    const alias = /^(\s*)\/dev:([a-z0-9-]+)(?=\s|$)/.exec(event.text);
+    const alias = /^(\s*)\/dev:([a-z0-9-]+)(?=\s|$)/i.exec(event.text);
+    const name = alias?.[2]?.toLowerCase();
     const text =
-      alias?.[2] !== undefined && fs.existsSync(path.join(SKILLS, alias[2], "SKILL.md"))
-        ? `${alias[1]}/skill:${alias[2]}${event.text.slice(alias[0].length)}`
+      alias !== null && name !== undefined && fs.existsSync(path.join(SKILLS, name, "SKILL.md"))
+        ? `${alias[1]}/skill:${name}${event.text.slice(alias[0].length)}`
         : event.text;
-    if (!/^\s*\/skill:/i.test(text)) return;
+    // Another package's skill of the same name as a phase is not this plugin's, so not gated.
+    const typed = /^\s*\/skill:([a-z0-9-]+)/i.exec(text)?.[1]?.toLowerCase();
+    if (typed === undefined || !fs.existsSync(path.join(SKILLS, typed, "SKILL.md"))) return;
     const v = check({ hook_event_name: "UserPromptSubmit", prompt: text }, ctx.cwd);
     if (v !== undefined && "block" in v) {
       ctx.ui.notify(`[dev] ${utf8(v.block)}`, "error");
@@ -363,6 +249,7 @@ export default function devExtension(pi: ExtensionAPI) {
     }
     if (v !== undefined && "error" in v)
       ctx.ui.notify(`[dev] the gate failed, ${text} loaded ungated: ${v.error}`, "warning");
+    phaseEntered(ctx, typed, text);
     return text === event.text ? undefined : { action: "transform", text };
   });
 
@@ -373,15 +260,19 @@ export default function devExtension(pi: ExtensionAPI) {
       // A call another tool made has id "<parent id>/<n>"; the root is the model-issued call
       // recorded in the transcript.
       const callId = event.toolCallId.split("/")[0] ?? event.toolCallId;
+      const args = skillArguments(ctx, callId, lastAssistant);
+      // Reading the skill of the phase in progress again is not an entry, so it is not gated.
+      if (continuesPhase(ctx, slug, args)) return;
       const v = check(
         {
           hook_event_name: "PreToolUse",
           tool_name: "Skill",
-          tool_input: { skill: slug, arguments: skillArguments(ctx, callId, lastAssistant) },
+          tool_input: { skill: slug, arguments: args },
         },
         ctx.cwd,
       );
       if (v !== undefined && "block" in v) return { block: true, reason: `[dev] ${utf8(v.block)}` };
+      phaseEntered(ctx, slug, args);
       return;
     }
     const input = guardInput(event, ctx.cwd);
@@ -446,7 +337,9 @@ export default function devExtension(pi: ExtensionAPI) {
       description: command.description,
       handler: async (args, ctx) => {
         if (command.write) await ctx.waitForIdle();
-        const { text, note } = runCommand(command, args.trim(), ctx.cwd);
+        const { text, note } = stackCommand(command.name, args, ctx.cwd, process.env) ?? {
+          text: `no command ${command.name}`,
+        };
         // The output is shown in the transcript; the note only reaches the model.
         pi.sendMessage(
           { customType: "dev-stack", content: text, display: true },

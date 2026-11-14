@@ -25,7 +25,8 @@ plugins/dev/                      the plugin; self-contained, since Claude copie
   core/                           the workflow logic: plans, stacks, gates (Node, synchronous)
   bin/                            CLIs over core (`node $DEV_LIB/bin/<name>.ts`); bin/hook.ts is the gate
   hooks/                          Claude Code plugin module (no Node): rules, and gates and commands
-                                  that run bin/ through $.process.run
+                                  that run bin/ through $.process.run; commands.ts, the rules text
+                                  and /dev-stack-* commands the Pi extension shares
   pi/                             Pi extension: rules, gates, and commands, calling core in-process
 test/                             node --test suites
 ```
