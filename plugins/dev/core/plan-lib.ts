@@ -17,6 +17,7 @@ import {
   readable,
   readBytes,
   realpathM,
+  replaceBytes,
 } from "./sys.ts";
 
 /** A plan path relative to the repository's docs/plans. */
@@ -274,16 +275,9 @@ export class PlanLib {
       if (key === "Status")
         for (const [k] of pairs) if (!present.has(k)) out += `${k}: ${val.get(k) ?? ""}\n`;
     });
-    const tmp = `${plan}.${Math.random().toString(36).slice(2, 8)}`;
     try {
-      const mode = fs.statSync(Buffer.from(plan, "latin1")).mode & 0o7777;
-      fs.writeFileSync(Buffer.from(tmp, "latin1"), Buffer.from(out, "latin1"), { mode });
-      fs.chmodSync(Buffer.from(tmp, "latin1"), mode);
-      fs.renameSync(Buffer.from(tmp, "latin1"), Buffer.from(plan, "latin1"));
+      replaceBytes(plan, out);
     } catch {
-      try {
-        fs.rmSync(Buffer.from(tmp, "latin1"), { force: true });
-      } catch {}
       return false;
     }
     // The cache keeps what was read before the change, as dev-plan-lib.sh's does.

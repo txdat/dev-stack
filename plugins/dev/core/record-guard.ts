@@ -20,6 +20,7 @@ import {
   P,
   readBytes,
   realpathM,
+  replaceBytes,
   stat,
 } from "./sys.ts";
 import { tryMainRoot } from "./utils.ts";
@@ -599,20 +600,9 @@ const postCheck = (snap: string, ctx: GateCtx, msgs: string[]): void => {
     if (content === newB) continue;
     try {
       if (!hasOld && content === "") fs.rmSync(P(now), { force: true });
-      else {
-        // One rename replaces the log, or a symlink standing at its path, so no moment leaves it
-        // missing; the log keeps its mode.
-        const tmp = `${base}/${d}/log.gate.${Math.random().toString(36).slice(2, 8)}`;
-        const mode = fs.statSync(P(now)).mode & 0o7777;
-        try {
-          fs.writeFileSync(P(tmp), P(content), { mode });
-          fs.chmodSync(P(tmp), mode);
-          fs.renameSync(P(tmp), P(now));
-        } catch (e) {
-          rmrf(tmp);
-          throw e;
-        }
-      }
+      // One rename replaces the log, or a symlink standing at its path, so no moment leaves it
+      // missing.
+      else replaceBytes(now, content);
     } catch {
       msgs.push(`${now}: ${fail}`);
       continue;
