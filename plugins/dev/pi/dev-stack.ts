@@ -96,7 +96,9 @@ const COMMANDS: Command[] = [
     argumentHint: "<spec file> ready|needs-changes",
     parse: (text) => {
       const [, plan, verdict] = text.match(/^(.*\S)\s+(ready|needs-changes)$/s) ?? [];
-      return plan && verdict && isPlan(plan) ? { argv: ["review", plan, verdict] } : { usage: true };
+      return plan && verdict && isPlan(plan)
+        ? { argv: ["review", plan, verdict] }
+        : { usage: true };
     },
     write: {
       note: ([, plan, verdict]) =>
@@ -117,7 +119,8 @@ const COMMANDS: Command[] = [
   },
   {
     name: "dev-stack-resume",
-    description: "Clear a plan's stop so run-stack continues it (dev-stack.sh resume; only the user runs it)",
+    description:
+      "Clear a plan's stop so run-stack continues it (dev-stack.sh resume; only the user runs it)",
     argumentHint: "<spec file>",
     parse: planOnly("resume"),
     write: {
@@ -202,9 +205,15 @@ export default function devStackExtension(pi: ExtensionAPI) {
       handler: async (args, ctx) => {
         const { text, note } = await run(pi, command, args.trim(), ctx);
         // The output is shown in the transcript; the note only reaches the model.
-        pi.sendMessage({ customType: "dev-stack", content: text, display: true }, { triggerTurn: false });
+        pi.sendMessage(
+          { customType: "dev-stack", content: text, display: true },
+          { triggerTurn: false },
+        );
         if (note) {
-          pi.sendMessage({ customType: "dev-stack-note", content: note, display: false }, { triggerTurn: false });
+          pi.sendMessage(
+            { customType: "dev-stack-note", content: note, display: false },
+            { triggerTurn: false },
+          );
         }
       },
     });

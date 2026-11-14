@@ -23,29 +23,36 @@ const TIMEOUT_MS = 10_000;
 
 function runCheck(hookJson: string, cwd: string): Promise<Verdict> {
   return new Promise((resolve) => {
-    const child = execFile(CHECK, { cwd, timeout: TIMEOUT_MS, killSignal: "SIGKILL" }, (err, stdout, stderr) => {
-      // The script prints a deny decision and exits 0, or prints nothing to pass.
-      if (!err && !stdout.trim()) return resolve({ deny: false });
-      try {
-        const out = JSON.parse(stdout) as {
-          decision?: string;
-          reason?: string;
-          hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string };
-        };
-        if (out.hookSpecificOutput?.permissionDecision === "deny" || out.decision === "deny") {
-          return resolve({
-            deny: true,
-            reason: out.hookSpecificOutput?.permissionDecisionReason ?? out.reason ?? "test-serial-check.sh denied",
-          });
+    const child = execFile(
+      CHECK,
+      { cwd, timeout: TIMEOUT_MS, killSignal: "SIGKILL" },
+      (err, stdout, stderr) => {
+        // The script prints a deny decision and exits 0, or prints nothing to pass.
+        if (!err && !stdout.trim()) return resolve({ deny: false });
+        try {
+          const out = JSON.parse(stdout) as {
+            decision?: string;
+            reason?: string;
+            hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string };
+          };
+          if (out.hookSpecificOutput?.permissionDecision === "deny" || out.decision === "deny") {
+            return resolve({
+              deny: true,
+              reason:
+                out.hookSpecificOutput?.permissionDecisionReason ??
+                out.reason ??
+                "test-serial-check.sh denied",
+            });
+          }
+        } catch {
+          // No verdict on stdout.
         }
-      } catch {
-        // No verdict on stdout.
-      }
-      const error = err?.killed
-        ? `timed out after ${TIMEOUT_MS / 1000}s`
-        : stderr.trim() || err?.message || `unreadable output: ${stdout.trim()}`;
-      resolve({ deny: false, error });
-    });
+        const error = err?.killed
+          ? `timed out after ${TIMEOUT_MS / 1000}s`
+          : stderr.trim() || err?.message || `unreadable output: ${stdout.trim()}`;
+        resolve({ deny: false, error });
+      },
+    );
     // A spawn failure closes stdin early; the callback above reports it.
     child.stdin?.on("error", () => {});
     child.stdin?.end(hookJson);
@@ -64,6 +71,7 @@ export default function testSerialCheckExtension(pi: ExtensionAPI) {
     });
     const verdict = await runCheck(hookJson, ctx.cwd);
     if (verdict.deny) return { block: true, reason: `[test-serial-check.sh] ${verdict.reason}` };
-    if (verdict.error) ctx.ui.notify(`test-serial-check.sh failed, bash ran unchecked: ${verdict.error}`, "warning");
+    if (verdict.error)
+      ctx.ui.notify(`test-serial-check.sh failed, bash ran unchecked: ${verdict.error}`, "warning");
   });
 }

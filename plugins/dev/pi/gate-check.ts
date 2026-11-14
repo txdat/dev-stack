@@ -48,9 +48,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 type Message = { role?: string; content?: unknown };
-type Verdict =
-  | { block: true; reason: string }
-  | { block: false; error?: string; warning?: string };
+type Verdict = { block: true; reason: string } | { block: false; error?: string; warning?: string };
 
 const HOME = os.homedir();
 const GATE_CHECK = path.join(HOME, ".dotfiles", ".ai-shared", "bin", "gate-check.sh");
@@ -115,7 +113,8 @@ function skillSlug(file: string): string | undefined {
     }
     for (const base of AI_SHARED_DEV) {
       const parts = segmentsUnder(base, form);
-      if (parts?.length === 1 && parts[0]!.endsWith(".md")) return parts[0]!.slice(0, -".md".length);
+      if (parts?.length === 1 && parts[0]!.endsWith(".md"))
+        return parts[0]!.slice(0, -".md".length);
     }
   }
   return undefined;
@@ -176,16 +175,24 @@ function runGateCheck(hookJson: string, cwd: string): Promise<Verdict> {
             stopReason?: string;
           };
           if (out.continue === false) {
-            return resolve({ block: true, reason: out.reason ?? out.stopReason ?? "gate-check.sh blocked" });
+            return resolve({
+              block: true,
+              reason: out.reason ?? out.stopReason ?? "gate-check.sh blocked",
+            });
           }
           if (out.decision === "block") {
-            return resolve({ block: false, warning: out.reason ?? "gate-check.sh restored a change to a plan" });
+            return resolve({
+              block: false,
+              warning: out.reason ?? "gate-check.sh restored a change to a plan",
+            });
           }
         } catch {
           // No verdict on stdout.
         }
         if (!err) return resolve({ block: false });
-        const error = err.killed ? `timed out after ${TIMEOUT_MS / 1000}s` : stderr.trim() || err.message;
+        const error = err.killed
+          ? `timed out after ${TIMEOUT_MS / 1000}s`
+          : stderr.trim() || err.message;
         resolve({ block: false, error });
       },
     );
@@ -203,7 +210,11 @@ function runGateCheck(hookJson: string, cwd: string): Promise<Verdict> {
 function guardCall(event: ToolCallEvent, cwd: string): string | undefined {
   const base = { hook_event_name: "PreToolUse", tool_use_id: event.toolCallId, cwd };
   if (isToolCallEventType("bash", event)) {
-    return JSON.stringify({ ...base, tool_name: "Bash", tool_input: { command: event.input.command } });
+    return JSON.stringify({
+      ...base,
+      tool_name: "Bash",
+      tool_input: { command: event.input.command },
+    });
   }
   if (isToolCallEventType("edit", event)) {
     return JSON.stringify({
@@ -251,7 +262,10 @@ export default function gateCheckExtension(pi: ExtensionAPI) {
       return { action: "handled" };
     }
     if (verdict.error) {
-      ctx.ui.notify(`gate-check.sh failed, ${event.text} loaded ungated: ${verdict.error}`, "warning");
+      ctx.ui.notify(
+        `gate-check.sh failed, ${event.text} loaded ungated: ${verdict.error}`,
+        "warning",
+      );
     }
   });
 
@@ -263,7 +277,10 @@ export default function gateCheckExtension(pi: ExtensionAPI) {
       const verdict = await runGateCheck(guard, ctx.cwd);
       if (verdict.block) return { block: true, reason: `[gate-check.sh] ${verdict.reason}` };
       if (verdict.error) {
-        ctx.ui.notify(`gate-check.sh failed, ${event.toolName} ran unguarded: ${verdict.error}`, "warning");
+        ctx.ui.notify(
+          `gate-check.sh failed, ${event.toolName} ran unguarded: ${verdict.error}`,
+          "warning",
+        );
       }
       return;
     }
@@ -283,7 +300,10 @@ export default function gateCheckExtension(pi: ExtensionAPI) {
     const verdict = await runGateCheck(hookJson, ctx.cwd);
     if (verdict.block) return { block: true, reason: `[gate-check.sh] ${verdict.reason}` };
     if (verdict.error) {
-      ctx.ui.notify(`gate-check.sh failed, ${event.input.path} loaded ungated: ${verdict.error}`, "warning");
+      ctx.ui.notify(
+        `gate-check.sh failed, ${event.input.path} loaded ungated: ${verdict.error}`,
+        "warning",
+      );
     }
   });
 
@@ -303,12 +323,17 @@ export default function gateCheckExtension(pi: ExtensionAPI) {
     const verdict = await runGateCheck(hookJson, ctx.cwd);
     const report = (reason: string) => {
       ctx.ui.notify(`[gate-check.sh] ${reason}`, "warning");
-      return { content: [...event.content, { type: "text" as const, text: `[gate-check.sh] ${reason}` }] };
+      return {
+        content: [...event.content, { type: "text" as const, text: `[gate-check.sh] ${reason}` }],
+      };
     };
     if (verdict.block) return report(verdict.reason);
     if (verdict.warning) return report(verdict.warning);
     if (verdict.error) {
-      ctx.ui.notify(`gate-check.sh failed, ${event.toolName} ran unguarded: ${verdict.error}`, "warning");
+      ctx.ui.notify(
+        `gate-check.sh failed, ${event.toolName} ran unguarded: ${verdict.error}`,
+        "warning",
+      );
     }
   });
 
@@ -327,7 +352,10 @@ export default function gateCheckExtension(pi: ExtensionAPI) {
     if (verdict.block) return;
     if (verdict.warning) ctx.ui.notify(`[gate-check.sh] ${verdict.warning}`, "warning");
     else if (verdict.error) {
-      ctx.ui.notify(`gate-check.sh failed, ${event.toolName} ran unguarded: ${verdict.error}`, "warning");
+      ctx.ui.notify(
+        `gate-check.sh failed, ${event.toolName} ran unguarded: ${verdict.error}`,
+        "warning",
+      );
     }
   });
 }
