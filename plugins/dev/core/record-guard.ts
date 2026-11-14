@@ -89,11 +89,21 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
 
 // ── edit tools, before they run ──────────────────────────────────────
 
-/** The cache key the simulated plan text is held under; no path contains a NUL. */
+/** The cache keys the simulated plan texts are held under; no path contains a NUL. */
 const NEW = "\u0000new";
+const OLD_LF = "\u0000old";
 
-/** Edit's or MultiEdit's replacements applied as literal strings; undefined when one cannot apply. */
-const applyEdits = (text: string, t: Json | undefined): string | undefined => {
+const lf = (text: string): string => text.replace(/\r\n?/g, "\n");
+
+/**
+ * Edit's or MultiEdit's replacements applied as literal strings, each string passed through
+ * `norm` first; undefined when one cannot apply.
+ */
+const applyEdits = (
+  text: string,
+  t: Json | undefined,
+  norm = (x: string) => x,
+): string | undefined => {
   const edits = member(t, "edits");
   const list: (Json | undefined)[] =
     edits === undefined || edits === null || edits === false
@@ -111,8 +121,8 @@ const applyEdits = (text: string, t: Json | undefined): string | undefined => {
     const oldS = pick("old_string") ?? "";
     const newS = pick("new_string") ?? "";
     if (typeof oldS !== "string" || typeof newS !== "string") return undefined;
-    const o = str(oldS) as string;
-    const n = str(newS) as string;
+    const o = norm(str(oldS) as string);
+    const n = norm(str(newS) as string);
     const parts = out.split(o);
     if (o === "" || parts.length < 2) return undefined;
     out = pick("replace_all") ? parts.join(n) : `${parts[0]}${n}${parts.slice(1).join(o)}`;
@@ -133,19 +143,29 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
   // The plan's own repository root serves: no Git call follows.
   const lib = libFor(m[1], ctx);
   let text: string | undefined;
+  // The plan text the new one is compared with.
+  let old = real;
   if (tool === "Write") {
     const c = member(t, "content");
     text = c === undefined || c === null ? "" : (str(c) ?? undefined);
   } else {
     if (!isFile(real)) return;
     const cur = readBytes(real);
-    text = cur === undefined ? undefined : applyEdits(cur, t);
+    if (cur === undefined) return;
+    text = applyEdits(cur, t);
+    // Pi and Claude Code match an edit against the file with its line breaks read as LF. Where
+    // only that matches, both sides are compared with LF line breaks.
+    if (text === undefined && cur.includes("\r")) {
+      text = applyEdits(lf(cur), t, lf);
+      lib.loadText(OLD_LF, lf(cur));
+      old = OLD_LF;
+    }
   }
   if (text === undefined) return;
   lib.loadText(NEW, text);
   // Raw Status values: a reviewed plan whose Tip comes later ranks reviewed.
   const newStatus = lib.fieldOr(NEW, "Status");
-  const oldStatus = isFile(real) ? lib.fieldOr(real, "Status") : "";
+  const oldStatus = isFile(real) ? lib.fieldOr(old, "Status") : "";
   if (oldStatus === "published")
     block(`Plan ${real} is published; no phase resumes or edits it (rules/plan.md#sequence).`);
   if (newStatus === "approved" && oldStatus !== "approved")
@@ -169,7 +189,7 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
     block(
       `Plan ${real} is '${oldStatus}'; an approved plan's Status never returns to planning or to an unknown value. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.ts reopen.`,
     );
-  if (lib.spec(NEW) !== lib.spec(real))
+  if (lib.spec(NEW) !== lib.spec(old))
     block(
       `Plan ${real} is '${oldStatus}' and frozen: after approval only its Status and Tip lines change. Leave it as it is: a change goes where rules/plan.md#changes says, or the user reopens it with dev-stack.ts reopen.`,
     );

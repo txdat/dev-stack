@@ -254,6 +254,44 @@ test("tool_call: the serial-test check and the record guard", async () => {
   );
 });
 
+test("tool_call: an edit to a CRLF or BOM plan is judged as the text Pi writes", async () => {
+  for (const [dir, form] of [
+    ["12_crlfonly", (t: string) => t.replaceAll("\n", "\r\n")],
+    ["12_bom", (t: string) => `\uFEFF${t}`],
+    ["12_crlf", (t: string) => t.replaceAll("\n", "\r\n")],
+  ] as const) {
+    const plan = `${REPO}/docs/plans/${dir}/pr1.spec.md`;
+    const header = { Status: "planning", Spec: "-", Tip: "-", Type: "feature", Base: "main" };
+    write(plan, form(planText({ ...header, Branch: `feat/${dir}`, Issue: "#12" }, GRAPH)));
+    stack("review", plan, "ready");
+    stack("approve", plan);
+    // dev-stack.ts writes its header lines with LF; this plan's line breaks are all CRLF again.
+    if (dir === "12_crlfonly") write(plan, read(plan).replace(/\r?\n/g, "\r\n"));
+    const edit = async (id: string, oldText: string, newText: string) =>
+      (await fire("tool_call", {
+        toolName: "edit",
+        toolCallId: id,
+        input: { path: plan, edits: [{ oldText, newText }] },
+      })) as { reason: string } | undefined;
+    assert.match(
+      (await edit(`${dir}1`, "TC-1 — scenario\n  Proves: AC-1", "TC-1 — other\n  Proves: AC-1"))
+        ?.reason ?? "",
+      /frozen/,
+      `${dir}: a spec change across lines`,
+    );
+    assert.match(
+      (await edit(`${dir}2`, "Status: auto-approved", "Status: planning"))?.reason ?? "",
+      /never returns to planning/,
+      `${dir}: a rollback`,
+    );
+    assert.equal(
+      await edit(`${dir}3`, "Tip: -", "Tip: abc1234"),
+      undefined,
+      `${dir}: a Tip change`,
+    );
+  }
+});
+
 test("tool_result and tool_execution_end: a shell rollback is restored and reported", async () => {
   const before = read(P);
   const command = `sed -i 's/^Status: auto-approved/Status: planning/' ${P}`;

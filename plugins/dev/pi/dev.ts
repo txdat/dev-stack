@@ -175,20 +175,26 @@ const continuesPhase = (ctx: ExtensionContext, skill: string, args: string): boo
 };
 
 /**
- * The text Pi's edit tool writes: each oldText matched once in the original file, and all of them
- * applied together, never one on another's output. Undefined where this does not model Pi
- * exactly: a file Pi cannot read or holding a BOM or a CR, or an oldText that is empty, missing,
- * repeated, or overlapping another, which Pi refuses or matches fuzzily.
+ * The text Pi's edit tool writes: each oldText matched once in the file with its BOM dropped and
+ * its line breaks read as LF, and all of them applied together, never one on another's output.
+ * Pi keeps the BOM, and in a file whose every line break is CRLF it writes each one, kept or
+ * inserted, as CRLF. Undefined where this does not model Pi exactly: a file Pi cannot read or
+ * mixing line breaks or holding a lone CR, or an oldText that is empty, missing, repeated, or
+ * overlapping another, which Pi refuses or matches fuzzily.
  */
 const piEdited = (file: string, edits: readonly { oldText: string; newText: string }[]) => {
-  let content: string;
+  let raw: string;
   try {
-    content = fs.readFileSync(file, "utf8");
+    raw = fs.readFileSync(file, "utf8");
   } catch {
     return undefined;
   }
-  if (content.startsWith("\uFEFF") || content.includes("\r")) return undefined;
+  const bom = raw.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const body = raw.slice(bom.length);
   const lf = (text: string) => text.replace(/\r\n?/g, "\n");
+  const content = lf(body);
+  const crlf = content !== body && content.replaceAll("\n", "\r\n") === body;
+  if (content !== body && !crlf) return undefined;
   const found: { at: number; end: number; text: string }[] = [];
   for (const e of edits) {
     const old = lf(e.oldText);
@@ -204,7 +210,8 @@ const piEdited = (file: string, edits: readonly { oldText: string; newText: stri
     out += content.slice(pos, f.at) + f.text;
     pos = f.end;
   }
-  return out + content.slice(pos);
+  out += content.slice(pos);
+  return bom + (crlf ? out.replaceAll("\n", "\r\n") : out);
 };
 
 /**
