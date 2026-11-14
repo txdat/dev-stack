@@ -182,7 +182,9 @@ const runCheck = (cmd: string, cwd: string): { code: number; out: string } => {
     fs.closeSync(fd);
     const out = readBytes(file) ?? "";
     const timedOut = (r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
-    const code = timedOut ? 124 : r.error ? 127 : (r.status ?? 128);
+    // As bash reports them: 127 when bash cannot start, 128 plus the number for a signal.
+    const killed = r.signal ? 128 + (os.constants.signals[r.signal] ?? 0) : 1;
+    const code = timedOut ? 124 : r.error && !r.pid ? 127 : (r.status ?? killed);
     return { code, out };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

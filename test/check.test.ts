@@ -182,6 +182,16 @@ test("pcs: every PC Check under Implementation Steps in one batch", () => {
   assert.equal(stdin.code, 1);
   assert.ok(stdin.out.includes("FAIL PC-2"), stdin.out);
 
+  // A Check killed by a signal reads as bash reports it: 128 plus the signal's number.
+  const killedPlan = `${dir}/pr3.spec.md`;
+  write(
+    killedPlan,
+    "# S\nStatus: planning\n## Implementation Steps\n  PC-1 — killed — Check: kill -KILL $$\n",
+  );
+  const killed = check("pcs", killedPlan);
+  assert.equal(killed.code, 1);
+  assert.ok(killed.out.includes("FAIL PC-1 (exit 137)"), killed.out);
+
   assert.equal(check("pcs", `${dir}/README.md`).out, "PASS no PCs\n");
   bad("pcs", `${dir}/README.md`, "PC-1");
   assert.ok(!fs.existsSync(`${dir}/nowhere`));
