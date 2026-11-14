@@ -442,13 +442,14 @@ class Gate {
    * precede the first proof. Topological order, so a repair merged forward reads as one line of
    * history whatever its dates. A merge commit implements nothing, so it never completes the
    * proof; a test(update) commit, a revised plan's test change, is neither proof nor
-   * implementation (../rules/plan.md#verification).
+   * implementation (../rules/plan.md#verification). Returns "none" when base..tip holds no proof
+   * commit and "order" when the proof is out of sequence.
    */
-  proofSequenceOk(base: string, re: RegExp | undefined, tip = "HEAD"): boolean {
+  proofSequence(base: string, re: RegExp | undefined, tip = "HEAD"): "ok" | "none" | "order" {
     if (re === undefined) {
       // A config plan needs only a commit of its own.
       const r = git(["log", "--format=%H", "--no-merges", `${base}..${tip}`], { cwd: this.tree });
-      return r.code === 0 && r.stdout !== "";
+      return r.code === 0 && r.stdout !== "" ? "ok" : "none";
     }
     const r = git(
       ["log", "--format=%s", "--topo-order", "--no-merges", "--reverse", `${base}..${tip}`],
@@ -456,7 +457,7 @@ class Gate {
         cwd: this.tree,
       },
     );
-    if (r.code !== 0) return false;
+    if (r.code !== 0) return "none";
     const subjects = r.stdout.split("\n");
     if (subjects[subjects.length - 1] === "") subjects.pop();
     let proofs = 0;
@@ -475,7 +476,7 @@ class Gate {
       if (!seen) bad = true;
       waiting = false;
     }
-    return !(proofs < 1 || waiting || bad);
+    return proofs < 1 ? "none" : waiting || bad ? "order" : "ok";
   }
 
   /** Plan's reviewed SHA holds its proof after base, as review-code checked. */
@@ -486,7 +487,7 @@ class Gate {
       kind.re === undefined
         ? "implementation commit"
         : `${kind.what} commit followed by implementation`;
-    if (base === "" || !this.proofSequenceOk(base, kind.re, green))
+    if (base === "" || this.proofSequence(base, kind.re, green) !== "ok")
       block(
         `Plan ${plan}'s reviewed SHA ${green} has no ${what} after ${base || "its PR target"}; run review-code on it (rules/plan.md#verification).`,
       );
@@ -602,20 +603,12 @@ class Gate {
         `The PR target '${target}' is missing or is not an ancestor of '${branch}'. If a repair landed on the parent plan's branch, merge it forward first (rules/plan.md#worktree).`,
       );
     const kind = this.proofKind(this.plan);
-    let count: number;
-    if (kind.re !== undefined) {
-      const re = kind.re;
-      const r = git(["log", "--format=%s", `${base}..HEAD`], { cwd: this.tree });
-      count = r.stdout.split("\n").filter((l) => re.test(l)).length;
-    } else {
-      const r = git(["log", "--format=%H", "--no-merges", `${base}..HEAD`], { cwd: this.tree });
-      count = r.stdout.split("\n").filter((l) => l !== "").length;
-    }
-    if (count < 1)
+    const proof = this.proofSequence(base, kind.re);
+    if (proof === "none")
       block(
         `Found no ${kind.what} commit between ${target} and ${branch} (rules/plan.md#verification).`,
       );
-    if (!this.proofSequenceOk(base, kind.re))
+    if (proof === "order")
       block(
         `Proof is out of sequence: each ${kind.what} commit needs at least one implementation commit after it, and nothing may come before the first (rules/plan.md#verification).`,
       );
