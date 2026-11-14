@@ -22,6 +22,9 @@ process.env["GIT_COMMITTER_NAME"] = "dev-test";
 process.env["GIT_COMMITTER_EMAIL"] = "dev-test@example.test";
 // Git's default excludes file is under XDG_CONFIG_HOME; the user's must decide nothing here.
 process.env["XDG_CONFIG_HOME"] = fs.mkdtempSync("/tmp/dev-test-xdg.");
+// Every child, such as a dev CLI a shell command runs, keeps worktrees out of ~/work/wt; a test
+// passes its own AI_WORKTREES_ROOT to in-process runs.
+process.env["AI_WORKTREES_ROOT"] = fs.mkdtempSync("/tmp/dev-test-worktrees.");
 
 /** A fresh directory under /tmp, its realpath. */
 export const tmp = (prefix: string): string =>
