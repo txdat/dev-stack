@@ -7,7 +7,7 @@
 // traceability block would teach readers to distrust the hook. `@` is a citation of another
 // artifact's ID. Anything else is a closure finding.
 
-import { asciiLower, b, trimSpace } from "./bytes.ts";
+import { b, trimSpace } from "./bytes.ts";
 
 const OWNER: Readonly<Record<string, string>> = {
   AC: "Acceptance Criteria",
@@ -189,7 +189,7 @@ export const idReport = (text: string): string[] => {
         stref.set(curst, 0);
         sttxt.set(curst, trimSpace(line));
       }
-      const at = asciiLower(line).indexOf("satisfies");
+      const at = line.search(/satisfies/i);
       if (curst !== "" && at >= 0)
         for (const id of scan(line.slice(at)))
           if (pfx(id) === "TC") {

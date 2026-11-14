@@ -80,7 +80,7 @@ const graphN = (n: number) => {
   );
 };
 
-const lib = () => new PlanLib(b(repo), { home: b(TMP), worktreesRoot: b(WTROOT) });
+const lib = () => new PlanLib(b(repo), { home: b(TMP), worktreesRoot: b(WTROOT), cwd: b(repo) });
 const edit = (file: string, f: (text: string) => string) => write(file, f(read(file)));
 const sub = (file: string, re: RegExp, by: string) => edit(file, (t) => t.replace(re, by));
 const insertAfter = (file: string, re: RegExp, line: string) =>
@@ -427,6 +427,14 @@ test("hook input shapes", () => {
     promptGate(repo, "explain /dev-review-feature to me"),
     "a slash command not at the start is not gated",
   );
+  for (const prompt of [`/DEV:Review-Feature ${P}`, `/Skill:REVIEW-feature ${P}`])
+    blocks(
+      promptGate(repo, prompt),
+      "already approved",
+      `${prompt.split(" ")[0]} is gated in any case`,
+    );
+  for (const prompt of [`/review-feature ${P}`, `/create-pr ${P}`, `/other:review-code ${P}`])
+    passes(promptGate(repo, prompt), `${prompt.split(" ")[0]}, not this plugin's, is not gated`);
   passes(
     call({
       hook_event_name: "PreToolUse",

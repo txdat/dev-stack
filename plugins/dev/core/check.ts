@@ -4,7 +4,7 @@
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { asciiLower, b, stripNewlines, utf8 } from "./bytes.ts";
+import { b, stripNewlines, utf8 } from "./bytes.ts";
 import { type Command, Exit, Output } from "./cli.ts";
 import { git, isDir, isFile, readable, readBytes } from "./sys.ts";
 
@@ -44,7 +44,7 @@ const additions = (cwd: string, commit: string, path: string): string =>
   );
 
 const TEST_DIRS =
-  /^(test|tests|spec|specs|__tests__|fixtures|testdata)\/|\/(test|tests|spec|specs|__tests__|fixtures|testdata)\//;
+  /^(test|tests|spec|specs|__tests__|fixtures|testdata)\/|\/(test|tests|spec|specs|__tests__|fixtures|testdata)\//i;
 
 const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
   if (argv.length < 2) usage();
@@ -66,8 +66,7 @@ const proof = (cwd: string, argv: readonly string[], o: Output): Out2 => {
   for (const path of tree.stdout.split("\n")) {
     if (path === "") continue;
     found = true;
-    const lower = asciiLower(path);
-    if (TEST_DIRS.test(lower) || /_test\.|_spec\.|\.test\.|\.spec\./.test(lower)) continue;
+    if (TEST_DIRS.test(path) || /_test\.|_spec\.|\.test\.|\.spec\./i.test(path)) continue;
     if (/Test\.|Spec\./.test(path)) continue;
     if (tests.includes(path)) {
       // --test exempts a path that does not look like a test, so it is the one way past the

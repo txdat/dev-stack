@@ -45,29 +45,27 @@ const SLUG_RE =
 
 /** The dev phase a skill name or slash command names; "" for none. */
 export const skillSlug = (name: string): string => {
-  let raw = asciiLower(name.startsWith("/") ? name.slice(1) : name).replace(/_/g, "-");
-  if (raw.startsWith("skill:")) raw = raw.slice(6);
-  if (raw.startsWith("dev:") || raw.startsWith("dev-")) {
-    const rest = raw.slice(4);
-    if (new RegExp(`^(${SLUG_RE})$`).test(rest)) return rest;
-  }
-  const m = new RegExp(`dev[:-](${SLUG_RE})`).exec(raw);
-  if (m?.[1]) return m[1];
-  const w = new RegExp(`(^|[ \\t\\n\\v\\f\\r/])(${SLUG_RE})([ \\t\\n\\v\\f\\r]|$)`).exec(raw);
-  return w?.[2] ?? "";
+  const raw = (name.startsWith("/") ? name.slice(1) : name)
+    .replace(/_/g, "-")
+    .replace(/^skill:/i, "");
+  const m =
+    new RegExp(`^dev[:-](${SLUG_RE})$`, "i").exec(raw) ??
+    new RegExp(`dev[:-](${SLUG_RE})`, "i").exec(raw);
+  if (m?.[1]) return asciiLower(m[1]);
+  const w = new RegExp(`(^|[ \\t\\n\\v\\f\\r/])(${SLUG_RE})([ \\t\\n\\v\\f\\r]|$)`, "i").exec(raw);
+  return asciiLower(w?.[2] ?? "");
 };
 
 /**
  * The skill a call invokes. Only a leading slash command invokes one from a prompt; prose that
  * mentions one is never gated. Claude Code types a plugin skill as /dev:<name>, Pi as
- * /skill:<name>.
+ * /skill:<name>; a bare /<name> is another plugin's or the user's own command and is never gated.
  */
 const rawSkill = (input: HookInput, event: string): string => {
   if (event === "UserPromptSubmit") {
-    const m =
-      /^[ \t\n\v\f\r]*\/(([Ss][Kk][Ii][Ll][Ll]:)?([Dd][Ee][Vv][-:])?[A-Za-z_-]+)([^A-Za-z0-9_-]|$)/.exec(
-        str(input["prompt"]) ?? "",
-      );
+    const m = /^[ \t\n\v\f\r]*\/((?:skill:(?:dev[-:])?|dev[-:])[a-z_-]+)(?:[^a-z0-9_-]|$)/i.exec(
+      str(input["prompt"]) ?? "",
+    );
     return m?.[1] ?? "";
   }
   const t = input["tool_input"];
@@ -197,6 +195,7 @@ class Gate {
     this.lib = new PlanLib(root, {
       home: ctx.env["HOME"] ?? "",
       worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
+      cwd: ctx.cwd,
     });
   }
 
@@ -313,8 +312,8 @@ class Gate {
       block(
         `Plan directory starts with ${num}, but the header has 'Issue: ${issue}'. The directory's <issue> is the issue number, or 0 for none; fix the header, or move the stack.`,
       );
-    const type = asciiLower(this.field(this.plan, "Type"));
-    if (!/^(feature|fix|refactor|config)$/.test(type))
+    const type = this.field(this.plan, "Type");
+    if (!/^(feature|fix|refactor|config)$/i.test(type))
       block(
         `Plan header has 'Type: ${type}'; write feature, fix, refactor, or config (rules/plan.md#schema).`,
       );
@@ -434,10 +433,10 @@ class Gate {
    * checks at the tip and no proof commit (re undefined), the rest with a failing test.
    */
   proofKind(plan: string): Proof {
-    const type = asciiLower(this.field(plan, "Type"));
-    if (type === "refactor")
+    const type = this.field(plan, "Type");
+    if (/^refactor$/i.test(type))
       return { re: /^test:[ \t\n\v\f\r]*baseline/, what: "'test: baseline'" };
-    if (type === "config") return { re: undefined, what: "implementation" };
+    if (/^config$/i.test(type)) return { re: undefined, what: "implementation" };
     return { re: /^test\(red\):/, what: "'test(red):'" };
   }
 

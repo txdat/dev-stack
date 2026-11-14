@@ -65,6 +65,7 @@ class Publish {
     this.lib = new PlanLib(root, {
       home: ctx.env["HOME"] ?? "",
       worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
+      cwd: ctx.cwd,
     });
   }
 

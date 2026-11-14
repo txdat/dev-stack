@@ -5,15 +5,7 @@
 // strings (bytes.ts).
 
 import * as fs from "node:fs";
-import {
-  asciiLower,
-  b,
-  byteCompare,
-  lines,
-  stripNewlines,
-  trimSpace,
-  versionCompare,
-} from "./bytes.ts";
+import { b, byteCompare, lines, stripNewlines, trimSpace, versionCompare } from "./bytes.ts";
 import {
   basename,
   dirname,
@@ -105,7 +97,7 @@ const parsePlan = (text: string): Parsed | undefined => {
     if (fenced) continue;
     if (row.startsWith("## ")) body = true;
     const l = row.replace(/^[ \t\n\v\f\r>*_-]+/, "");
-    if (/^stacks[ \t\n\v\f\r]+on/.test(asciiLower(l))) {
+    if (/^stacks[ \t\n\v\f\r]+on/i.test(l)) {
       n++;
       if (body || !row.startsWith("Stacks On:")) bad = true;
       line = row.replace(/^Stacks On:[ \t\n\v\f\r]*/, "").replace(/[ \t\n\v\f\r]+$/, "");
@@ -129,12 +121,18 @@ export class PlanLib {
   private worktreeList: string | undefined;
   private localBranches: string | undefined;
 
-  /** `repoRoot`, `home`, and `worktreesRoot` are byte strings; worktreesRoot is AI_WORKTREES_ROOT. */
-  constructor(repoRoot: string, env: { home: string; worktreesRoot?: string | undefined }) {
+  /**
+   * `repoRoot`, `home`, `worktreesRoot`, and `cwd` are byte strings; worktreesRoot is
+   * AI_WORKTREES_ROOT, and a relative one resolves against `cwd`, the caller's directory.
+   */
+  constructor(
+    repoRoot: string,
+    env: { home: string; worktreesRoot?: string | undefined; cwd: string },
+  ) {
     this.repoRoot = repoRoot;
     this.home = env.home;
-    this.worktreesRoot = realpathM(env.worktreesRoot || `${env.home}/work/wt`);
-    this.repoPlans = realpathM(`${repoRoot}/docs/plans`);
+    this.worktreesRoot = realpathM(env.worktreesRoot || `${env.home}/work/wt`, env.cwd);
+    this.repoPlans = realpathM(`${repoRoot}/docs/plans`, env.cwd);
     const format = `${this.repoPlans}/<issue>_<slug>/pr<N>.spec.md`;
     this.planFormat = format.startsWith(`${this.home}/`)
       ? `~/${format.slice(this.home.length + 1)}`
@@ -148,7 +146,7 @@ export class PlanLib {
     let p = input;
     if (p.startsWith("~/")) p = `${this.home}/${p.slice(2)}`;
     if (!p.startsWith("/") || p.endsWith("/")) return undefined;
-    const real = `${realpathM(dirname(p))}/${basename(p)}`;
+    const real = `${realpathM(dirname(p), "/")}/${basename(p)}`;
     if (!real.startsWith(`${this.repoPlans}/`)) return undefined;
     return PLAN_REL_RE.test(real.slice(this.repoPlans.length + 1)) ? real : undefined;
   }

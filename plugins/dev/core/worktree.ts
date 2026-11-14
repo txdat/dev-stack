@@ -14,6 +14,7 @@ import {
   isFile,
   isLink,
   nonEmpty,
+  P,
   readBytes,
   realpathM,
   writeBytes,
@@ -50,8 +51,6 @@ const validName = (name: string): void => {
     fail(`Invalid directory name: ${name}`);
 };
 
-const B = (p: string): Buffer => Buffer.from(p, "latin1");
-
 export const devWorktree: Command = (ctx) => {
   const o = new Output();
   return guard(o, () => {
@@ -68,6 +67,7 @@ export const devWorktree: Command = (ctx) => {
     const lib = new PlanLib(MAIN, {
       home: ctx.env["HOME"] ?? "",
       worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
+      cwd: ctx.cwd,
     });
     const SCRATCH = `${lib.worktreesRoot}/scratch`;
     const env = childEnv(ctx.env);
@@ -90,13 +90,13 @@ export const devWorktree: Command = (ctx) => {
       for (const d of deps) validName(d);
       for (const d of deps)
         if (isDir(`${MAIN}/${d}`) && !exists(`${worktree}/${d}`) && !isLink(`${worktree}/${d}`))
-          fs.symlinkSync(B(`${MAIN}/${d}`), B(`${worktree}/${d}`));
+          fs.symlinkSync(P(`${MAIN}/${d}`), P(`${worktree}/${d}`));
     };
 
     const depLinks = (worktree: string): string[] => {
       let names: string[];
       try {
-        names = fs.readdirSync(B(worktree), { encoding: "latin1" });
+        names = fs.readdirSync(P(worktree), { encoding: "latin1" });
       } catch {
         return [];
       }
@@ -107,7 +107,7 @@ export const devWorktree: Command = (ctx) => {
         .filter((e) => {
           if (!isLink(e)) return false;
           try {
-            return fs.readlinkSync(B(e), { encoding: "latin1" }) === `${MAIN}/${basename(e)}`;
+            return fs.readlinkSync(P(e), { encoding: "latin1" }) === `${MAIN}/${basename(e)}`;
           } catch {
             return false;
           }
@@ -166,9 +166,9 @@ export const devWorktree: Command = (ctx) => {
         validName(argv[2] as string);
         const dep = `${wt}/${argv[2]}`;
         // Unlink only the directory entry; never traverse into the shared target.
-        if (isLink(dep)) fs.unlinkSync(B(dep));
+        if (isLink(dep)) fs.unlinkSync(P(dep));
         else if (exists(dep) && !isDir(dep)) fail(`Dependency path is not a directory: ${dep}`);
-        fs.mkdirSync(B(dep), { recursive: true });
+        fs.mkdirSync(P(dep), { recursive: true });
         if (!isDir(dep) || isLink(dep)) fail("Dependency isolation failed.");
         return o.done();
       }
@@ -180,7 +180,7 @@ export const devWorktree: Command = (ctx) => {
         if (head.code !== 0) fail("Worktree HEAD is detached; its branch cannot be identified.");
         const branch = stripNewlines(head.stdout);
         // An unignored dependency link would otherwise block removal; its main-root target stays.
-        for (const e of depLinks(wt)) fs.unlinkSync(B(e));
+        for (const e of depLinks(wt)) fs.unlinkSync(P(e));
         const status = git(["status", "--porcelain", "--untracked-files=all"], { cwd: wt });
         o.err(status.stderr);
         if (stripNewlines(status.stdout) !== "")
@@ -237,7 +237,7 @@ export const devWorktree: Command = (ctx) => {
         if (exists(dest) || isLink(dest)) fail(`Scratch worktree already exists: ${dest}`);
         // A scratch deleted by hand leaves a registration that would block this path.
         sh(o, ["git", "-C", MAIN, "worktree", "prune"]);
-        fs.mkdirSync(B(SCRATCH), { recursive: true });
+        fs.mkdirSync(P(SCRATCH), { recursive: true });
         sh(o, ["git", "-C", MAIN, "worktree", "add", "--detach", dest, base], { stdout: "err" });
         const gitDir = stripNewlines(
           sh(o, ["git", "-C", dest, "rev-parse", "--absolute-git-dir"], { stdout: "keep" }).stdout,

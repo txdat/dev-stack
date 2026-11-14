@@ -10,10 +10,19 @@ import * as fs from "node:fs";
 import { byteCompare, stripNewlines } from "./bytes.ts";
 import { block, type GateCtx, type HookInput, type Json, member, str } from "./hook-input.ts";
 import { PlanLib, statusRank } from "./plan-lib.ts";
-import { basename, dirname, isDir, isFile, isLink, readBytes, realpathM } from "./sys.ts";
+import {
+  basename,
+  dirname,
+  isDir,
+  isFile,
+  isLink,
+  lstat,
+  P,
+  readBytes,
+  realpathM,
+  stat,
+} from "./sys.ts";
 import { tryMainRoot } from "./utils.ts";
-
-const P = (p: string): Buffer => Buffer.from(p, "latin1");
 
 const LOG_BLOCK =
   "The stack log is written only by dev-stack.ts (review, code-review, approve, stop, and autopilot's auto-reopen; resume and reopen are the user's). Read it, never write it (rules/plan.md#changes).";
@@ -165,7 +174,11 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
 };
 
 const libFor = (root: string, ctx: GateCtx): PlanLib =>
-  new PlanLib(root, { home: ctx.env["HOME"] ?? "", worktreesRoot: ctx.env["AI_WORKTREES_ROOT"] });
+  new PlanLib(root, {
+    home: ctx.env["HOME"] ?? "",
+    worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
+    cwd: ctx.cwd,
+  });
 
 /** Before a shell or edit call: throws Block when the call breaks the record. */
 export const recordGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
@@ -175,20 +188,6 @@ export const recordGuard = (tool: string, input: HookInput, ctx: GateCtx): void 
 
 // ── snapshots ────────────────────────────────────────────────────────
 
-const lstat = (p: string): fs.Stats | undefined => {
-  try {
-    return fs.lstatSync(P(p));
-  } catch {
-    return undefined;
-  }
-};
-const stat = (p: string): fs.Stats | undefined => {
-  try {
-    return fs.statSync(P(p));
-  } catch {
-    return undefined;
-  }
-};
 const rmrf = (p: string): boolean => {
   try {
     fs.rmSync(P(p), { recursive: true, force: true });

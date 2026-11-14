@@ -74,12 +74,19 @@ export const guard = (o: Output, body: () => Out): Out => {
   }
 };
 
-/** The process's context as byte strings. */
-export const processCtx = (): Ctx => {
-  const env: Record<string, string | undefined> = {};
-  for (const [k, v] of Object.entries(process.env)) env[k] = v === undefined ? undefined : b(v);
-  return { argv: process.argv.slice(2).map(b), env, cwd: b(process.cwd()) };
+/** An env of UTF-8 text, such as process.env, as byte strings. */
+export const byteEnv = (env: NodeJS.ProcessEnv): Env => {
+  const out: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(env)) out[k] = v === undefined ? undefined : b(v);
+  return out;
 };
+
+/** The process's context as byte strings. */
+export const processCtx = (): Ctx => ({
+  argv: process.argv.slice(2).map(b),
+  env: byteEnv(process.env),
+  cwd: b(process.cwd()),
+});
 
 /** The env a child gets back from a byte-string Env. */
 export const childEnv = (env: Env): NodeJS.ProcessEnv => {

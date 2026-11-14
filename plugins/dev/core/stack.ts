@@ -11,10 +11,8 @@ import { type Command, type Ctx, Exit, fail, guard, Output } from "./cli.ts";
 import { gateCheck, gateDesign } from "./gate-check.ts";
 import type { GateCtx } from "./hook-input.ts";
 import { heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
-import { dirname, git, globNames, isFile, isLink, readBytes } from "./sys.ts";
+import { dirname, git, globNames, isFile, isLink, P, readBytes } from "./sys.ts";
 import { mainRoot } from "./utils.ts";
-
-const P = (p: string): Buffer => Buffer.from(p, "latin1");
 
 const USAGE = [
   "Usage: dev-stack.ts stack <root plan>",
@@ -81,6 +79,7 @@ class Stack {
     this.lib = new PlanLib(root, {
       home: ctx.env["HOME"] ?? "",
       worktreesRoot: ctx.env["AI_WORKTREES_ROOT"],
+      cwd: ctx.cwd,
     });
     this.gate = { cwd: root, env: ctx.env };
   }

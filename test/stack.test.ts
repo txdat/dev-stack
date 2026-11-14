@@ -107,7 +107,7 @@ const expectNext = (want: string) => {
   assert.equal(got.join(" "), want);
 };
 
-const lib = () => new PlanLib(b(REPO), { home: b(ROOT), worktreesRoot: b(WTROOT) });
+const lib = () => new PlanLib(b(REPO), { home: b(ROOT), worktreesRoot: b(WTROOT), cwd: b(REPO) });
 
 test("stack lists the stack from its root", () => {
   writePlan(R, "planning", "feat/root");

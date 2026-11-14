@@ -7,7 +7,8 @@ import * as path from "node:path";
 import { utf8 } from "./bytes.ts";
 
 // Paths and argv are byte strings; fs takes them as Buffers, spawn as UTF-8 text.
-const P = (p: string): Buffer => Buffer.from(p, "latin1");
+/** A byte-string path as the Buffer fs takes. */
+export const P = (p: string): Buffer => Buffer.from(p, "latin1");
 
 export type Ran = { code: number; stdout: string; stderr: string };
 
@@ -43,7 +44,8 @@ export const git = (args: readonly string[], opts: RunOptions = {}): Ran => {
   return run(["git", ...(cwd === undefined ? [] : ["-C", cwd]), ...args], rest);
 };
 
-const lstat = (p: string): fs.Stats | undefined => {
+/** fs.lstat, undefined when the path is missing. */
+export const lstat = (p: string): fs.Stats | undefined => {
   try {
     return fs.lstatSync(P(p));
   } catch {
@@ -51,7 +53,8 @@ const lstat = (p: string): fs.Stats | undefined => {
   }
 };
 
-const stat = (p: string): fs.Stats | undefined => {
+/** fs.stat, undefined when the path is missing. */
+export const stat = (p: string): fs.Stats | undefined => {
   try {
     return fs.statSync(P(p));
   } catch {
@@ -93,8 +96,11 @@ export const writeBytes = (p: string, bytes: string, mode?: number): void => {
   fs.writeFileSync(P(p), Buffer.from(bytes, "latin1"), mode === undefined ? {} : { mode });
 };
 
-/** `realpath -m`: links resolved where components exist, `..` applied after resolving. */
-export const realpathM = (p: string, cwd = process.cwd()): string => {
+/**
+ * `realpath -m`: links resolved where components exist, `..` applied after resolving. A relative
+ * `p` resolves against `cwd`, the caller's directory.
+ */
+export const realpathM = (p: string, cwd: string): string => {
   let hops = 0;
   const walk = (base: string, rel: string): string => {
     let cur = base;
