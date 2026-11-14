@@ -289,9 +289,9 @@ test("plan resolution", () => {
     "a relative mention beside an exact path is ignored",
   );
   blocks(
-    runGate(repo, "dev-execute-feature", `${P} ${PD}/12_gate/pr9.spec.md`),
-    `${PD}/12_gate/pr9.spec.md`,
-    "an exact path to no plan blocks beside one that resolves",
+    runGate(repo, "dev-execute-feature", `${P} /other/repo/12_gate/pr1.spec.md`),
+    "not found: /other/repo/12_gate/pr1.spec.md",
+    "an absolute path that does not resolve blocks beside one that does",
   );
   blocks(
     runGate(repo, "dev-execute-feature", "/other/repo/12_gate/pr1.spec.md"),
