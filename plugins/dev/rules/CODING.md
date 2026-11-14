@@ -6,13 +6,13 @@ Follow project patterns and stay within the request: no speculative abstractions
 
 Duplication is cheaper than the wrong abstraction: extract an established shared concept, not an anticipated one. Reuse code that implements the same concept (same data meaning and contract, not merely similar steps); do not bend shared code with flags to serve a different concept.
 
-Verify changed calls, fields, imports, and assumptions against actual definitions or runtime evidence. Design failure paths deliberately and preserve error causes. Comment only non-obvious reasons or invariants. UI work follows [frontend-design.md](skills/dev/frontend-design.md).
+Verify changed calls, fields, imports, and assumptions against actual definitions or runtime evidence. Design failure paths deliberately and preserve error causes. Comment only non-obvious reasons or invariants. UI work follows [frontend-design.md](frontend-design.md).
 
 Report inspected facts, inference, and unrun checks distinctly, with decisive file locations or command results and no secrets.
 
 ## Tests
 
-Tests assert required observable behavior; never special-case test inputs or replace behavior with canned results. Plan-backed work adds [test-first proof](skills/dev/plan.md#verification).
+Tests assert required observable behavior; never special-case test inputs or replace behavior with canned results. Plan-backed work adds [test-first proof](plan.md#verification).
 
 Affected tests are the tests the change adds or edits, plus existing tests that exercise the changed code or its callers. Find them through references and imports, or the runner's related-test selection, such as Jest `--findRelatedTests`. Unless the user or the project's instructions, such as AGENTS.md or CLAUDE.md, require the full suite, run only affected tests, selected by file or test name, such as `go test ./changed/pkg -run '^(TestA|TestB)$'` or a pytest node id; when the runner cannot select them, run the smallest unit that contains them and report what else it ran. A CI workflow or test script that runs the full suite is not such a requirement. When a project check runs a full suite that neither the user nor the project's instructions require, run the check's other steps and the affected tests instead, and report the full suite as unrun; the full suite is then not a required check under [CORE.md — Work](CORE.md#work).
 
@@ -30,7 +30,7 @@ Before changing security, concurrency, data-integrity, or performance-critical b
 
 For changed contracts, inspect callers, consumers, and tests, including reliance on errors, defaults, ordering, timing, and side effects beyond the signature. For shared state used as a decision input or signal, check writers and readers together: meaning, ownership, initialization, transitions, concurrency, cleanup.
 
-Record decisive evidence with the design or verification results. Fix broken consumers within scope; material compatibility uncertainty or extra work needs a decision first, under [plan.md — Changes](skills/dev/plan.md#changes) for plan-backed work.
+Record decisive evidence with the design or verification results. Fix broken consumers within scope; material compatibility uncertainty or extra work needs a decision first, under [plan.md — Changes](plan.md#changes) for plan-backed work.
 
 ## Tools
 
@@ -38,10 +38,10 @@ Prefer semantic navigation for definitions and callers. Reuse evidence until its
 
 Database MCP (mandatory): before writing any query or aggregation pipeline, read the schema and existing indexes of every target, including join targets, with the MCP's tools. Shape it to those fields, types, and indexes. If no index supports it, report that; never create indexes.
 
-Shared shell helpers live in `~/.dotfiles/.ai-shared/bin/`; invoke them by full path with Bash, as their owning skill specifies.
+The dev plugin's helper CLIs live in `$DEV_LIB/bin/`; run them with the shell tool as `node $DEV_LIB/bin/<name>.ts …`, as their owning skill specifies.
 
 ## Ownership
 
 Preserve unrelated work. The main agent owns Git mutations unless a task explicitly delegates them. Confirm destructive actions only when they exceed existing authorization. Never bypass required checks or discard unfamiliar files to get past an obstacle; fix the failure or report the blocker.
 
-Work directly by default. Delegate only a substantial, independent chunk, when a subagent is available and concurrent work justifies it. Use the most specific agent type whose description and tools fit the chunk, else general-purpose. Tell the subagent to read this file and the owning skill; give it exclusive files, inputs, verification, and off-limits actions, and remind it that others share the codebase. The main agent integrates and verifies the result. Review isolation follows [plan.md — Review](skills/dev/plan.md#review).
+Work directly by default. Delegate only a substantial, independent chunk, when a subagent is available and concurrent work justifies it. Use the most specific agent type whose description and tools fit the chunk, else general-purpose. Tell the subagent to read this file and the owning skill; give it exclusive files, inputs, verification, and off-limits actions, and remind it that others share the codebase. The main agent integrates and verifies the result. Review isolation follows [plan.md — Review](plan.md#review).
