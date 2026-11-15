@@ -1,5 +1,9 @@
 # dev-stack
 
+<p align="center">
+  <img src="icon.svg" alt="dev-stack icon" width="200">
+</p>
+
 A plan-backed development workflow for Claude Code, Pi, and DeepSeek Harness (DSH): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. It ships as one package holding one plugin, `dev`, that each harness installs natively. The sources are TypeScript, type-checked with TypeScript 7 and linted with Biome; `npm run build` compiles them to JavaScript in `dist/dev/`, the plugin every harness loads.
 
 ## Install
