@@ -13,6 +13,8 @@ Pre-install `npm install && npm run build`
 | DSH | install this checkout as a linked bundle: `plugin_manager` action `install_bundle` with the checkout's absolute path | `dev-<skill>`, as the session skill catalog shows |
 | Antigravity (`agy`) | `agy plugin install ~/work/dev-stack/dist/dev-agy` | `<skill>` (from the `dev` plugin) |
 
+The marketplace also lists `typescript-lsp`, a Claude Code-only plugin that runs [vtsls](https://github.com/yioneko/vtsls) as the language server for `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs` files. Install `vtsls` on `PATH` (`npm install -g @vtsls/language-server`), then `/plugin install typescript-lsp@dev-stack`. It is plain JSON, so it needs no build.
+
 `dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code copies the plugin into its cache, so reinstall it through `/plugin` after a rebuild; Pi loads `dist/dev` in place, so `/reload` picks up a rebuild. For development, `CLAUDE_CODE_PLUGIN_DIRS=~/work/dev-stack/dist/dev claude` loads the built plugin from the checkout; restart the session after `npm run build`. DSH links the checkout, so it runs `dist/dev/dsh/index.js` in place; rebuild and restart the session after changing the plugin.
 
 The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/dev/rules/CODING.md) into the context (Claude: a `prompt.context` block, which subagents also receive; Pi: `before_agent_start`; DSH: a `dev-stack:rules` system-prompt section; Antigravity: `SessionStart` `injectSteps` via `bin/agy-hook.js`) and defines `$DEV_LIB` there as the plugin's absolute install root. No `CLAUDE.md`, `AGENTS.md`, `~/.dsh/AGENTS.md`, or `GEMINI.md` pointer is needed.
@@ -22,10 +24,11 @@ DSH has no Skill tool arguments and no prompt-submit hook. A phase's plan is the
 ## Layout
 
 ```
-.claude-plugin/marketplace.json   the marketplace: one plugin, dev, from dist/dev
+.claude-plugin/marketplace.json   the marketplace: dev, from dist/dev, and typescript-lsp
 package.json                      the Pi package manifest (dist/dev), the DSH bundle manifest, dev tooling
 cordis.patch.yml                  the DSH bundle patch: inserts the dev-stack Host plugin
 locale/, icon.svg                 DSH display metadata and icon
+plugins/typescript-lsp/           the Claude Code vtsls language-server plugin, shipped as is
 plugins/dev/                      the plugin's sources; their build ships alone
   skills/<name>/SKILL.md          skills
   agents/<name>.md                subagents (Claude); Pi's main agent reads them directly

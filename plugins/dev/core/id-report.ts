@@ -5,7 +5,8 @@
 // Output classes the caller keeps apart: `!` means the IDs could not be read (ranges, leading
 // zeros, duplicates, a missing section, a bad Proves:), so no closure verdict follows; a false
 // traceability block would teach readers to distrust the hook. `@` is a citation of another
-// artifact's ID. Anything else is a closure finding.
+// artifact's ID. Anything else is a closure finding, including, with `fields`, an AC, TC, or DD
+// missing one of its schema fields.
 
 import { b, rowsOf, trimSpace } from "./bytes.ts";
 
@@ -41,6 +42,16 @@ const scan = (s: string): string[] => {
 
 const pfx = (id: string): string => id.slice(0, 2);
 
+/** The fields each AC, TC, and DD carries (../rules/plan.md#schema); TC's Proves: is checked apart. */
+const FIELDS: Readonly<Record<string, readonly string[]>> = {
+  AC: ["Source", "Success", "Failure"],
+  TC: ["Fixture", "Action", "Expected"],
+  DD: ["Options", "Choice", "Why"],
+};
+
+/** A `Label: value` field with a value, at a line's start (after a bullet) or after a `|`. */
+const FIELD_RE = /(^|\|)[ \t]*([-*][ \t]*)?([A-Z][A-Za-z]*):[ \t]*[^ \t\n\v\f\r|]/g;
+
 const RANGES = Object.keys(OWNER).map((p) => [
   new RegExp(`${p}-[0-9]+(${S}+(through|thru|to)${S}+|${S}*\\.\\.${S}*|${EN}|-)${p}-[0-9]+`),
   new RegExp(`${p}-[0-9]+${S}+(through|thru|to)${S}+[0-9]+`),
@@ -56,8 +67,11 @@ const COUNT_WC = new RegExp(
   `(^|[^A-Za-z0-9_-])wc${S}([^|;&]*${S})?(-[A-Za-z]*l[A-Za-z]*|--lines)([ \\t\\n\\v\\f\\r);|&"'\`]|$)`,
 );
 
-/** The report lines for plan text, in the order the checks find them. */
-export const idReport = (text: string): string[] => {
+/**
+ * The report lines for plan text, in the order the checks find them. With `fields`, each AC, TC,
+ * and DD must carry its schema fields, each with a value.
+ */
+export const idReport = (text: string, opts: { fields?: boolean } = {}): string[] => {
   const out: string[] = [];
   let unreadable = false;
   const bad = (msg: string) => {
@@ -80,6 +94,8 @@ export const idReport = (text: string): string[] => {
   const stref = new Map<string, number>();
   const sttxt = new Map<string, string>();
   const tcsat = new Set<string>();
+  let item = "";
+  const itemFields = new Map<string, Set<string>>();
 
   rows.forEach((line, i) => {
     const nr = i + 1;
@@ -90,6 +106,7 @@ export const idReport = (text: string): string[] => {
     if (fenced) return;
     if (line.startsWith("## ")) {
       sec = trimSpace(line.slice(3));
+      item = "";
       return;
     }
 
@@ -109,6 +126,18 @@ export const idReport = (text: string): string[] => {
     // A line in the owning section that begins with an ID declares it.
     const first = ids[0] ?? "";
     const decl = n > 0 && lead.startsWith(first) && OWNER[pfx(first)] === sec ? first : "";
+
+    // An item's fields are the lines after its declaration, until the next declaration or an
+    // unindented line that is not a field, as for Proves: below.
+    if (decl !== "") {
+      item = pfx(decl) in FIELDS && !itemFields.has(decl) ? decl : "";
+      if (item !== "") itemFields.set(item, new Set());
+    } else if (item !== "") {
+      const labels = [...line.matchAll(FIELD_RE)].map((m) => m[3] as string);
+      if (/^[^ \t\n\v\f\r]/.test(line) && !/^([-*][ \t]*)?[A-Za-z][A-Za-z ]*:/.test(line))
+        item = "";
+      else for (const l of labels) itemFields.get(item)?.add(l);
+    }
 
     if (sec === "Test Cases") {
       if (decl.startsWith("TC-")) {
@@ -217,6 +246,18 @@ export const idReport = (text: string): string[] => {
       if (!tcsat.has(id)) out.push(`${id} is not satisfied by any Implementation Step`);
     } else if (id.startsWith("ST-")) {
       if (!stref.get(id)) out.push(`${id} has no satisfies clause naming a TC: ${sttxt.get(id)}`);
+    }
+    const have = itemFields.get(id);
+    if (opts.fields && have) {
+      const missing = (FIELDS[pfx(id)] ?? []).filter((f) => !have.has(f));
+      if (missing.length > 0)
+        out.push(
+          `${id} (line ${declared.get(id)}) has no ${missing.map((f) => `${f}:`).join(", ")} ${EM} write ${
+            pfx(id) === "DD"
+              ? `"  Options: <considered> | Choice: <chosen, by whom> | Why: <rationale, derivation>"`
+              : `each on its own line under ${id}, such as "  ${missing[0]}: <value>"`
+          }`,
+        );
     }
   }
   return out;

@@ -70,7 +70,7 @@ export const stackLog = (plan: string): string => `${dirname(plan)}/log`;
 /** awk's default field splitting. */
 const fields = (line: string): string[] => line.split(/[ \t\n]+/).filter((f) => f !== "");
 
-type Parsed = { head: string; stacks: string; spec: string };
+type Parsed = { head: string; stacks: string; spec: string; dupes: string[] };
 
 /** One plan file as the header reader sees it (dev-plan-lib.sh PLAN_AWK). */
 const parsePlan = (text: string): Parsed | undefined => {
@@ -83,18 +83,20 @@ const parsePlan = (text: string): Parsed | undefined => {
   let body = false;
   let n = 0;
   let bad = false;
-  const seen = new Set<string>();
-  for (const row of rows) {
+  const seen = new Map<string, number>();
+  const dupes: string[] = [];
+  for (const [i, row] of rows.entries()) {
     let record = false;
     if (!fenced && !body) {
       const m = /^[A-Z][A-Za-z ]*:/.exec(row);
       if (m) {
         const key = m[0].slice(0, -1);
-        if (!seen.has(key)) {
-          seen.add(key);
+        const at = seen.get(key);
+        if (at === undefined) {
+          seen.set(key, i + 1);
           head += `${row}\n`;
           record = key === "Status" || key === "Spec" || key === "Tip";
-        }
+        } else dupes.push(`'${key}' on lines ${at} and ${i + 1}`);
       }
     }
     if (!record) spec += `${row}\n`;
@@ -112,7 +114,7 @@ const parsePlan = (text: string): Parsed | undefined => {
     }
   }
   const stacks = fenced || n > 1 || bad || (n > 0 && line === "") ? "!" : line;
-  return { head: `\n${head}`, stacks, spec };
+  return { head: `\n${head}`, stacks, spec, dupes };
 };
 
 export class PlanLib {
@@ -183,7 +185,7 @@ export class PlanLib {
     for (const p of paths) {
       const text = readBytes(p);
       const parsed = text === undefined ? undefined : parsePlan(text);
-      this.plans.set(p, parsed ?? { head: "", stacks: "", spec: "" });
+      this.plans.set(p, parsed ?? { head: "", stacks: "", spec: "", dupes: [] });
     }
   }
 
@@ -194,7 +196,7 @@ export class PlanLib {
 
   /** Caches `text` as the plan at `key`, as load_plans reads a file holding it. */
   loadText(key: string, text: string): void {
-    this.plans.set(key, parsePlan(text) ?? { head: "", stacks: "", spec: "" });
+    this.plans.set(key, parsePlan(text) ?? { head: "", stacks: "", spec: "", dupes: [] });
   }
 
   /** The plan files in a directory, in number order, as the stack index lists them. */
@@ -243,6 +245,11 @@ export class PlanLib {
   /** field() with an unreadable plan read as "". */
   fieldOr(plan: string, key: string): string {
     return this.field(plan, key) ?? "";
+  }
+
+  /** Header keys plan repeats, which field() reads from their first line only, with their lines. */
+  duplicateKeys(plan: string): string[] {
+    return this.loaded(plan)?.dupes ?? [];
   }
 
   /**

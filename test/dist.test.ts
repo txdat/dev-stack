@@ -88,9 +88,16 @@ test("the manifests point at the built plugin", () => {
     fs.readFileSync(path.join(ROOT, ".claude-plugin/marketplace.json"), "utf8"),
   );
   assert.deepEqual(
-    market.plugins.map((p: { source: string }) => p.source),
-    ["./dist/dev"],
+    market.plugins.map((p: { name: string; source: string }) => [p.name, p.source]),
+    [
+      ["dev", "./dist/dev"],
+      ["typescript-lsp", "./plugins/typescript-lsp"],
+    ],
   );
+  const lsp = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "plugins/typescript-lsp/.claude-plugin/plugin.json"), "utf8"),
+  );
+  assert.equal(lsp.name, "typescript-lsp");
   const pi = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).pi;
   for (const entry of [...pi.extensions, ...pi.skills] as string[]) {
     assert.ok(entry.startsWith("./dist/dev/"), entry);

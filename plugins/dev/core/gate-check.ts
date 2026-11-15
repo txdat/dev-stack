@@ -428,8 +428,18 @@ class Gate {
       );
   }
 
-  requireIds(): void {
-    const report = idReport(readBytes(this.plan) ?? "");
+  /** A repeated header key shows people one value and the gate another, so review blocks it. */
+  requireUniqueKeys(): void {
+    const dupes = this.lib.duplicateKeys(this.plan);
+    if (dupes.length > 0)
+      block(
+        `Plan ${this.plan} repeats header keys: ${dupes.join("; ")}. Each header key appears once; the gate reads only its first line. Delete the extra lines (rules/plan.md#schema).`,
+      );
+  }
+
+  /** With `fields`, review-feature also requires each AC, TC, and DD's schema fields. */
+  requireIds(fields = false): void {
+    const report = idReport(readBytes(this.plan) ?? "", { fields });
     if (report.length === 0) return;
     if (report.some((l) => l.startsWith("!")))
       block(
@@ -443,7 +453,7 @@ class Gate {
           .join("\n")}`,
       );
     block(
-      `The plan shape in ${this.plan} fails: its ID graph is not closed, or a PC lacks a Check or counts matches (rules/plan.md#schema, skills/design-feature/SKILL.md#3-write-the-spec):\n${report.join("\n")}\n\nThis is shape, not correctness: fixing these does not make an edge or a Check right.`,
+      `The plan shape in ${this.plan} fails: its ID graph is not closed, an AC, TC, or DD lacks a schema field, or a PC lacks a Check or counts matches (rules/plan.md#schema, skills/design-feature/SKILL.md#3-write-the-spec):\n${report.join("\n")}\n\nThis is shape, not correctness: fixing these does not make an edge or a Check right.`,
     );
   }
 
@@ -622,7 +632,8 @@ class Gate {
     // design-feature checks a stack before the user approves any of it.
     if (this.design) this.requireParentRank(0, "planning");
     else this.requireParentRank(1, "approved");
-    this.requireIds();
+    this.requireUniqueKeys();
+    this.requireIds(true);
     this.requireBranch();
     if (this.parentPlan !== "") this.requireStacked(this.plan, this.parentPlan);
   }
