@@ -68,11 +68,11 @@ ST-1 — <change, files/symbols> — satisfies TC-1
   PC-1 — <fact about current code the step relies on> — Check: <command that fails when the fact is false>
 ```
 
-The header is the `<Key>: <value>` lines between the title and the first `##` heading, outside code fences, one field per line; the first line of each key counts. `Spec:` binds the last verdict to the spec it judged, set by [dev-stack.js](../bin/dev-stack.js) `review`; `Tip:` is the Branch tip review-code passed. Both start as `-` and change in place. `Branch:` is the plan's PR branch, never its Base. `Stacks On:` names the parent plan in this directory, numbered below this one; the root omits it. The PR targets the parent's Branch, or Base for the root.
+The header is the `<Key>: <value>` lines between the title and the first `##` heading, outside code fences, one field per line, each key once; the review-feature gate blocks a repeated key, and other gates read only a key's first line. `Spec:` binds the last verdict to the spec it judged, set by [dev-stack.js](../bin/dev-stack.js) `review`; `Tip:` is the Branch tip review-code passed. Both start as `-` and change in place. `Branch:` is the plan's PR branch, never its Base. `Stacks On:` names the parent plan in this directory, numbered below this one; the root omits it. The PR targets the parent's Branch, or Base for the root.
 
 Optional sections: `## Context`, `## Affected Existing Tests` (how to find them and the expected effect). Omit Design Decisions when there are none.
 
-IDs are `AC`, `TC`, `ST`, `PC`, and `DD`, numbered from 1, never renumbered or reused. Declare each at the start of a line in its own section, outside code fences. List IDs one by one, never as ranges. Cite only this plan's IDs; refer to other artifacts by path. Each TC proves exactly one AC, and every AC, TC, and ST is linked. The gate checks this shape at review-feature and review-code.
+IDs are `AC`, `TC`, `ST`, `PC`, and `DD`, numbered from 1, never renumbered or reused. Declare each at the start of a line in its own section, outside code fences. List IDs one by one, never as ranges. Cite only this plan's IDs; refer to other artifacts by path. Each TC proves exactly one AC, and every AC, TC, and ST is linked. The gate checks this shape at review-feature and review-code. At review-feature it also requires each AC's `Source:`, `Success:`, and `Failure:`, each TC's `Fixture:`, `Action:`, and `Expected:`, and each DD's `Options:`, `Choice:`, and `Why:`, each with a value, on the lines after the declaration and before the next ID declaration, `##` heading, or unindented line that is not a field.
 
 ## Changes
 

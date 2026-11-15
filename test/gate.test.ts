@@ -70,11 +70,21 @@ TC-1 — unapproved plan reaches execute-feature
 ## Implementation Steps
 ST-1 — add the status gate — satisfies TC-1`;
 
+const AC_FIELDS = "  Source: requirement\n  Success: it holds\n  Failure: it does not";
+const TC_FIELDS = "  Fixture: a plan\n  Action: the phase runs\n  Expected: the result";
+
+/** graph with each AC and TC declaration followed by its schema fields, for ID-only cases. */
+const withFields = (graph: string) =>
+  graph.replace(
+    /^([-*] )?(AC|TC)-[0-9]+ — .*$/gm,
+    (line, _b, p) => `${line}\n${p === "AC" ? AC_FIELDS : TC_FIELDS}`,
+  );
+
 /** A closed graph of n ACs, one TC and one step each. */
 const graphN = (n: number) => {
   const r = (f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i + 1)).join("");
-  return `## Acceptance Criteria\n${r((i) => `AC-${i} — outcome ${i}\n`)}## Test Cases\n${r(
-    (i) => `TC-${i} — scenario ${i}\n  Proves: AC-${i}\n`,
+  return `## Acceptance Criteria\n${r((i) => `AC-${i} — outcome ${i}\n${AC_FIELDS}\n`)}## Test Cases\n${r(
+    (i) => `TC-${i} — scenario ${i}\n  Proves: AC-${i}\n${TC_FIELDS}\n`,
   )}## Implementation Steps\n${r((i) => `ST-${i} — do ${i} — satisfies TC-${i}\n`)}`.replace(
     /\n$/,
     "",
@@ -723,8 +733,9 @@ test("review-feature", () => {
 
 test("ID shape", () => {
   reviewGraph("eight ACs enter review without a cap", graphN(8), "");
-  const g = (ac: string, tc: string, st: string, extra = "") =>
+  const raw = (ac: string, tc: string, st: string, extra = "") =>
     `## Acceptance Criteria\n${ac}\n## Test Cases\n${tc}\n## Implementation Steps\n${st}${extra}`;
+  const g = (ac: string, tc: string, st: string, extra = "") => withFields(raw(ac, tc, st, extra));
   const cases: [label: string, graph: string, want: string][] = [
     [
       "a bulleted plan resolves the same graph",
@@ -740,7 +751,7 @@ test("ID shape", () => {
       `## Design Decisions
 DD-1 — reject at the API so every client gets AC-1
   Options: API or UI | Choice: API, by the user | Why: one enforcement point
-${g(
+${raw(
   "AC-1 — an archived user cannot check out\n  Source: issue #12\n  Success: checkout returns 403\n  Failure: an order is created",
   "TC-1 — archived user checks out\n  Proves: AC-1\n  Fixture: user u1, archived, cart with one item\n  Action: POST /checkout as u1\n  Expected: 403 and no order row",
   'ST-1 — guard checkout in api/checkout.py — satisfies TC-1\n  PC-1 — checkout reads the user before writing — Check: rg -n "get_user" api/checkout.py',
@@ -908,6 +919,107 @@ ${g(
     ["PR rows are not IDs", `${graphN(1)}\n## Notes\nPR-1 ships ST-1`, ""],
   ];
   for (const [label, graph, want] of cases) reviewGraph(label, graph, want);
+});
+
+test("schema fields: review-feature requires each AC, TC, and DD's fields", () => {
+  const ac = "AC-1 — outcome";
+  const tc = "TC-1 — scenario\n  Proves: AC-1";
+  const st = "ST-1 — action — satisfies TC-1";
+  const g = (a: string, t: string, dd = "") =>
+    `${dd ? `## Design Decisions\n${dd}\n` : ""}## Acceptance Criteria\n${a}\n## Test Cases\n${t}\n## Implementation Steps\n${st}`;
+  const fullAc = `${ac}\n${AC_FIELDS}`;
+  const fullTc = `${tc}\n${TC_FIELDS}`;
+  const cases: [label: string, graph: string, want: string][] = [
+    [
+      "an AC without Failure: blocks",
+      g(`${ac}\n  Source: requirement\n  Success: it holds`, fullTc),
+      "AC-1 (line 14) has no Failure:",
+    ],
+    [
+      "a TC without Action: and Expected: blocks, naming both",
+      g(fullAc, `${tc}\n  Fixture: a plan`),
+      "TC-1 (line 19) has no Action:, Expected:",
+    ],
+    [
+      "a field with an empty value does not count",
+      g(fullAc, `${tc}\n  Fixture: a plan\n  Action: the phase runs\n  Expected:`),
+      "TC-1 (line 19) has no Expected:",
+    ],
+    [
+      "a field after an unindented prose line belongs to no item",
+      g(
+        fullAc,
+        `${tc}\n  Fixture: a plan\n  Action: the phase runs\nSee the notes.\n  Expected: e`,
+      ),
+      "TC-1 (line 19) has no Expected:",
+    ],
+    [
+      "a fenced field does not count",
+      g(fullAc, `${tc}\n  Fixture: a plan\n  Action: the phase runs\n~~~\n  Expected: e\n~~~`),
+      "TC-1 (line 19) has no Expected:",
+    ],
+    [
+      "the next item's fields do not count for the one before",
+      g(
+        `${ac}\n${fullAc.replace("AC-1", "AC-2")}`,
+        `${fullTc}\nTC-2 — second\n  Proves: AC-2\n${TC_FIELDS}`,
+      ),
+      "AC-1 (line 14) has no Source:, Success:, Failure:",
+    ],
+    [
+      "a DD without Why: blocks with the one-line form",
+      g(
+        fullAc,
+        fullTc,
+        "DD-1 — reject at the API\n  Options: API or UI | Choice: API, by the user",
+      ),
+      'DD-1 (line 14) has no Why: — write "  Options: <considered> | Choice: <chosen, by whom> | Why: <rationale, derivation>"',
+    ],
+    [
+      "DD fields on their own lines pass",
+      g(
+        fullAc,
+        fullTc,
+        "DD-1 — reject at the API\n  Options: API or UI\n  Choice: API, by the user\n  Why: one point",
+      ),
+      "",
+    ],
+    [
+      "bulleted fields pass",
+      g(
+        `- ${ac}\n  - Source: requirement\n  - Success: it holds\n  - Failure: it does not`,
+        `- ${tc}\n  - Fixture: a plan\n  - Action: the phase runs\n  - Expected: the result`,
+      ),
+      "",
+    ],
+  ];
+  for (const [label, graph, want] of cases) reviewGraph(label, graph, want);
+
+  // A plan approved before the field check keeps entering review-code.
+  useRepo();
+  planWithWorktree("implemented", g(ac, tc));
+  const wt = wtOf(P);
+  wtCommit(wt, "test(red): gate", "tests/gate_test.py");
+  wtCommit(wt, "feat(gate): implement", "src/gate.py");
+  passes(runGate(repo, "dev-review-code", P), "review-code does not require the fields");
+});
+
+test("header keys: review-feature blocks a repeated header key", () => {
+  useRepo();
+  writePlan(P, "planning", VALID, "feature", "#12", "Status: approved");
+  blocks(
+    runGate(repo, "dev-review-feature", P),
+    "repeats header keys: 'Status' on lines 2 and 9",
+    "a second Status line blocks",
+  );
+  writePlan(P, "planning", VALID, "feature", "#12", "Base: main\nType: fix");
+  blocks(
+    runGate(repo, "dev-review-feature", P),
+    "'Base' on lines 6 and 9; 'Type' on lines 5 and 10",
+    "every repeated key is named",
+  );
+  writePlan(P, "planning", `${VALID}\n\n## Context\nStatus: shipped upstream`);
+  passes(runGate(repo, "dev-review-feature", P), "a key-like line in the body is not a header key");
 });
 
 test("failing closed: invalid bytes reach a verdict", () => {

@@ -6,6 +6,11 @@
       "name": "dev",
       "source": "./dist/dev",
       "description": "Plan-backed dev workflow: skills, agents, phase gates, rules, and /dev-stack-* commands"
+    },
+    {
+      "name": "typescript-lsp",
+      "source": "./plugins/typescript-lsp",
+      "description": "TypeScript/JavaScript language server (vtsls)"
     }
   ]
 }
