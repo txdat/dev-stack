@@ -18,9 +18,9 @@ const CLAUDE_COPY = [".claude-plugin/plugin.json", "hooks/hooks.json"];
 const MARK = ".dev-stack-build";
 
 const AGY_MODELS: Record<string, string> = {
-  haiku: "gemini-4-hydrogen",
-  sonnet: "gemini-4-hydrogen",
-  opus: "gemini-4-argon",
+  haiku: "flash",// "gemini-4-hydrogen",
+  sonnet: "flash",// "gemini-4-hydrogen",
+  opus: "pro",// "gemini-4-argon",
 };
 
 // Antigravity's native tool for each Claude Code grant, as its plugin import maps them. A grant with
