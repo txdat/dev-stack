@@ -141,7 +141,7 @@ The review base is where the Branch leaves its PR target: for Base, the merge-ba
 Test-first:
 
 1. **RED.** Turn each TC's fixture, action, and expected result into a test. Run it at the review base: it must fail for the intended missing behavior — fixture, import, and syntax failures do not count. A refactor instead gives each TC a test, new or edited from an existing one, that passes at the review base.
-2. Commit only the tests, plus throwing stubs where a new API needs them, as `test(red): <scope>`, or `test: baseline <scope>` for a refactor. The gate counts these subjects. Run `node $DEV_LIB/bin/dev-check.js proof <commit> [--test <path>] [--stub <path>]` and read the diff.
+2. Commit only the tests, plus throwing stubs where a new API needs them, as `test(red): <scope>`, or `test: baseline <scope>` for a refactor. The gate counts these subjects. Run `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-check.js proof <commit> [--test <path>] [--stub <path>]` and read the diff.
 3. **GREEN.** Implement, run the tests, and commit the implementation separately. When it is unclear whether an assertion really depends on the behavior, break the behavior briefly and confirm the test fails.
 
 Rules:

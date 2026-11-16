@@ -10,7 +10,7 @@ import { exec, git, gitOk, read, run, tmp, withEnv, write } from "./helpers.ts";
 
 const ROOT = tmp("dev-publish-test");
 
-const GH = `#!/usr/bin/env node
+const GH = `#!/usr/bin/env bun
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const store = process.env.GH_STORE;

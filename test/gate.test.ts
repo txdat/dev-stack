@@ -20,6 +20,7 @@ import {
   gate,
   git,
   PLUGIN,
+  RUN,
   read,
   run,
   tmp,
@@ -30,7 +31,7 @@ import {
 const TMP = tmp("gate-check-test");
 const WTROOT = `${TMP}/worktrees`;
 const ENV = { AI_WORKTREES_ROOT: WTROOT };
-const DS = `node '${PLUGIN}/bin/dev-stack.ts'`;
+const DS = `${RUN} '${PLUGIN}/bin/dev-stack.ts'`;
 
 let repo = "";
 let PD = "";
@@ -710,7 +711,7 @@ test("worktree and root", () => {
   const realGit = exec(["sh", "-c", "command -v git"]).out.trim();
   write(
     `${shim}/git`,
-    `#!/usr/bin/env node
+    `#!/usr/bin/env bun
 const a = process.argv.slice(2);
 if (a.some((x, i) => x === "worktree" && a[i + 1] === "list")) process.exit(1);
 const r = require("node:child_process").spawnSync(${JSON.stringify(realGit)}, a, { stdio: "inherit" });
@@ -1870,7 +1871,7 @@ test("record guard: Bash, Edit, and Write calls", () => {
     "resume after a separator and a quoted path is caught",
   );
   blocks(bashGuard(`true\ndev-stack.sh resume ${P}`), resume, "resume on a later line is caught");
-  const viaCommand = `node ${PLUGIN}/bin/dev-stack-command.ts`;
+  const viaCommand = `${RUN} ${PLUGIN}/bin/dev-stack-command.ts`;
   blocks(
     bashGuard(`${viaCommand} dev-stack-resume ${P}`),
     resume,
@@ -1895,19 +1896,29 @@ test("record guard: Bash, Edit, and Write calls", () => {
     logOnly,
     "an agent cannot append to the stack log",
   );
+  // The runtimes, bun also with the flags the plugin runs it with.
+  const RUNTIMES = ["node", "bun", RUN];
+  for (const rt of RUNTIMES) {
+    passes(
+      bashGuard(`${rt} ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
+      `a dev CLI under ${rt} is no log write`,
+    );
+    blocks(
+      bashGuard(`${rt} -e "require('fs').appendFileSync('${LOG}','x')"`),
+      logOnly,
+      `${rt} -e writing the log`,
+    );
+  }
   passes(
-    bashGuard(`node ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
-    "a dev CLI under node is no log write",
-  );
-  blocks(
-    bashGuard(`node -e "require('fs').appendFileSync('${LOG}','x')"`),
-    logOnly,
-    "node -e writing the log",
-  );
-  passes(
-    bashGuard(`cd /tmp && node '${PLUGIN}/bin/dev-stack.ts' next ${P} && cat ${LOG}`),
+    bashGuard(`cd /tmp && ${RUN} '${PLUGIN}/bin/dev-stack.ts' next ${P} && cat ${LOG}`),
     "a quoted dev CLI path after cd is no log write",
   );
+  for (const opt of ["--preload ./x.js", "--config=./bunfig.toml", "run"])
+    blocks(
+      bashGuard(`bun ${opt} ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
+      logOnly,
+      `bun ${opt} makes a dev CLI any script`,
+    );
   // Only this plugin's own bin/ is trusted: a lookalike name or a copy elsewhere is any script.
   const fake = fs.mkdtempSync(`${TMP}/fakebin.`);
   for (const script of [
@@ -1920,20 +1931,22 @@ test("record guard: Bash, Edit, and Write calls", () => {
     // Run from the sources, only .ts names in bin/ are this plugin's CLIs.
     `${PLUGIN}/bin/dev-stack.js`,
   ])
-    blocks(bashGuard(`node ${script} ${LOG}`), logOnly, `node ${script} writing the log`);
-  blocks(
-    bashGuard(`node "$DEV_LIB/bin/dev-stack.ts" resume ${P}`),
-    resume,
-    "resume under node is caught",
-  );
+    for (const rt of RUNTIMES)
+      blocks(bashGuard(`${rt} ${script} ${LOG}`), logOnly, `${rt} ${script} writing the log`);
+  for (const rt of [...RUNTIMES, "bun run", "bun --smol", "node --no-warnings"])
+    blocks(
+      bashGuard(`${rt} "$DEV_LIB/bin/dev-stack.ts" resume ${P}`),
+      resume,
+      `resume under ${rt} is caught`,
+    );
   // The built plugin's CLIs are .js; the user's writes are caught under either extension.
   blocks(
-    bashGuard(`node "$DEV_LIB/bin/dev-stack.js" resume ${P}`),
+    bashGuard(`${RUN} "$DEV_LIB/bin/dev-stack.js" resume ${P}`),
     resume,
     "resume through the built CLI is caught",
   );
   blocks(
-    bashGuard(`node "$DEV_LIB/bin/dev-stack-command.js" dev-stack-reopen ${P}`),
+    bashGuard(`${RUN} "$DEV_LIB/bin/dev-stack-command.js" dev-stack-reopen ${P}`),
     "dev-stack.js reopen is the user's alone",
     "reopen through the built command CLI is caught",
   );

@@ -22,7 +22,7 @@ import type {
 } from "../plugins/dev/dsh/api.ts";
 import { apply } from "../plugins/dev/dsh/index.ts";
 import devExtension from "../plugins/dev/pi/dev.ts";
-import { exec, git, PLUGIN, planText, read, repo, tmp, write } from "./helpers.ts";
+import { BUN, exec, git, PLUGIN, planText, RUN, read, repo, tmp, write } from "./helpers.ts";
 
 const BIN = path.join(PLUGIN, "bin");
 const HOOK = path.join(BIN, "hook.ts");
@@ -161,7 +161,7 @@ const directEdit = async (dir: string, h: Harness): Promise<void> => {
   const created = await runs(
     "autopilot creates the worktree",
     h,
-    `node ${WORKTREE} create 13_cache-pr1 ${branch} main`,
+    `${RUN} ${WORKTREE} create 13_cache-pr1 ${branch} main`,
     dir,
   );
   const wt = created.out.trim();
@@ -213,10 +213,10 @@ const directEdit = async (dir: string, h: Harness): Promise<void> => {
   assert.ok(!fs.existsSync(path.join(path.dirname(plan), "log")), "a refused call ran");
   await refused(
     "resume stays the user's",
-    h.bash(`node ${STACK} resume ${plan}`, wt),
+    h.bash(`${RUN} ${STACK} resume ${plan}`, wt),
     /is the user's alone/,
   );
-  await runs("autopilot removes its worktree", h, `node ${WORKTREE} remove ${wt}`, dir);
+  await runs("autopilot removes its worktree", h, `${RUN} ${WORKTREE} remove ${wt}`, dir);
 };
 
 /**
@@ -242,7 +242,7 @@ const planBacked = async (
   if (orchestrator === "autopilot") await writes("the planner writes the plan", h, plan, spec);
 
   await allowed("review-feature enters on a planning plan", h.skill("review-feature", plan));
-  await runs("review-feature records a ready spec", h, `node ${STACK} review ${plan} ready`, dir);
+  await runs("review-feature records a ready spec", h, `${RUN} ${STACK} review ${plan} ready`, dir);
   await refused(
     "execute-feature waits for approval",
     h.skill("execute-feature", plan),
@@ -264,14 +264,14 @@ const planBacked = async (
     await runs(
       "run-stack --auto-approve runs dev-stack approve",
       h,
-      `node ${STACK} approve ${plan}`,
+      `${RUN} ${STACK} approve ${plan}`,
       dir,
     );
     assert.match(read(plan), /^Status: auto-approved$/m);
   } else {
     // The user approves in their editor, outside the agent's tools, and dev-stack records it.
     write(plan, read(plan).replace("Status: ready", "Status: approved"));
-    await runs("dev-stack records the user's approval", h, `node ${STACK} next ${plan}`, dir);
+    await runs("dev-stack records the user's approval", h, `${RUN} ${STACK} next ${plan}`, dir);
     assert.match(read(plan), /^Status: approved$/m);
   }
 
@@ -289,7 +289,7 @@ const deliver = async (dir: string, plan: string, branch: string, h: Harness): P
   const created = await runs(
     "execute-feature creates the worktree",
     h,
-    `node ${WORKTREE} create 12_auto-pr1 ${branch} main`,
+    `${RUN} ${WORKTREE} create 12_auto-pr1 ${branch} main`,
     dir,
   );
   const wt = created.out.trim();
@@ -333,7 +333,7 @@ const deliver = async (dir: string, plan: string, branch: string, h: Harness): P
     "review-code enters on an implemented plan with its proof",
     h.skill("review-code", plan, wt),
   );
-  await runs("review-code records its pass", h, `node ${STACK} code-review ${plan} pass`, dir);
+  await runs("review-code records its pass", h, `${RUN} ${STACK} code-review ${plan} pass`, dir);
   await refused(
     "create-pr waits for the reviewed status",
     h.skill("create-pr", plan, wt),
@@ -342,7 +342,7 @@ const deliver = async (dir: string, plan: string, branch: string, h: Harness): P
   await edits("review-code records reviewed", h, plan, "Status: implemented", "Status: reviewed");
   await edits("review-code records its tip", h, plan, "Tip: -", `Tip: ${tip}`);
   await allowed("create-pr enters on a reviewed plan", h.skill("create-pr", plan, wt));
-  await runs("create-pr removes the worktree", h, `node ${WORKTREE} remove ${wt}`, dir);
+  await runs("create-pr removes the worktree", h, `${RUN} ${WORKTREE} remove ${wt}`, dir);
 };
 
 // ── Claude Code ───────────────────────────────────────────────────────
@@ -353,7 +353,7 @@ const deliver = async (dir: string, plan: string, branch: string, h: Harness): P
  */
 const claude = (dir: string): Harness => {
   const hook = (input: unknown, cwd = dir): Verdict => {
-    const r = exec(["node", HOOK], { cwd, input: JSON.stringify(input) });
+    const r = exec([...BUN, HOOK], { cwd, input: JSON.stringify(input) });
     assert.equal(r.code, 0, `bin/hook.ts: ${r.all}`);
     if (r.out.trim() === "") return PASS;
     const out = JSON.parse(r.out) as {
@@ -578,7 +578,7 @@ const dsh = (dir: string): Harness => {
  */
 const antigravity = (dir: string): Harness => {
   const hook = (payload: unknown, cwd = dir): Verdict => {
-    const r = exec(["node", AGY_HOOK], { cwd, input: JSON.stringify(payload) });
+    const r = exec([...BUN, AGY_HOOK], { cwd, input: JSON.stringify(payload) });
     assert.equal(r.code, 0, `bin/agy-hook.ts: ${r.all}`);
     const out = JSON.parse(r.out) as { decision?: string; reason?: string };
     return out.decision === "deny" ? refusal(out.reason ?? "denied") : PASS;

@@ -24,12 +24,12 @@ A re-review covers only what [plan.md — Review](../../rules/plan.md#review) li
 
 - Security, data integrity, concurrency, compatibility, and failure paths, under [CODING.md — Impact](../../rules/CODING.md#impact).
 - Unnecessary queries, repeated or unbounded work, reimplemented concepts, and shared code bent with flags. Report concrete impact; unbounded or repeated work on a production path, with a location and evidence, blocks.
-- Secrets and debug or conflict artifacts: run `node $DEV_LIB/bin/dev-check.js artifacts <review base> HEAD`, judge each line it lists for review, and read the diff.
+- Secrets and debug or conflict artifacts: run `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-check.js artifacts <review base> HEAD`, judge each line it lists for review, and read the diff.
 
 Report your conclusion on each AC and the Goal, the decisive evidence, and findings with their label, location, and proof, split into blocking and notes. The review passes when nothing blocks.
 
 ## Finalize
 
-Unless the request is review-only, the main agent records each round's verdict with `node $DEV_LIB/bin/dev-stack.js code-review <plan> pass|needs-changes` before repairing or finalizing; [plan.md — Review rounds](../../rules/plan.md#review-rounds) owns the round limit.
+Unless the request is review-only, the main agent records each round's verdict with `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js code-review <plan> pass|needs-changes` before repairing or finalizing; [plan.md — Review rounds](../../rules/plan.md#review-rounds) owns the round limit.
 
 After a logged pass, the main agent runs the local checks, TC tests, and affected tests at the Branch tip, leaves the worktree on the Branch, sets `Status: reviewed` and `Tip: <tip SHA>` to the SHA the pass names, and hands off to [create-pr.md](../create-pr/SKILL.md). A later change to the Branch returns the plan to `implemented` for another review.

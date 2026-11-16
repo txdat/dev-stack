@@ -53,6 +53,10 @@ export const exitCode = (r: {
   return r.error && code === 0 ? 1 : code;
 };
 
+/** A spawn error's message, led by its errno code, such as ENOENT, when the runtime omits it. */
+const spawnReason = (e: NodeJS.ErrnoException): string =>
+  e.code === undefined || e.message.includes(e.code) ? e.message : `${e.code}: ${e.message}`;
+
 /**
  * Runs argv without a shell; its status is exitCode's, with the reason on stderr when it cannot
  * start or stopped for passing the output limit.
@@ -67,11 +71,12 @@ export const run = (argv: readonly string[], opts: RunOptions): Ran => {
     stdio: [opts.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
     maxBuffer: 256 * 1024 * 1024,
   });
-  if (res.error && !res.pid) return { code: 127, stdout: "", stderr: String(res.error.message) };
+  if (res.error && !res.pid) return { code: 127, stdout: "", stderr: spawnReason(res.error) };
   return {
     code: exitCode(res),
     stdout: res.stdout?.toString("latin1") ?? "",
-    stderr: (res.stderr?.toString("latin1") ?? "") + (res.error ? `${res.error.message}\n` : ""),
+    stderr:
+      (res.stderr?.toString("latin1") ?? "") + (res.error ? `${spawnReason(res.error)}\n` : ""),
   };
 };
 

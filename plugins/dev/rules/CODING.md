@@ -38,7 +38,7 @@ Prefer semantic navigation for definitions and callers. Reuse evidence until its
 
 Database MCP (mandatory): before writing any query or aggregation pipeline, read the schema and existing indexes of every target, including join targets, with the MCP's tools. Shape it to those fields, types, and indexes. If no index supports it, report that; never create indexes.
 
-The dev plugin's helper CLIs live in `$DEV_LIB/bin/`; run them with the shell tool as `node $DEV_LIB/bin/<name>.js …`, as their owning skill specifies.
+The dev plugin's helper CLIs live in `$DEV_LIB/bin/`; run them with the shell tool as `bun --no-env-file --config=/dev/null $DEV_LIB/bin/<name>.js …`, as their owning skill specifies. Never drop the two flags: without them, Bun loads the working directory's `.env` and `bunfig.toml` into the CLI.
 
 ## Ownership
 
