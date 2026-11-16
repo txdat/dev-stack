@@ -61,6 +61,7 @@ test/                             node --test suites
 | Review a plan before approval | [review-feature](plugins/dev/skills/review-feature/SKILL.md) |
 | Implement an approved or auto-approved plan | [execute-feature](plugins/dev/skills/execute-feature/SKILL.md) |
 | Review implemented work | [review-code](plugins/dev/skills/review-code/SKILL.md) |
+| Review a direct edit before its PR, or an open PR | [review-change](plugins/dev/skills/review-change/SKILL.md) |
 | Publish reviewed PRs | [create-pr](plugins/dev/skills/create-pr/SKILL.md) |
 | Split a PR into atomic PRs, on request only | [split-pr-atomic](plugins/dev/skills/split-pr-atomic/SKILL.md) |
 | Drive a stack through its phases | [run-stack](plugins/dev/skills/run-stack/SKILL.md) |

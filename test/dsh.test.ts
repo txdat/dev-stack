@@ -82,6 +82,7 @@ const SKILLS = [
   "fix-bug",
   "handoff",
   "recap",
+  "review-change",
   "review-code",
   "review-feature",
   "review-infra",
