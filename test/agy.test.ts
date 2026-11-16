@@ -117,21 +117,30 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
         Issue: "#37088",
         Type: "fix",
         Status: "planning",
+        Spec: "-",
+        Tip: "-",
         Base: "main",
         Branch: "fix-37088",
-        PR: "none",
       },
       [
         "## Goal",
         "g",
+        "## Scope",
+        "in / out",
         "## Acceptance Criteria",
-        "- AC-1: a",
+        "AC-1 — a",
+        "  Source: s",
+        "  Success: ok",
+        "  Failure: fail",
         "## Test Cases",
-        "- TC-1 (AC-1): t",
-        "## Plan",
-        "- Step 1 (TC-1): s",
-        "## Preconditions",
-        "- PC-1: p",
+        "TC-1 — t",
+        "  Proves: AC-1",
+        "  Fixture: f",
+        "  Action: a",
+        "  Expected: e",
+        "## Implementation Steps",
+        "ST-1 — s — satisfies TC-1",
+        "  PC-1 — p — Check: true",
         "",
       ].join("\n"),
     ),
@@ -195,6 +204,45 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     },
   });
   assert.equal(proseDeny["decision"], "deny");
+
+  // Inside invoke_subagent, lastUserInput is empty or does not carry the parent's orchestrator
+  // command; allow when a plan in docs/plans/ passes the phase gate, and deny when none does.
+  const subagentReviewAllow = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "",
+    toolCall: {
+      id: "s6",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+    },
+  });
+  assert.equal(subagentReviewAllow["decision"], "allow", JSON.stringify(subagentReviewAllow));
+
+  const subagentExecDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "",
+    toolCall: {
+      id: "s7",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+    },
+  });
+  assert.equal(subagentExecDeny["decision"], "deny", JSON.stringify(subagentExecDeny));
+
+  // Explicit wrong-status plan mention is still denied even if another plan is runnable.
+  const explicitDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: `/dev:execute-feature ${spec}`,
+    toolCall: {
+      id: "s8",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+    },
+  });
+  assert.equal(explicitDeny["decision"], "deny", JSON.stringify(explicitDeny));
 });
 
 test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot", () => {

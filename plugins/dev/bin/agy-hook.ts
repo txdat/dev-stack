@@ -10,7 +10,9 @@ import { asciiLower, b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
 import { gateCheck, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
+import { planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
+import { tryMainRoot } from "../core/utils.ts";
 import { GATED_PHASES, RULE_FILES, rulesText } from "../hooks/commands.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -54,6 +56,43 @@ const isOrchestratorInput = (lastUserInput: string): boolean =>
   /^[ \t\n\v\f\r]*\/?(?:skill:(?:dev[:-])?|dev[:-])?(?:autopilot|run-stack)(?:[^a-z0-9_-]|$)/i.test(
     lastUserInput.replace(/_/g, "-"),
   );
+
+/**
+ * Checks whether any plan in the main root's `docs/plans/` passes `gateCheck` for `skill`.
+ * Used when `read_file` on a gated `SKILL.md` runs inside a subagent (where `lastUserInput`
+ * does not carry the subagent's prompt or plan path) or after a non-slash resume reply.
+ */
+const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): boolean => {
+  const root = tryMainRoot(ctx.cwd, ctx.env);
+  if (!root) return false;
+  const plansDir = path.join(root, "docs", "plans");
+  let stacks: fs.Dirent[];
+  try {
+    stacks = fs.readdirSync(plansDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const stack of stacks) {
+    if (!stack.isDirectory()) continue;
+    const stackDir = path.join(plansDir, stack.name);
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(stackDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isFile() || !/^pr[1-9][0-9]*\.spec\.md$/.test(entry.name)) continue;
+      const planPath = path.join(stackDir, entry.name);
+      const verdict = gateCheck(
+        { tool_name: "Skill", tool_input: { skill, arguments: planPath } },
+        ctx,
+      );
+      if (verdict === undefined) return true;
+    }
+  }
+  return false;
+};
 
 /** Converts an Antigravity PreToolUse/PostToolUse payload into the Claude-shaped HookInput. */
 const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
@@ -159,6 +198,12 @@ const run = (raw: HookInput): void => {
     }
     const verdict = gateCheck(mapped, ctx);
     if (verdict && "block" in verdict) {
+      const skill = str(member(mapped["tool_input"], "skill")) ?? "";
+      const args = str(member(mapped["tool_input"], "arguments")) ?? "";
+      if (isPhaseCall(mapped) && planMentions(args).length === 0 && hasRunnablePlan(skill, ctx)) {
+        writeJson({ decision: "allow" });
+        return;
+      }
       writeJson({ decision: "deny", reason: utf8(verdict.block) });
       return;
     }
