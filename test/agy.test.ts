@@ -107,6 +107,49 @@ test("PreToolUse gates read_file on gated dev skills and allows ungated skills",
   assert.equal(allow["decision"], "allow");
 });
 
+test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack delegates a plan", () => {
+  const dir = repo(tmp("dev-agy-autopilot-skill"));
+  const spec = path.join(dir, "docs/plans/37088_fix/pr1.spec.md");
+  write(
+    spec,
+    planText(
+      {
+        Issue: "#37088",
+        Type: "fix",
+        Status: "planning",
+        Base: "main",
+        Branch: "fix-37088",
+        PR: "none",
+      },
+      [
+        "## Goal",
+        "g",
+        "## Acceptance Criteria",
+        "- AC-1: a",
+        "## Test Cases",
+        "- TC-1 (AC-1): t",
+        "## Plan",
+        "- Step 1 (TC-1): s",
+        "## Preconditions",
+        "- PC-1: p",
+        "",
+      ].join("\n"),
+    ),
+  );
+
+  const out = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "/dev:autopilot issue 37088",
+    toolCall: {
+      id: "s3",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+    },
+  });
+  assert.equal(out["decision"], "allow", JSON.stringify(out));
+});
+
 test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot", () => {
   const dir = repo(tmp("dev-agy-post"));
   const spec = path.join(dir, "docs/plans/1_test/pr1.spec.md");
