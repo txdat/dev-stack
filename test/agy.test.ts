@@ -107,6 +107,189 @@ test("PreToolUse gates read_file on gated dev skills and allows ungated skills",
   assert.equal(allow["decision"], "allow");
 });
 
+test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack delegates a plan", () => {
+  const dir = repo(tmp("dev-agy-autopilot-skill"));
+  const spec = path.join(dir, "docs/plans/37088_fix/pr1.spec.md");
+  write(
+    spec,
+    planText(
+      {
+        Issue: "#37088",
+        Type: "fix",
+        Status: "planning",
+        Spec: "-",
+        Tip: "-",
+        Base: "main",
+        Branch: "fix-37088",
+      },
+      [
+        "## Goal",
+        "g",
+        "## Scope",
+        "in / out",
+        "## Acceptance Criteria",
+        "AC-1 — a",
+        "  Source: s",
+        "  Success: ok",
+        "  Failure: fail",
+        "## Test Cases",
+        "TC-1 — t",
+        "  Proves: AC-1",
+        "  Fixture: f",
+        "  Action: a",
+        "  Expected: e",
+        "## Implementation Steps",
+        "ST-1 — s — satisfies TC-1",
+        "  PC-1 — p — Check: true",
+        "",
+      ].join("\n"),
+    ),
+  );
+
+  const out = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "/dev:autopilot issue 37088",
+    toolCall: {
+      id: "s3",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+    },
+  });
+  assert.equal(out["decision"], "allow", JSON.stringify(out));
+
+  // Multi-plan / multi-stack: lastUserInput names pr1.spec.md while another plan is runnable,
+  // or invokes bare run-stack / autopilot when a runnable plan exists.
+  const pr2 = path.join(dir, "docs/plans/37089_other/pr1.spec.md");
+  write(
+    pr2,
+    planText(
+      {
+        Issue: "#37089",
+        Type: "fix",
+        Status: "planning",
+        Spec: "-",
+        Tip: "-",
+        Base: "main",
+        Branch: "fix-37089",
+      },
+      [
+        "## Goal",
+        "g",
+        "## Scope",
+        "in / out",
+        "## Acceptance Criteria",
+        "AC-1 — a",
+        "  Source: s",
+        "  Success: ok",
+        "  Failure: fail",
+        "## Test Cases",
+        "TC-1 — t",
+        "  Proves: AC-1",
+        "  Fixture: f",
+        "  Action: a",
+        "  Expected: e",
+        "## Implementation Steps",
+        "ST-1 — s — satisfies TC-1",
+        "  PC-1 — p — Check: true",
+        "",
+      ].join("\n"),
+    ),
+  );
+  // Mark pr2 Spec as current so execute-feature gate passes on it.
+  const reviewRes = exec(["node", path.join(PLUGIN, "bin/dev-stack.ts"), "review", pr2, "ready"], {
+    cwd: dir,
+  });
+  assert.equal(reviewRes.code, 0, reviewRes.all);
+  const approveRes = exec(["node", path.join(PLUGIN, "bin/dev-stack.ts"), "approve", pr2], {
+    cwd: dir,
+  });
+  assert.equal(approveRes.code, 0, approveRes.all);
+
+  for (const [input, skill] of [
+    [`/dev:run-stack ${spec}`, "review-feature"],
+    [`run-stack ${spec}`, "execute-feature"],
+    ["autopilot issue 37088", "execute-feature"],
+  ]) {
+    const res = runHook({
+      hookEventName: "PreToolUse",
+      cwd: dir,
+      lastUserInput: input,
+      toolCall: {
+        id: "s4",
+        name: "read_file",
+        args: { Path: path.join(PLUGIN, `skills/${skill}/SKILL.md`) },
+      },
+    });
+    assert.equal(res["decision"], "allow", `${input} (${skill}): ${JSON.stringify(res)}`);
+  }
+
+  // Orchestrator input still denies a phase when no plan is at its entry status.
+  const noReviewedDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "/dev:autopilot issue 37088",
+    toolCall: {
+      id: "s4b",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/create-pr/SKILL.md") },
+    },
+  });
+  assert.equal(noReviewedDeny["decision"], "deny", JSON.stringify(noReviewedDeny));
+
+  // Prose mentioning autopilot does not bypass the gate.
+  const proseDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "explain how autopilot works",
+    toolCall: {
+      id: "s5",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-code/SKILL.md") },
+    },
+  });
+  assert.equal(proseDeny["decision"], "deny");
+
+  // Inside invoke_subagent, lastUserInput is empty or does not carry the parent's orchestrator
+  // command; allow when a plan in docs/plans/ passes the phase gate, and deny when none does.
+  const subagentReviewAllow = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "",
+    toolCall: {
+      id: "s6",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+    },
+  });
+  assert.equal(subagentReviewAllow["decision"], "allow", JSON.stringify(subagentReviewAllow));
+
+  const subagentReviewCodeDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "",
+    toolCall: {
+      id: "s7",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-code/SKILL.md") },
+    },
+  });
+  assert.equal(subagentReviewCodeDeny["decision"], "deny", JSON.stringify(subagentReviewCodeDeny));
+
+  // Explicit wrong-status plan mention is still denied even if another plan is runnable.
+  const explicitDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: `/dev:execute-feature ${spec}`,
+    toolCall: {
+      id: "s8",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+    },
+  });
+  assert.equal(explicitDeny["decision"], "deny", JSON.stringify(explicitDeny));
+});
+
 test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot", () => {
   const dir = repo(tmp("dev-agy-post"));
   const spec = path.join(dir, "docs/plans/1_test/pr1.spec.md");
