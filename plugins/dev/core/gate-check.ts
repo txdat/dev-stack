@@ -276,7 +276,8 @@ class Gate {
   /**
    * Exactly one plan path, which must resolve: a typo or foreign path blocks. A relative mention,
    * such as `12_x/pr1.spec.md` in a listing Pi passes with the whole message, is ignored when an
-   * exact path resolves; alone, it blocks.
+   * exact path resolves; alone, it blocks. A `@` file mention resolves as a relative path, so one
+   * that does not resolve blocks (plan-lib.ts canonicalPlan).
    */
   resolvePlan(): void {
     const named: string[] = [];
@@ -286,11 +287,12 @@ class Gate {
         `Named plan not found: ${mention}. Pass the full path of an existing ${format} of this repository.`,
       );
     let relative: string | undefined;
-    for (const mention of planMentions(this.text)) {
+    for (const { path: mention, at } of planMentions(this.text)) {
       if (mention === "") continue;
-      const doc = this.lib.canonicalPlan(mention);
+      const doc = this.lib.canonicalPlan(mention, at);
+      const shown = at ? `@${mention}` : mention;
       if (doc === undefined) {
-        if (mention.startsWith("/") || mention.startsWith("~/")) notFound(mention);
+        if (at || mention.startsWith("/") || mention.startsWith("~/")) notFound(shown);
         relative ??= mention;
         continue;
       }

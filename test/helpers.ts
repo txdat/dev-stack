@@ -1,6 +1,6 @@
 // Shared fixtures: scratch Git repositories under /tmp, in-process runs of the core commands, and
 // bin/hook.ts runs. Every repo ignores its docs/plans through .git/info/exclude, Git reads no
-// global or system config, and AI_WORKTREES_ROOT keeps worktrees out of ~/work/wt.
+// global or system config, and AI_WORKTREES_ROOT keeps worktrees out of ~/wt.
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -22,7 +22,7 @@ process.env["GIT_COMMITTER_NAME"] = "dev-test";
 process.env["GIT_COMMITTER_EMAIL"] = "dev-test@example.test";
 // Git's default excludes file is under XDG_CONFIG_HOME; the user's must decide nothing here.
 process.env["XDG_CONFIG_HOME"] = fs.mkdtempSync("/tmp/dev-test-xdg.");
-// Every child, such as a dev CLI a shell command runs, keeps worktrees out of ~/work/wt; a test
+// Every child, such as a dev CLI a shell command runs, keeps worktrees out of ~/wt; a test
 // passes its own AI_WORKTREES_ROOT to in-process runs.
 process.env["AI_WORKTREES_ROOT"] = fs.mkdtempSync("/tmp/dev-test-worktrees.");
 

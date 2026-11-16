@@ -53,6 +53,14 @@ Write rules in English only, whatever language the request uses.
 2. Its row in [README.md](README.md).
 3. For a dev phase the gate must recognize, the phase list in `core/gate-check.ts` and its cases in `test/`.
 
+## Adding a harness
+
+A harness is supported when its adapter runs the gates, injects `rules/`, and loads the skills and `/dev-stack-*` commands, and its driver passes all three lanes in [test/autopilot-e2e.test.ts](test/autopilot-e2e.test.ts).
+
+1. The adapter, in `hooks/` for an engine that runs the plugin module itself, `bin/<harness>-hook.ts` for one that pipes hook JSON to a gate CLI, or a directory such as `pi/` or `dsh/` for one that imports `core/` directly. An adapter that reaches `core/` directly maps the harness's tool calls and typed prompts onto [hook-input.ts](plugins/dev/core/hook-input.ts); it never restates the gate's policy.
+2. Its row in the [README.md](README.md) install table.
+3. Its driver in [test/autopilot-e2e.test.ts](test/autopilot-e2e.test.ts): autopilot's direct-edit lane, autopilot's plan-backed lane, and run-stack's plan-backed lane.
+
 ## Code
 
 All code is TypeScript. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Node 24, and `test/dist.test.ts` checks a fresh build.
@@ -66,7 +74,7 @@ All code is TypeScript. `npm run build` (`scripts/build.ts`) compiles `plugins/d
 
 The gate reads plan header fields and IDs, never prose. A change to the plan schema, statuses, or stack rules in [plan.md](plugins/dev/rules/plan.md) needs matching changes in `core/` and `test/`.
 
-Tests that need a repository build scratch Git repos under `/tmp`, whose `docs/plans` hold their plans, ignore those through each repo's `.git/info/exclude` with `GIT_CONFIG_GLOBAL=/dev/null`, and set `AI_WORKTREES_ROOT` so they never touch `~/work/wt`.
+Tests that need a repository build scratch Git repos under `/tmp`, whose `docs/plans` hold their plans, ignore those through each repo's `.git/info/exclude` with `GIT_CONFIG_GLOBAL=/dev/null`, and set `AI_WORKTREES_ROOT` so they never touch `~/wt`.
 
 ## Commands
 

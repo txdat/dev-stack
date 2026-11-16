@@ -37,10 +37,20 @@ const MENTION_RE = new RegExp(
   "g",
 );
 
+/** A plan mention: its path text, and whether a prompt wrote it as a `@` file mention. */
+export type PlanMention = { path: string; at: boolean };
+
+/** Whether the `@` before a mention at `at` starts a file mention, not an email's local part. */
+const atBoundary = (line: string, at: number) => !/[A-Za-z0-9._-]/.test(line[at - 1] ?? "");
+
 /** Every pr<N>.spec.md mention in `text`, in order (text is a byte string). */
-export const planMentions = (text: string): string[] => {
-  const out: string[] = [];
-  for (const line of text.split("\n")) for (const m of line.matchAll(MENTION_RE)) out.push(m[0]);
+export const planMentions = (text: string): PlanMention[] => {
+  const out: PlanMention[] = [];
+  for (const line of text.split("\n"))
+    for (const m of line.matchAll(MENTION_RE)) {
+      const start = m.index ?? 0;
+      out.push({ path: m[0], at: line[start - 1] === "@" && atBoundary(line, start - 1) });
+    }
   return out;
 };
 
@@ -123,6 +133,8 @@ export class PlanLib {
   readonly worktreesRoot: string;
   readonly repoPlans: string;
   readonly planFormat: string;
+  /** The caller's directory, where a `@`-mention's relative path resolves. */
+  readonly cwd: string;
   /** Whether childPlans keeps published plans. */
   includePublished = false;
 
@@ -142,8 +154,9 @@ export class PlanLib {
     this.repoRoot = repoRoot;
     this.env = ctx.env;
     this.home = ctx.env["HOME"] ?? "";
-    this.worktreesRoot = realpathM(ctx.env["AI_WORKTREES_ROOT"] || `${this.home}/work/wt`, ctx.cwd);
+    this.worktreesRoot = realpathM(ctx.env["AI_WORKTREES_ROOT"] || `${this.home}/wt`, ctx.cwd);
     this.repoPlans = realpathM(`${repoRoot}/docs/plans`, ctx.cwd);
+    this.cwd = realpathM(ctx.cwd, "/");
     const format = `${this.repoPlans}/<issue>_<slug>/pr<N>.spec.md`;
     this.planFormat = format.startsWith(`${this.home}/`)
       ? `~/${format.slice(this.home.length + 1)}`
@@ -152,10 +165,18 @@ export class PlanLib {
 
   // ── paths ────────────────────────────────────────────────────────────
 
-  /** The absolute path of a plan of this repository, or undefined (dev-plan-lib.sh canonical_plan). */
-  canonicalPlan(input: string): string | undefined {
-    let p = input;
+  /**
+   * The absolute path of a plan of this repository, or undefined (dev-plan-lib.sh canonical_plan).
+   * A leading `@` is a file mention's mark, which a harness strips before its own calls
+   * (pi/dev.ts resolveToCwd): `@x/y/z` is `<cwd>/x/y/z`, as is the `at` path of a mention a gate
+   * found in text. Any other path resolves only written absolute or under `~`, so a listing's
+   * relative mention never captures a plan.
+   */
+  canonicalPlan(input: string, at = false): string | undefined {
+    const mention = at || input.startsWith("@");
+    let p = input.startsWith("@") ? input.slice(1) : input;
     if (p.startsWith("~/")) p = `${this.home}/${p.slice(2)}`;
+    else if (mention && !p.startsWith("/")) p = `${this.cwd}/${p}`;
     if (!p.startsWith("/") || p.endsWith("/")) return undefined;
     const real = `${realpathM(dirname(p), "/")}/${basename(p)}`;
     if (!real.startsWith(`${this.repoPlans}/`)) return undefined;

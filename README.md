@@ -1,9 +1,5 @@
 # dev-stack
 
-<p align="center">
-  <img src="icon.svg" alt="dev-stack icon" width="200">
-</p>
-
 A plan-backed development workflow for Claude Code, Pi, and DeepSeek Harness (DSH): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. It ships as one package holding one plugin, `dev`, that each harness installs natively. The sources are TypeScript, type-checked with TypeScript 7 and linted with Biome; `npm run build` compiles them to JavaScript in `dist/dev/`, the plugin every harness loads.
 
 ## Install
@@ -77,4 +73,11 @@ test/                             node --test suites
 
 ## Agents
 
-[inspector](plugins/dev/agents/inspector.md) diagnoses bugs, [planner](plugins/dev/agents/planner.md) designs and revises plans, [reviewer](plugins/dev/agents/reviewer.md) reviews under [plan.md — Review](plugins/dev/rules/plan.md#review), and [executor](plugins/dev/agents/executor.md) implements. In Claude Code they are `dev:<name>`. DSH has no named plugin agents, so its skills hand these files' instructions to the `subagent` tool.
+In Claude Code they are `dev:<name>`. DSH has no named plugin agents, so its skills hand these files' instructions to the `subagent` tool.
+
+| Need | Agent |
+|---|---|
+| Implement a plan or an assigned chunk | [executor](plugins/dev/agents/executor.md) |
+| Diagnose a bug | [inspector](plugins/dev/agents/inspector.md) |
+| Design or revise plans and design documents | [planner](plugins/dev/agents/planner.md) |
+| Review under [plan.md — Review](plugins/dev/rules/plan.md#review) | [reviewer](plugins/dev/agents/reviewer.md) |

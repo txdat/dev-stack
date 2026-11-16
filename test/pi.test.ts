@@ -134,6 +134,21 @@ test("input: the /dev: alias and the gate on typed skills", async () => {
   assert.equal(await fire("input", { text: "hello" }), undefined);
 });
 
+test("input: a @ plan path resolves in the caller's directory", async () => {
+  for (const text of [
+    "/dev:review-feature @docs/plans/12_pi/pr1.spec.md",
+    "/dev:review-feature @./docs/plans/12_pi/pr1.spec.md",
+  ]) {
+    assert.deepEqual(await fire("input", { text }), { action: "handled" }, text);
+    assert.match(notes[0]?.[0] ?? "", /already auto-approved/, `${text}: the @ mention resolved`);
+  }
+  assert.deepEqual(
+    await fire("input", { text: "/dev:review-feature @docs/plans/12_pi/pr9.spec.md" }),
+    { action: "handled" },
+  );
+  assert.match(notes[0]?.[0] ?? "", /not found/, "a @ mention that does not resolve blocks");
+});
+
 test("/dev:<skill> commands: one per skill, described by its SKILL.md", () => {
   const slugs = fs
     .readdirSync(path.join(PLUGIN, "skills"), { withFileTypes: true })

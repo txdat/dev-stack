@@ -110,6 +110,13 @@ const expectNext = (want: string) => {
 const lib = () =>
   new PlanLib(b(REPO), { cwd: b(REPO), env: { HOME: b(ROOT), AI_WORKTREES_ROOT: b(WTROOT) } });
 
+test("worktrees default to ~/wt", () => {
+  assert.equal(
+    new PlanLib(b(REPO), { cwd: b(REPO), env: { HOME: b(ROOT) } }).worktreesRoot,
+    `${ROOT}/wt`,
+  );
+});
+
 test("stack lists the stack from its root", () => {
   writePlan(R, "planning", "feat/root");
   writePlan(C, "planning", "feat/child", "pr1");
@@ -729,4 +736,41 @@ test("header fields", () => {
     "a failed setHeader left a temporary file",
   );
   fs.rmSync(F);
+});
+
+test("a plan path resolves written absolute or as a @ file mention", () => {
+  const root = tmp("dev-stack-path-test");
+  const r = repo(`${root}/repo`);
+  const dir = `${r}/docs/plans/12_path`;
+  const plan = `${dir}/pr1.spec.md`;
+  writePlan(plan, "planning", "feat/path");
+  const ds = (argv: string[], cwd = r) => run(devStack, argv, { cwd, env: ENV });
+  const pathOf = (argv: string[], cwd = r) => {
+    const res = ds(argv, cwd);
+    assert.equal(res.code, 0, `${argv.join(" ")}: ${res.all}`);
+    return res.out.trimEnd();
+  };
+  assert.equal(pathOf(["stack", plan]), plan, "an absolute path");
+  assert.equal(pathOf(["stack", `@${plan}`]), plan, "a @ path that is absolute");
+  assert.equal(
+    pathOf(["stack", "@docs/plans/12_path/pr1.spec.md"]),
+    plan,
+    "a @ path relative to the caller's directory",
+  );
+  assert.equal(
+    pathOf(["stack", "@pr1.spec.md"], dir),
+    plan,
+    "a @ path relative to the caller's directory inside the plans",
+  );
+  const tilde = run(devStack, ["stack", `~/${path.relative(root, plan)}`], {
+    cwd: r,
+    env: { ...ENV, HOME: root },
+  });
+  assert.equal(tilde.code, 0, tilde.all);
+  assert.equal(tilde.out.trimEnd(), plan, "a path under ~");
+  assert.notEqual(
+    ds(["stack", "docs/plans/12_path/pr1.spec.md"]).code,
+    0,
+    "a relative path without @ does not resolve",
+  );
 });
