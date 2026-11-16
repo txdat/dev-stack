@@ -148,6 +148,53 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     },
   });
   assert.equal(out["decision"], "allow", JSON.stringify(out));
+
+  // Multi-plan run-stack: lastUserInput names pr1.spec.md while a subagent reads a gated skill
+  // for pr2.spec.md, or invokes bare run-stack / autopilot.
+  const pr2 = path.join(dir, "docs/plans/37088_fix/pr2.spec.md");
+  write(
+    pr2,
+    planText({
+      Issue: "#37088",
+      Type: "fix",
+      Status: "approved",
+      Base: "fix-37088",
+      Branch: "fix-37088-p2",
+      "Stacks On": "docs/plans/37088_fix/pr1.spec.md",
+      PR: "none",
+    }),
+  );
+
+  for (const [input, skill] of [
+    [`/dev:run-stack ${spec}`, "execute-feature"],
+    [`run-stack ${spec}`, "review-code"],
+    ["autopilot issue 37088", "create-pr"],
+  ]) {
+    const res = runHook({
+      hookEventName: "PreToolUse",
+      cwd: dir,
+      lastUserInput: input,
+      toolCall: {
+        id: "s4",
+        name: "read_file",
+        args: { Path: path.join(PLUGIN, `skills/${skill}/SKILL.md`) },
+      },
+    });
+    assert.equal(res["decision"], "allow", `${input} (${skill}): ${JSON.stringify(res)}`);
+  }
+
+  // Prose mentioning autopilot does not bypass the gate.
+  const proseDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "explain how autopilot works",
+    toolCall: {
+      id: "s5",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-code/SKILL.md") },
+    },
+  });
+  assert.equal(proseDeny["decision"], "deny");
 });
 
 test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot", () => {

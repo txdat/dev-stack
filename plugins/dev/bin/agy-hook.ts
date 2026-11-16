@@ -6,12 +6,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { b, utf8 } from "../core/bytes.ts";
+import { asciiLower, b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
 import { gateCheck, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
 import { serialCheck } from "../core/serial-check.ts";
-import { RULE_FILES, rulesText } from "../hooks/commands.ts";
+import { GATED_PHASES, RULE_FILES, rulesText } from "../hooks/commands.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -48,6 +48,12 @@ const skillFromPath = (filePath: string): string => {
   const m = /(?:^|\/)skills\/([a-z0-9-]+)\/SKILL\.md$/i.exec(filePath.replace(/\\/g, "/"));
   return m?.[1] ?? "";
 };
+
+/** Whether `lastUserInput` invokes an orchestrator (`autopilot` or `run-stack`). */
+const isOrchestratorInput = (lastUserInput: string): boolean =>
+  /^[ \t\n\v\f\r]*\/?(?:skill:(?:dev[:-])?|dev[:-])?(?:autopilot|run-stack)(?:[^a-z0-9_-]|$)/i.test(
+    lastUserInput.replace(/_/g, "-"),
+  );
 
 /** Converts an Antigravity PreToolUse/PostToolUse payload into the Claude-shaped HookInput. */
 const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
@@ -98,12 +104,18 @@ const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
   if (name === "read_file") {
     const slug = skillFromPath(str(member(args, "Path")) ?? "");
     if (slug === "") return undefined;
+    const lastUserInput = str(raw["lastUserInput"]) ?? "";
+    // Orchestrators (autopilot, run-stack) delegate gated phases to subagents whose read_file
+    // inherits the user's top-level prompt, which need not name the subagent's target plan.
+    if (GATED_PHASES.includes(asciiLower(slug)) && isOrchestratorInput(lastUserInput)) {
+      return undefined;
+    }
     return {
       ...base,
       tool_name: "Skill",
       tool_input: {
         skill: `dev:${slug}`,
-        arguments: str(raw["lastUserInput"]) ?? "",
+        arguments: lastUserInput,
       },
     };
   }
