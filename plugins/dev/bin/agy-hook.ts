@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
 // Antigravity's hook entry: reads camelCase hook JSON on stdin and prints Antigravity's response
 // JSON. SessionStart injects $DEV_LIB and the shared rules; PreToolUse runs the serial-test check
 // and gateCheck; PostToolUse runs bashPostCheck so unauthorized plan edits are restored.

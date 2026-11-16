@@ -35,11 +35,12 @@ const SP = "[ \\t\\n\\v\\f\\r]";
 const NSP = "[^ \\t\\n\\v\\f\\r]";
 
 // dev-stack resume or reopen in command position: at the start, after a separator or newline, or
-// after a runner such as bash or env; also dev-stack-command dev-stack-resume or -reopen, the
-// same writes as the Claude Code module runs them. Either extension matches: the sources are .ts,
-// the built plugin .js. A mention inside an argument, such as a grep pattern or a message, passes.
+// after a runner such as bash, env, or bun run, and its single-token options, such as
+// --config=x but not --config x; also dev-stack-command dev-stack-resume or -reopen, the same
+// writes as the Claude Code module runs them. Either extension matches: the sources are .ts, the
+// built plugin .js. A mention inside an argument, such as a grep pattern or a message, passes.
 const USER_RE = new RegExp(
-  `(^|[;&|(]|\\n)${SP}*((bash|sh|exec|env|command|sudo|time|nohup|node)${SP}+|[A-Za-z_][A-Za-z0-9_]*=${NSP}*${SP}+)*['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack(\\.(sh|ts|js))?['"]?${SP}+|dev-stack-command\\.(ts|js)['"]?${SP}+['"]?dev-stack-)(resume|reopen)([^A-Za-z0-9_-]|$)`,
+  `(^|[;&|(]|\\n)${SP}*((bash|sh|exec|env|command|sudo|time|nohup|node|bun|run|-${NSP}*)${SP}+|[A-Za-z_][A-Za-z0-9_]*=${NSP}*${SP}+)*['"]?[^ \\t\\n\\v\\f\\r;&|'"]*(dev-stack(\\.(sh|ts|js))?['"]?${SP}+|dev-stack-command\\.(ts|js)['"]?${SP}+['"]?dev-stack-)(resume|reopen)([^A-Za-z0-9_-]|$)`,
 );
 
 // A stack log path under a repository's docs/plans (a worktree's log/ directory is not one): under
@@ -53,13 +54,16 @@ const REDIR_RE = new RegExp(
   `[0-9]*(>>?\\|?|>&|&>>?)${SP}*['"]?([^ \\t\\n\\v\\f\\r'"]*${LOG_PATH}|${REL_PATH})${END}`,
 );
 const WRITE_RE = new RegExp(
-  `(^|[^A-Za-z0-9_-])(tee|rm|mv|cp|truncate|dd|install|ln|perl|python3?|ruby|node)(${SP}|$)|sed${SP}+(-[A-Za-z]+${SP}+)*-[A-Za-z]*i|sed${SP}.*--in-place`,
+  `(^|[^A-Za-z0-9_-])(tee|rm|mv|cp|truncate|dd|install|ln|perl|python3?|ruby|node|bun)(${SP}|$)|sed${SP}+(-[A-Za-z]+${SP}+)*-[A-Za-z]*i|sed${SP}.*--in-place`,
   "s",
 );
 
-/** `node <path>` in command position, the path's quote, and the path. */
-const NODE_RE = new RegExp(
-  `(^|[;&|(\\n])${SP}*node${SP}+(['"]?)([^ \\t\\n\\v\\f\\r;&|'"]*)\\2(?=[ \\t\\n\\v\\f\\r;&|)]|$)`,
+/**
+ * `node <path>` or `bun <path>` in command position, the path's quote, and the path. Bun may carry
+ * only the flags the plugin runs it with; any other option, such as a preload, makes it any script.
+ */
+const RUNTIME_RE = new RegExp(
+  `(^|[;&|(\\n])${SP}*(?:node|bun(?:${SP}+(?:--no-env-file|--config=/dev/null))*)${SP}+(['"]?)([^ \\t\\n\\v\\f\\r;&|'"]*)\\2(?=[ \\t\\n\\v\\f\\r;&|)]|$)`,
   "g",
 );
 // The CLIs carry this module's own extension: .ts run from the sources, .js in the built plugin.
@@ -115,9 +119,9 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
       )
       .join("\n"),
   );
-  // The dev CLIs run under node write the log only through dev-stack, so node in that position is
-  // no writing tool; node -e and other scripts still are.
-  const tools = probe.replace(NODE_RE, (all, lead: string, _q, path: string) =>
+  // The dev CLIs run under node or bun write the log only through dev-stack, so the runtime in that
+  // position is no writing tool; node -e, bun -e, and other scripts still are.
+  const tools = probe.replace(RUNTIME_RE, (all, lead: string, _q, path: string) =>
     isDevCli(path, ctx) ? lead : all,
   );
   if (REDIR_RE.test(probe) || (LOG_RE.test(probe) && WRITE_RE.test(tools))) block(LOG_BLOCK);

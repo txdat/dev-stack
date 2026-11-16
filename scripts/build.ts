@@ -3,7 +3,7 @@
 // dist/dev-agy serves Antigravity with its native manifest, root hooks.json, and mapped frontmatter.
 // It builds into a sibling directory and swaps it in only when every step succeeded, so a failed
 // or running build never leaves a partial plugin at the output.
-// Usage: node scripts/build.ts [--agy] [--out <dir>]
+// Usage: bun scripts/build.ts [--agy] [--out <dir>]
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -137,14 +137,14 @@ const buildOne = (outArg: string, agy: boolean): number => {
   fs.mkdirSync(path.dirname(t.out), { recursive: true });
   const work = fs.mkdtempSync(`${t.out}.build-`);
   try {
-    const tsc = path.join(ROOT, "node_modules/.bin/tsc");
+    // tsc's own script under this runtime: node_modules/.bin/tsc names node in its shebang.
+    const tsc = path.join(ROOT, "node_modules/typescript/bin/tsc");
     const configs = agy
       ? ["tsconfig.build.json"]
       : ["tsconfig.build.json", "tsconfig.build-engine.json"];
     for (const config of configs) {
-      const ran = spawnSync(tsc, ["-p", path.join(ROOT, config), "--outDir", work], {
-        stdio: "inherit",
-      });
+      const args = [tsc, "-p", path.join(ROOT, config), "--outDir", work];
+      const ran = spawnSync(process.execPath, args, { stdio: "inherit" });
       if (ran.status !== 0) {
         process.stderr.write(
           `build: tsc -p ${config} failed${ran.error ? `: ${ran.error.message}` : ""}\n`,
@@ -183,7 +183,7 @@ const main = (args: string[]): number => {
     } else if (args[i] === "--out" && i + 1 < args.length) {
       out = args[++i];
     } else {
-      process.stderr.write("usage: node scripts/build.ts [--agy] [--out <dir>]\n");
+      process.stderr.write("usage: bun scripts/build.ts [--agy] [--out <dir>]\n");
       return 2;
     }
   }

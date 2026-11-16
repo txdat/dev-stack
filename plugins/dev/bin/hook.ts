@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
 // Claude Code's hook entry: reads hook JSON on stdin and prints the verdict JSON, or nothing to
 // pass. A PreToolUse Bash call gets the serial-test check, then the record guard.
 //

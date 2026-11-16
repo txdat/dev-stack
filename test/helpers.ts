@@ -10,6 +10,11 @@ import { b, utf8 } from "../plugins/dev/core/bytes.ts";
 import type { Command } from "../plugins/dev/core/cli.ts";
 import { type GateResult, gateCheck, gateDesign } from "../plugins/dev/core/gate-check.ts";
 import type { HookInput } from "../plugins/dev/core/hook-input.ts";
+import { BUN } from "../plugins/dev/hooks/commands.ts";
+
+/** The shipped CLI invocation, as argv and as a shell prefix. */
+export { BUN };
+export const RUN = BUN.join(" ");
 
 export const PLUGIN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../plugins/dev");
 
@@ -131,13 +136,13 @@ export const gate = (input: HookInput, opts: { cwd: string; env?: Env }): string
 export const design = (plan: string, opts: { cwd: string; env?: Env }): string =>
   reason(gateDesign(b(plan), { cwd: b(opts.cwd), env: byteEnv(opts.env) }));
 
-/** Runs a bin/ CLI under node, for the entry points themselves. */
+/** Runs a bin/ CLI under bun, for the entry points themselves. */
 export const cli = (
   name: string,
   argv: readonly string[],
   opts: { cwd: string; env?: Env; input?: string },
 ): Ran =>
-  exec(["node", path.join(PLUGIN, "bin", `${name}.ts`), ...argv], {
+  exec([...BUN, path.join(PLUGIN, "bin", `${name}.ts`), ...argv], {
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
     ...(opts.input === undefined ? {} : { input: opts.input }),

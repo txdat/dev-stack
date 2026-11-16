@@ -46,6 +46,12 @@ export const mayNamePhase = (input: unknown): boolean => {
 
 /** How the rules text starts; an adapter that sees it already in the prompt adds nothing. */
 export const RULES_MARK = "$DEV_LIB is ";
+
+/**
+ * How the plugin runs its CLIs: Bun without the working directory's .env or bunfig.toml, which
+ * Bun otherwise loads, so a repository cannot change the gate's environment or preload code into it.
+ */
+export const BUN = ["bun", "--no-env-file", "--config=/dev/null"] as const;
 export const RULE_FILES = ["CORE.md", "CODING.md"] as const;
 
 /**
@@ -58,7 +64,7 @@ export const rulesText = (
   contents: readonly (string | { error: string })[],
   readTool: string,
 ): string => {
-  let text = `${RULES_MARK}${root}: the dev plugin's install root. Run its CLIs as node $DEV_LIB/bin/<name>.js.`;
+  let text = `${RULES_MARK}${root}: the dev plugin's install root. Run its CLIs as ${BUN.join(" ")} $DEV_LIB/bin/<name>.js.`;
   RULE_FILES.forEach((name, i) => {
     const file = `${root}/rules/${name}`;
     const c = contents[i] ?? { error: "not read" };

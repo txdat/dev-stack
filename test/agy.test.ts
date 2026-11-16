@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { exec, PLUGIN, planText, read, repo, tmp, write } from "./helpers.ts";
+import { BUN, exec, PLUGIN, planText, read, repo, tmp, write } from "./helpers.ts";
 
 const ROOT = path.resolve(PLUGIN, "../..");
 const HOOK = path.join(PLUGIN, "bin/agy-hook.ts");
@@ -15,7 +15,7 @@ const runHook = (
   payload: unknown,
   opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
 ): Record<string, unknown> => {
-  const r = exec(["node", HOOK], {
+  const r = exec([...BUN, HOOK], {
     ...opts,
     input: typeof payload === "string" ? payload : JSON.stringify(payload),
   });
@@ -260,11 +260,11 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     ),
   );
   // Mark pr2 Spec as current so execute-feature gate passes on it.
-  const reviewRes = exec(["node", path.join(PLUGIN, "bin/dev-stack.ts"), "review", pr2, "ready"], {
+  const reviewRes = exec([...BUN, path.join(PLUGIN, "bin/dev-stack.ts"), "review", pr2, "ready"], {
     cwd: dir,
   });
   assert.equal(reviewRes.code, 0, reviewRes.all);
-  const approveRes = exec(["node", path.join(PLUGIN, "bin/dev-stack.ts"), "approve", pr2], {
+  const approveRes = exec([...BUN, path.join(PLUGIN, "bin/dev-stack.ts"), "approve", pr2], {
     cwd: dir,
   });
   assert.equal(approveRes.code, 0, approveRes.all);
@@ -383,7 +383,7 @@ test("malformed stdin fails open with decision allow", () => {
 
 test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   const out = path.join(tmp("dev-agy-dist"), "dev-agy");
-  const r = exec(["node", path.join(ROOT, "scripts/build.ts"), "--agy", "--out", out]);
+  const r = exec([...BUN, path.join(ROOT, "scripts/build.ts"), "--agy", "--out", out]);
   assert.equal(r.code, 0, r.all);
 
   assert.ok(fs.existsSync(path.join(out, "plugin.json")));
