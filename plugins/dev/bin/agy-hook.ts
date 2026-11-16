@@ -6,14 +6,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { asciiLower, b, utf8 } from "../core/bytes.ts";
+import { b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
-import { gateCheck, isPhaseCall } from "../core/gate-check.ts";
+import { gateCheck, gateIndexed, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
-import { planMentions } from "../core/plan-lib.ts";
+import { PlanLib, planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
 import { tryMainRoot } from "../core/utils.ts";
-import { GATED_PHASES, RULE_FILES, rulesText } from "../hooks/commands.ts";
+import { RULE_FILES, rulesText } from "../hooks/commands.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -57,12 +57,23 @@ const isOrchestratorInput = (lastUserInput: string): boolean =>
     lastUserInput.replace(/_/g, "-"),
   );
 
+const PHASE_ENTRY_STATUSES: Record<string, readonly string[]> = {
+  "review-feature": ["planning", "needs-changes"],
+  "execute-feature": ["approved", "auto-approved"],
+  "review-code": ["implemented"],
+  "create-pr": ["reviewed"],
+};
+
 /**
- * Checks whether any plan in the main root's `docs/plans/` passes `gateCheck` for `skill`.
- * Used when `read_file` on a gated `SKILL.md` runs inside a subagent (where `lastUserInput`
- * does not carry the subagent's prompt or plan path) or after a non-slash resume reply.
+ * Checks whether any plan in the main root's `docs/plans/` passes `gateIndexed` for `skill`.
+ * Used when `read_file` on a gated `SKILL.md` runs under an orchestrator (`autopilot`,
+ * `run-stack`), inside a subagent (where `lastUserInput` does not carry the subagent's prompt
+ * or plan path), or after a non-slash resume reply.
  */
 const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): boolean => {
+  const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
+  const allowedStatuses = PHASE_ENTRY_STATUSES[slug];
+  if (!allowedStatuses) return false;
   const root = tryMainRoot(ctx.cwd, ctx.env);
   if (!root) return false;
   const plansDir = path.join(root, "docs", "plans");
@@ -72,6 +83,8 @@ const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): b
   } catch {
     return false;
   }
+  const lib = new PlanLib(root, ctx);
+  const indexed = new Set<string>();
   for (const stack of stacks) {
     if (!stack.isDirectory()) continue;
     const stackDir = path.join(plansDir, stack.name);
@@ -84,11 +97,12 @@ const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): b
     for (const entry of entries) {
       if (!entry.isFile() || !/^pr[1-9][0-9]*\.spec\.md$/.test(entry.name)) continue;
       const planPath = path.join(stackDir, entry.name);
-      const verdict = gateCheck(
-        { tool_name: "Skill", tool_input: { skill, arguments: planPath } },
-        ctx,
-      );
-      if (verdict === undefined) return true;
+      if (!allowedStatuses.includes(lib.status(planPath))) continue;
+      if (!indexed.has(stackDir)) {
+        lib.indexStack(planPath);
+        indexed.add(stackDir);
+      }
+      if (gateIndexed(slug, planPath, lib) === undefined) return true;
     }
   }
   return false;
@@ -143,18 +157,12 @@ const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
   if (name === "read_file") {
     const slug = skillFromPath(str(member(args, "Path")) ?? "");
     if (slug === "") return undefined;
-    const lastUserInput = str(raw["lastUserInput"]) ?? "";
-    // Orchestrators (autopilot, run-stack) delegate gated phases to subagents whose read_file
-    // inherits the user's top-level prompt, which need not name the subagent's target plan.
-    if (GATED_PHASES.includes(asciiLower(slug)) && isOrchestratorInput(lastUserInput)) {
-      return undefined;
-    }
     return {
       ...base,
       tool_name: "Skill",
       tool_input: {
         skill: `dev:${slug}`,
-        arguments: lastUserInput,
+        arguments: str(raw["lastUserInput"]) ?? "",
       },
     };
   }
@@ -200,7 +208,11 @@ const run = (raw: HookInput): void => {
     if (verdict && "block" in verdict) {
       const skill = str(member(mapped["tool_input"], "skill")) ?? "";
       const args = str(member(mapped["tool_input"], "arguments")) ?? "";
-      if (isPhaseCall(mapped) && planMentions(args).length === 0 && hasRunnablePlan(skill, ctx)) {
+      if (
+        isPhaseCall(mapped) &&
+        (isOrchestratorInput(args) || planMentions(args).length === 0) &&
+        hasRunnablePlan(skill, ctx)
+      ) {
         writeJson({ decision: "allow" });
         return;
       }

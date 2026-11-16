@@ -158,26 +158,58 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
   });
   assert.equal(out["decision"], "allow", JSON.stringify(out));
 
-  // Multi-plan run-stack: lastUserInput names pr1.spec.md while a subagent reads a gated skill
-  // for pr2.spec.md, or invokes bare run-stack / autopilot.
-  const pr2 = path.join(dir, "docs/plans/37088_fix/pr2.spec.md");
+  // Multi-plan / multi-stack: lastUserInput names pr1.spec.md while another plan is runnable,
+  // or invokes bare run-stack / autopilot when a runnable plan exists.
+  const pr2 = path.join(dir, "docs/plans/37089_other/pr1.spec.md");
   write(
     pr2,
-    planText({
-      Issue: "#37088",
-      Type: "fix",
-      Status: "approved",
-      Base: "fix-37088",
-      Branch: "fix-37088-p2",
-      "Stacks On": "docs/plans/37088_fix/pr1.spec.md",
-      PR: "none",
-    }),
+    planText(
+      {
+        Issue: "#37089",
+        Type: "fix",
+        Status: "planning",
+        Spec: "-",
+        Tip: "-",
+        Base: "main",
+        Branch: "fix-37089",
+      },
+      [
+        "## Goal",
+        "g",
+        "## Scope",
+        "in / out",
+        "## Acceptance Criteria",
+        "AC-1 — a",
+        "  Source: s",
+        "  Success: ok",
+        "  Failure: fail",
+        "## Test Cases",
+        "TC-1 — t",
+        "  Proves: AC-1",
+        "  Fixture: f",
+        "  Action: a",
+        "  Expected: e",
+        "## Implementation Steps",
+        "ST-1 — s — satisfies TC-1",
+        "  PC-1 — p — Check: true",
+        "",
+      ].join("\n"),
+    ),
   );
+  // Mark pr2 Spec as current so execute-feature gate passes on it.
+  const reviewRes = exec(["node", path.join(PLUGIN, "bin/dev-stack.ts"), "review", pr2, "ready"], {
+    cwd: dir,
+  });
+  assert.equal(reviewRes.code, 0, reviewRes.all);
+  const approveRes = exec(["node", path.join(PLUGIN, "bin/dev-stack.ts"), "approve", pr2], {
+    cwd: dir,
+  });
+  assert.equal(approveRes.code, 0, approveRes.all);
 
   for (const [input, skill] of [
-    [`/dev:run-stack ${spec}`, "execute-feature"],
-    [`run-stack ${spec}`, "review-code"],
-    ["autopilot issue 37088", "create-pr"],
+    [`/dev:run-stack ${spec}`, "review-feature"],
+    [`run-stack ${spec}`, "execute-feature"],
+    ["autopilot issue 37088", "execute-feature"],
   ]) {
     const res = runHook({
       hookEventName: "PreToolUse",
@@ -191,6 +223,19 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     });
     assert.equal(res["decision"], "allow", `${input} (${skill}): ${JSON.stringify(res)}`);
   }
+
+  // Orchestrator input still denies a phase when no plan is at its entry status.
+  const noReviewedDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "/dev:autopilot issue 37088",
+    toolCall: {
+      id: "s4b",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/create-pr/SKILL.md") },
+    },
+  });
+  assert.equal(noReviewedDeny["decision"], "deny", JSON.stringify(noReviewedDeny));
 
   // Prose mentioning autopilot does not bypass the gate.
   const proseDeny = runHook({
@@ -219,17 +264,17 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
   });
   assert.equal(subagentReviewAllow["decision"], "allow", JSON.stringify(subagentReviewAllow));
 
-  const subagentExecDeny = runHook({
+  const subagentReviewCodeDeny = runHook({
     hookEventName: "PreToolUse",
     cwd: dir,
     lastUserInput: "",
     toolCall: {
       id: "s7",
       name: "read_file",
-      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+      args: { Path: path.join(PLUGIN, "skills/review-code/SKILL.md") },
     },
   });
-  assert.equal(subagentExecDeny["decision"], "deny", JSON.stringify(subagentExecDeny));
+  assert.equal(subagentReviewCodeDeny["decision"], "deny", JSON.stringify(subagentReviewCodeDeny));
 
   // Explicit wrong-status plan mention is still denied even if another plan is runnable.
   const explicitDeny = runHook({
