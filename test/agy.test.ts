@@ -107,6 +107,69 @@ test("PreToolUse gates read_file on gated dev skills and allows ungated skills",
   assert.equal(allow["decision"], "allow");
 });
 
+test("PreToolUse read_file: a @ plan path in the user input resolves in the session's directory", () => {
+  const dir = repo(tmp("dev-agy-path"));
+  const spec = path.join(dir, "docs/plans/12_path/pr1.spec.md");
+  write(
+    spec,
+    planText(
+      {
+        Issue: "#12",
+        Type: "feature",
+        Status: "planning",
+        Spec: "-",
+        Tip: "-",
+        Base: "main",
+        Branch: "feat/path",
+      },
+      [
+        "## Goal",
+        "g",
+        "## Acceptance Criteria",
+        "AC-1 — a",
+        "  Source: s",
+        "  Success: ok",
+        "  Failure: fail",
+        "## Test Cases",
+        "TC-1 — t",
+        "  Proves: AC-1",
+        "  Fixture: f",
+        "  Action: a",
+        "  Expected: e",
+        "## Implementation Steps",
+        "ST-1 — s — satisfies TC-1",
+        "  PC-1 — p — Check: true",
+        "",
+      ].join("\n"),
+    ),
+  );
+  const read = (input: string) =>
+    runHook({
+      hookEventName: "PreToolUse",
+      cwd: dir,
+      lastUserInput: input,
+      toolCall: {
+        id: "p1",
+        name: "read_file",
+        args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+      },
+    });
+
+  // The gate resolves the mention itself; the orchestrator bypass does not apply, since the input
+  // names a plan.
+  const allow = read("/dev:review-feature @docs/plans/12_path/pr1.spec.md");
+  assert.equal(allow["decision"], "allow", JSON.stringify(allow));
+  assert.equal(read("/dev:review-feature @./docs/plans/12_path/pr1.spec.md")["decision"], "allow");
+
+  const missing = read("/dev:review-feature @docs/plans/12_path/pr9.spec.md");
+  assert.equal(missing["decision"], "deny", JSON.stringify(missing));
+  assert.match(String(missing["reason"]), /not found/);
+
+  const bare = read("/dev:review-feature docs/plans/12_path/pr1.spec.md");
+  assert.equal(bare["decision"], "deny", "a relative path without @ does not resolve");
+  assert.match(String(bare["reason"]), /none was named|not found/);
+});
+
 test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack delegates a plan", () => {
   const dir = repo(tmp("dev-agy-autopilot-skill"));
   const spec = path.join(dir, "docs/plans/37088_fix/pr1.spec.md");

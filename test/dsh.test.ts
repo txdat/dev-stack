@@ -213,6 +213,72 @@ test("a gated phase load with no plan named is denied, with the reason", async (
   assert.match(decision.reason ?? "", /none was named/);
 });
 
+test("a @ plan path in the user's message resolves in the working directory", async () => {
+  const dir = repo(tmp("dev-dsh-path"));
+  const plan = path.join(dir, "docs/plans/12_path/pr1.spec.md");
+  write(
+    plan,
+    planFixture(
+      {
+        Issue: "#12",
+        Type: "feature",
+        Status: "planning",
+        Spec: "-",
+        Tip: "-",
+        Base: "main",
+        Branch: "feat/path",
+      },
+      [
+        "## Goal",
+        "g",
+        "## Acceptance Criteria",
+        "AC-1 — a",
+        "  Source: s",
+        "  Success: ok",
+        "  Failure: fail",
+        "## Test Cases",
+        "TC-1 — t",
+        "  Proves: AC-1",
+        "  Fixture: f",
+        "  Action: a",
+        "  Expected: e",
+        "## Implementation Steps",
+        "ST-1 — s — satisfies TC-1",
+        "  PC-1 — p — Check: true",
+        "",
+      ].join("\n"),
+    ),
+  );
+  const { ctx, handlers } = host(dir);
+  apply(ctx);
+  const say = async (text: string) => {
+    const one = agent();
+    await listener(handlers, "session/event")(one.session, {
+      type: "user/message",
+      seq: 1,
+      data: { role: "user", content: [{ type: "text", text }] },
+    });
+    return (await listener(handlers, "tools/pre-execute")(
+      {
+        name: "skill",
+        callId: "call-1",
+        arguments: { name: "dev-review-feature" },
+        agent: one,
+      },
+      async () => ({ kind: "allow" }),
+    )) as { kind: string; reason?: string };
+  };
+  const allow = await say("/dev-review-feature @docs/plans/12_path/pr1.spec.md");
+  assert.equal(allow.kind, "allow", JSON.stringify(allow));
+  assert.equal((await say("/dev-review-feature @./docs/plans/12_path/pr1.spec.md")).kind, "allow");
+  const missing = await say("/dev-review-feature @docs/plans/12_path/pr9.spec.md");
+  assert.equal(missing.kind, "deny", JSON.stringify(missing));
+  assert.match(missing.reason ?? "", /not found/);
+  const bare = await say("/dev-review-feature docs/plans/12_path/pr1.spec.md");
+  assert.equal(bare.kind, "deny", "a relative path without @ does not resolve");
+  assert.match(bare.reason ?? "", /none was named|not found/);
+});
+
 test("a non-gated skill load is passed through", async () => {
   const { ctx, handlers } = host();
   apply(ctx);

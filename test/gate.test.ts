@@ -276,6 +276,37 @@ test("plan resolution", () => {
     "surrounding punctuation is not part of the path",
   );
   passes(
+    runGate(repo, "dev-execute-feature", "@docs/plans/12_gate/pr1.spec.md"),
+    "a @ file mention resolves in the caller's directory",
+  );
+  passes(
+    runGate(`${repo}/docs`, "dev-execute-feature", "@plans/12_gate/pr1.spec.md"),
+    "a @ file mention from a subdirectory",
+  );
+  passes(
+    runGate(`${repo}/docs`, "dev-execute-feature", "@./plans/12_gate/pr1.spec.md"),
+    "a @ file mention written with ./",
+  );
+  blocks(
+    runGate(repo, "dev-execute-feature", "@12_gate/pr1.spec.md"),
+    "not found",
+    "a @ file mention does not resolve in the plans directory",
+  );
+  blocks(
+    runGate(repo, "dev-execute-feature", "@docs/plans/12_gate/pr9.spec.md"),
+    `not found: ${repo}/docs/plans/12_gate/pr9.spec.md`,
+    "a mistyped @ file mention blocks beside nothing",
+  );
+  blocks(
+    runGate(repo, "dev-execute-feature", `${P} @docs/plans/12_gate/pr9.spec.md`),
+    "takes one plan path",
+    "a @ file mention beside an exact path is a second plan path",
+  );
+  passes(
+    runGate(repo, "dev-execute-feature", `${P} user@host/12_gate/pr1.spec.md`),
+    "an email's @ does not make a file mention",
+  );
+  passes(
     runGate(
       repo,
       "dev-execute-feature",
@@ -411,6 +442,24 @@ test("hook input shapes", () => {
     undefined,
     "a UserPromptSubmit block carries no PreToolUse output",
   );
+  // bin/hook.ts, the program Claude Code runs, resolves a @ file mention in the caller's directory.
+  const atHook = (mention: string) =>
+    JSON.parse(
+      cli("hook", [], {
+        cwd: repo,
+        env: ENV,
+        input: JSON.stringify({
+          hook_event_name: "UserPromptSubmit",
+          prompt: `/dev-review-feature ${mention}`,
+        }),
+      }).out,
+    ) as { decision?: string; reason?: string };
+  const atResolved = atHook("@docs/plans/12_gate/pr1.spec.md");
+  assert.equal(atResolved.decision, "block");
+  assert.match(atResolved.reason ?? "", /already approved/, "the @ mention resolved to the plan");
+  const atMissing = atHook("@docs/plans/12_gate/pr9.spec.md");
+  assert.equal(atMissing.decision, "block");
+  assert.match(atMissing.reason ?? "", /not found/, "a @ mention that does not resolve blocks");
   blocks(
     promptGate(repo, `/skill:review-feature ${P}`),
     "already approved",
@@ -1895,7 +1944,7 @@ test("record guard: Bash, Edit, and Write calls", () => {
   );
   passes(
     bashGuard(
-      "cp x.go ~/work/wt/repo-12_slug-pr1/log/handler.go && echo x > ~/work/wt/repo-12_slug-pr1/log/a.go",
+      "cp x.go ~/wt/repo-12_slug-pr1/log/handler.go && echo x > ~/wt/repo-12_slug-pr1/log/a.go",
     ),
     "a worktree's log/ directory is not the stack log",
   );

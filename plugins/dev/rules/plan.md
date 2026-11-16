@@ -28,7 +28,7 @@ A gate blocks each phase until its entry status holds, and blocks every gated ph
 
 ## Artifact
 
-One plan delivers one PR. Plans live in the main working tree ([dev-utils.js](../bin/dev-utils.js) `main-root`), never a linked worktree, at `docs/plans/<issue>_<slug>/pr<N>.spec.md`: `<issue>` is the issue number or `0`, and `<slug>` lowercase words joined by hyphens. One directory holds one stack; a parent's number is below its children's. Plans are never committed: the code, its tests, and the PR carry what ships ([Rationale](#rationale)). Git must ignore `docs/plans/` through the global excludes file or `.git/info/exclude`, never a committed `.gitignore`; the gates and `dev-stack.js check` block when Git does not ignore it. Never run `git clean -x`; it deletes plans. Every phase takes exactly one plan path; never pick a plan by slug or recency.
+One plan delivers one PR. Plans live in the main working tree ([dev-utils.js](../bin/dev-utils.js) `main-root`), never a linked worktree, at `docs/plans/<issue>_<slug>/pr<N>.spec.md`: `<issue>` is the issue number or `0`, and `<slug>` lowercase words joined by hyphens. One directory holds one stack; a parent's number is below its children's. Plans are never committed: the code, its tests, and the PR carry what ships ([Rationale](#rationale)). Git must ignore `docs/plans/` through the global excludes file or `.git/info/exclude`, never a committed `.gitignore`; the gates and `dev-stack.js check` block when Git does not ignore it. Never run `git clean -x`; it deletes plans. Every phase takes exactly one plan path, absolute or under `~`, or a `@` file mention of one, `@<path>`, resolved in the caller's directory, so `@docs/plans/<issue>_<slug>/pr<N>.spec.md` resolves only from the main working tree; a phase running in a worktree takes the absolute path. Never pick a plan by slug or recency.
 
 Write plan, PR, and review prose in the linked issue's primary language, or English without one. Keep headings, field names, statuses, IDs, code, and paths as written below.
 
@@ -102,7 +102,7 @@ The user, or autopilot, may split, merge, insert, or drop unapproved plans ([Cha
 
 ## Worktree
 
-Each plan has its own worktree at `~/work/wt/<repo>-<issue>_<slug>-pr<N>`, found by that path, never recorded.
+Each plan has its own worktree at `~/wt/<repo>-<issue>_<slug>-pr<N>`, found by that path, never recorded.
 
 - Create it only with [dev-worktree.js](../bin/dev-worktree.js) `create <issue>_<slug>-pr<N> <Branch> <target>`, where target is the PR target: `origin/<Base>` (local Base without one), or the parent plan's Branch for a stacked plan. On an existing Branch it reattaches that Branch as it is, so a worktree that went missing is recreated the same way.
 - One phase runs in a worktree at a time, on the plan's own Branch. The worktree stays until create-pr's cleanup removes it.

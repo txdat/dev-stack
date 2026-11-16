@@ -15,7 +15,10 @@ test("handoff path location, ignore check, and invalid inputs", () => {
     });
   // Pi sets its own, and Claude Code's id wins when a session has both.
   const atPi = (cwd: string, session: string | undefined) =>
-    run(handoffPath, [], { cwd, env: { PI_SESSION_ID: session } });
+    run(handoffPath, [], {
+      cwd,
+      env: { CLAUDE_CODE_SESSION_ID: undefined, PI_SESSION_ID: session },
+    });
   const atBoth = (cwd: string) =>
     run(handoffPath, [], {
       cwd,
