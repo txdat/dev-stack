@@ -328,7 +328,7 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   assert.ok(fs.existsSync(path.join(out, "bin/agy-hook.js")));
 
   const skill = read(path.join(out, "skills/design-feature/SKILL.md"));
-  assert.match(skill, /^model: gemini-4-argon$/m);
+  assert.match(skill, /^model: pro$/m);
 
   const agent = read(path.join(out, "agents/planner.md"));
   assert.match(
