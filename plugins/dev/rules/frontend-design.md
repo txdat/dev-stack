@@ -12,6 +12,8 @@ Verify the rendered UI, not only its code: drive it with the project's UI test t
 
 - **Layout:** no changed view clips content its design does not truncate, or scrolls in a direction its design does not scroll, and no interactive element covers another outside an open overlay, such as a dialog or menu.
 - **Flow:** each changed state is reachable through the UI from the flow's entry; focus order follows the visual order; and the form and error-message rules above hold.
+- **Access:** every changed control is reachable and operable by keyboard with visible focus; the platform's accessibility tree exposes each changed element's semantic role and each changed control's accessible name; and changed text meets the platform's accessibility contrast guideline, such as WCAG 2.2 AA for a web app.
+- **Content:** the interface-text, empty-state, numbering, and line-length rules above hold for changed content.
 - **Motion:** the motion rules above hold, including under the platform's reduced-motion preference.
 
 Save screenshots, and verification scripts that are not the change's tests, outside the project tree, such as under `/tmp`. Never add a test tool to the project's dependencies to run these checks; report the checks left unrun under [CORE.md — Work](CORE.md#work). Material behavior and visual commitments belong in the plan's ACs or DDs.
