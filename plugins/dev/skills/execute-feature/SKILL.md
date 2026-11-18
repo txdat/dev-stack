@@ -15,4 +15,6 @@ Implement an `approved` or `auto-approved` plan test-first under [plan.md](../..
 
 To delegate chunks, use [executor](../../agents/executor.md) where installed. Whoever runs this skill owns the RED tests, their commit, and the plan; chunk workers never edit them. Give each chunk worker the DD invariants its files enforce.
 
+For a change to a rendered UI, run [frontend-design.md — Verification](../../rules/frontend-design.md#verification) at the tip before setting `Status: implemented`.
+
 When the plan passes its checks, set `Status: implemented`, report each TC's test with its result where [plan.md — Verification](../../rules/plan.md#verification) requires it, or for `Type: config` its check result. Then hand off to [review-code.md](../review-code/SKILL.md).
