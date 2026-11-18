@@ -24,7 +24,7 @@ A re-review covers only what [plan.md — Review](../../rules/plan.md#review) li
 
 - Security, data integrity, concurrency, compatibility, and failure paths, under [CODING.md — Impact](../../rules/CODING.md#impact).
 - Unnecessary queries, repeated or unbounded work, reimplemented concepts, and shared code bent with flags. Report concrete impact; unbounded or repeated work on a production path, with a location and evidence, blocks.
-- For a change to a rendered UI, run [frontend-design.md — Verification](../../rules/frontend-design.md#verification)'s checks against the plan's DDs in the round's scratch; for a review-only request, against the plan's worktree with commands that leave its `git status` unchanged. Each failed check, with its screenshot or the driving run's output, is `ran` and blocks.
+- For a change to a rendered UI, run [frontend-design.md — Verification](../../rules/frontend-design.md#verification)'s checks against the plan's DDs in the round's scratch; for a review-only request, against the plan's worktree with commands that leave its `git status` unchanged. Each failed check, with its screenshot or the driving run's output, is `ran`.
 - Secrets and debug or conflict artifacts: run `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-check.js artifacts <review base> HEAD`, judge each line it lists for review, and read the diff.
 
 Report your conclusion on each AC and the Goal, the decisive evidence, and findings with their label, location, and proof, split into blocking and notes. The review passes when nothing blocks.
