@@ -4,7 +4,7 @@
 
 - Use the project's existing design system and component patterns.
 - Whoever sets the direction, design-feature or the main agent, reads the project's existing screens first.
-- Whoever sets the direction names each view's mode, which sets how far the design may go beyond the platform's conventions:
+- Whoever sets the direction names and records each view's mode, which sets how far the design may go beyond the platform's conventions:
   - **Operate**, such as an app screen, dashboard, or settings;
   - **Read**, such as documentation or an article;
   - **Persuade**, such as a landing or marketing page.
@@ -19,7 +19,7 @@
   - a density, such as more rows per screen for a data tool than for a marketing page.
 - When the project has no design system but depends on a component library, build with that library before writing new components.
 - In plan-backed work, design-feature records these decisions as DDs before approval.
-- In a direct edit, the main agent establishes them before writing any of the change's code and reports them with its result. The main agent, or the chunk it delegates the commit to, records them in the message of the commit that carries the change, not the test commit.
+- In a direct edit, the main agent establishes them before writing any of the change's code and reports them with its result. When the main agent, or the chunk it delegates the commit to, commits the change, it records them in that commit's message, not the test commit's.
 
 ## States
 
@@ -39,17 +39,18 @@
 - Never put an apology in place of what happened or what to do next.
 - Never present invented figures, reviews, quotes, customers, or names as real; label demonstration data as sample data.
 - Never show filler text, such as lorem ipsum, `[Company Name]`, `{{token}}`, or `TODO`.
-- A link's text must name its destination out of context, never "Learn more" or "Click here".
-- Every field must have a visible label; never use its placeholder as the label.
+- A link's text, with its surrounding context such as its table row, must name its destination; never a bare "Learn more" or "Click here".
+- Every field must have a visible label, except a single field, such as search, that its adjacent button or icon names; never use its placeholder as the label.
 - A destructive action's confirmation must name the action on its button, never "Yes" or "OK". When the action can be undone, offer undo instead of a confirmation.
 - Loading text must name what it loads, such as "Loading invoices".
 
 ## Visual
 
+- Where the design system or the project's existing screens already set a value, style, or pattern, it holds over the Visual and Motion rules. The Access check holds over the design system; report each departure from it.
 - On an Operate view, use the platform's standard controls and navigation, and accent color only on the primary action, links, selection, state, and the ranked-first content.
 - On a Read view, body text must be at least 16 px on the web, unless the design system sets it.
 - Take every font size, color, spacing, radius, and shadow from the design system or the recorded direction, never a one-off value.
-- Each view must have at most one primary action, styled as its most prominent control.
+- Each form or dialog must have at most one primary action, styled as its most prominent control.
 - Spacing between groups must be larger than spacing between items within a group. Space above a heading must be larger than space below it.
 - Elements of the same kind, such as table rows or cards, must share one style across views.
 - Use borders, dividers, shadows, and gradients only to mark a grouping, boundary, order, or state in the content, or to make the ranked-first content or the primary action prominent. Never add them as decoration alone, except to carry the brand the design system or recorded direction defines on a Persuade view.
@@ -63,11 +64,11 @@
   - a colored stripe on one side of a card;
   - emoji or text glyphs in place of icons; monospace text outside code, identifiers, or raw values.
 - Number only ordered items, such as steps.
-- Body text lines must stay under 80 characters, 45 to 75 on a Read view, unless the design system sets the measure.
+- Body text lines must stay under 80 characters, at most 75 on a Read view, unless the design system sets the measure.
 
 ## Guidance
 
-A departure from these rules is never a failed check; review-code reports one as a note.
+A departure from these rules alone is never a failed check. A departure from a recorded DD is judged under [review-code — Behavior](../skills/review-code/SKILL.md#behavior).
 
 - Write in the user's domain terms.
 - Make the content the information hierarchy ranks first the most prominent in its view, by size, weight, or contrast.
@@ -82,7 +83,7 @@ A departure from these rules is never a failed check; review-code reports one as
 - Content must be visible when its animation does not run, such as under reduced motion or before the animation's script loads.
 - A hover effect never moves a neighboring element or the hovered element's own target area.
 - On the web, animate transform, opacity, and color; never animate layout properties, such as width, height, or margin, except to expand or collapse a region or to fill a progress indicator.
-- An exit animation the change adds must be shorter than its entrance, unless the design system sets the durations. Use the design system's easing, or ease-out; never bounce or elastic easing.
+- An exit animation the change adds must be shorter than its entrance, unless the design system sets the durations. Use the design system's easing, or ease-out or ease-in-out; never bounce or elastic easing.
 - Motion the user did not trigger that runs longer than 5 seconds, other than a loading or progress indicator, must have a control that pauses, stops, or hides it.
 
 ## Verification
@@ -91,20 +92,20 @@ Verify the rendered UI, not only its code.
 
 - **Who:** whoever runs execute-feature; in a direct edit or after a review-code repair, the main agent. Each verifies after integrating any chunks it delegated. A reviewer runs the same checks when its review skill says so.
 - **Tool:** the project's UI test tooling that computes layout and captures screenshots, such as a browser or device test runner. Without one, use a UI automation tool, such as Playwright for a web app. The agent running the checks may run that tool from a fresh directory under `/tmp`, with its package and browser caches there, such as through `BUN_INSTALL_CACHE_DIR` and `PLAYWRIGHT_BROWSERS_PATH`. It must point the app's build and server caches at `/tmp` too, or serve a build output copied there, so the run writes nothing into the worktree or a linked dependency.
-- **Coverage:** each changed state at each screen or window size the product supports in the default theme, each changed state in each other supported theme at one size, and keyboard use. Force each state that depends on an external result by simulating that result. Stress each changed view at one size with text 30% longer, with a single 30-character unbroken word, with 100 items where the view lists items, and at 200% zoom on the web or the platform's largest text size elsewhere; under stress, text must not clip and elements must not overlap, and the view may scroll sideways.
+- **Coverage:** each changed state at each screen or window size the product supports in the default theme, each changed state in each other supported theme at one size, and keyboard use. Force each state that depends on an external result by simulating that result. Stress each changed view at one size with text 30% longer, with a single 30-character unbroken word, with 100 items where the view lists items, and at 200% zoom on the web or the platform's largest text size elsewhere; under stress, text must not clip beyond the design's truncation, and elements must not overlap, and the view may scroll sideways.
 - **Scope:** for a text-only change, one that alters only interface text, the implementing agent captures each changed state at the narrowest size and runs the Content and Layout checks on those screenshots, with the text-length stress cases. A reviewer captures each changed state at the narrowest and widest supported size in the default theme and skips the stress cases; for a text-only change it runs the Content and Layout checks, otherwise every check.
 - **Review:** capture a full-view screenshot of each case Coverage lists after entrance motion settles. Before judging a screenshot, confirm it shows the state and size its name claims, with no blank or half-loaded region; recapture one that does not. Check Layout, Visual, and Content against each screenshot, and against the code for values. Check Flow, Access, and Motion by driving the UI.
 
 Checks:
 
-- **Layout:** no changed view clips content its design does not truncate. No changed view scrolls in a direction its design does not scroll. No interactive element covers another outside an open overlay, such as a dialog or menu. Images and media, and content inserted above content already on screen, must reserve their space; compare a screenshot taken before they load with one taken after.
+- **Layout:** no changed view clips content its design does not truncate. No changed view scrolls in a direction its design does not scroll. No interactive element covers another outside an open overlay, such as a dialog or menu. Images and media, and content inserted above content already on screen other than in response to the user's action, must reserve their space; compare a screenshot taken before they load with one taken after.
 - **Flow:** each changed state is reachable through the UI from the flow's entry. Focus order follows the visual order. The [States](#states) rules hold.
 - **Access:** every changed control is reachable and operable by keyboard with visible focus. The platform's accessibility tree exposes each changed element's semantic role and each changed control's accessible name. Changed text, and each changed control's boundary, icon, and focus indicator, meets the platform's accessibility contrast guideline, such as WCAG 2.2 AA for a web app. Each changed touch or click target meets the platform's minimum size, such as 24 by 24 CSS px on the web, 44 by 44 pt on iOS, 48 by 48 dp on Android. Both apply with the guideline's exceptions, such as disabled controls and links inside text.
 - **Visual:** the [Visual](#visual) rules hold for changed views.
-- **Content:** the [Interface text](#interface-text) rules hold for changed content.
+- **Content:** the [Interface text](#interface-text) rules, and the empty-state rules in [States](#states), hold for changed content.
 - **Motion:** the [Motion](#motion) rules hold, including under the platform's reduced-motion preference.
 
-The implementing agent **Who** names, never a reviewer, fixes each failed check and verifies again. It fixes every failure one round of screenshots shows before capturing again. A reviewer reports a failed check as its review skill specifies.
+The implementing agent that Who names, never a reviewer, fixes each failed check and verifies again. It fixes every failure one round of screenshots shows before capturing again. A reviewer reports a failed check as its review skill specifies.
 
 Save screenshots, and verification scripts that are not the change's tests, outside the project tree, such as under `/tmp`. Never add a test tool to the project's dependencies to run these checks. Report each check left unrun under [CORE.md — Work](CORE.md#work), naming each state and size no screenshot covered.
 
