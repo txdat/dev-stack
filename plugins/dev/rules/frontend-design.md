@@ -1,19 +1,63 @@
 # Frontend Design
 
-Use the project's existing design system and component patterns. Establish audience, primary task, information hierarchy, and any material visual direction with the user; record decisions the implementation must preserve. When the project has no design system, that visual direction includes a palette, type roles (such as heading, body, and label styles), and a layout grid with its alignment, each chosen for the audience and primary task. In plan-backed work, design-feature records them as DDs before approval; in a direct edit, the main agent establishes them before any of the change's code is written and reports them with its result.
+This file is guidance for UI work. The agent doing the work decides how to apply it and which checks to run for the change. A departure from it never blocks a review or a workflow step.
 
-Design layouts for each screen or window size the product supports and each loading, empty, error, success, disabled, and focus state the flow can reach. Preserve semantic roles, keyboard access, visible focus, accessible names, readable contrast, and reduced-motion preferences. Validate forms and retain user input after recoverable failures. When a user action can fill an empty state, the empty state must name that action.
+## Direction
 
-Write interface text in the user's domain terms, never internal identifiers such as field names, error codes, or enum values, except a reference code the user needs to quote to support. A button or other action control's label must name the result of using it, such as "Save changes" rather than "Submit"; an action must keep one name through the flow, such as "Publish" confirming as "Published". An error message must state what happened and, when the user can fix it, how; otherwise, what the user can do next, such as retry later. Never apologize in place of either.
+- Use the project's existing design system, components, layout grid, and density. When the project has none but depends on a component library, build with that library before writing new components.
+- Before designing a new view, read the project's existing screens.
+- For a new view, or a change the existing screens do not already decide, establish with the user, where the existing screens and the requirement leave them open, the audience, the primary task, the information hierarchy, and any material visual direction. Under autopilot, decide them under [autopilot.md — Decisions](../skills/autopilot/SKILL.md#decisions).
+- For each new view, name its mode, which sets how far the design goes beyond the platform's conventions:
+  - **Operate**, such as an app screen, dashboard, or settings: standard controls and navigation, and accent color only on the primary action, links, selection, and state;
+  - **Read**, such as documentation or an article: body text at least 16 px on the web;
+  - **Persuade**, such as a landing or marketing page: palette, type, and composition may carry the brand.
+- When the project has no design system, the visual direction includes a palette (neutrals, one accent color, and colors for error, warning, and success), type roles such as heading, body, and label, a spacing scale, at most two font families, and a layout grid.
+- In plan-backed work, design-feature records these decisions, including each view's mode, as DDs. In a direct edit, the main agent reports them with its result.
 
-Implement with existing tokens and components before adding variants. Use borders, dividers, and numbering only to mark a grouping, boundary, or order in the content; number only ordered items, such as steps. Body text lines must stay under 80 characters unless the design system sets the measure. Motion that responds to a user action must show what changed. Motion the user did not trigger, such as an entrance or attention animation, must run at most one sequence per view; loading and progress indicators do not count. Choose typography, spacing, imagery, and motion for the content and primary task; no particular aesthetic or signature effect is mandatory.
+## States
 
-Verify the rendered UI, not only its code: whoever runs execute-feature, and in a direct edit or after a review-code repair the main agent, each after integrating any chunks it delegated, drives the integrated change with the project's UI test tooling that computes layout and captures screenshots, such as a browser or device test runner, else with a UI automation tool, such as Playwright for a web app, at each screen or window size the product supports and through each changed state, including keyboard use. Force each state that depends on an external result by simulating that result, and review a screenshot of each changed state at each of those sizes.
+- Design a layout for each screen or window size the product supports.
+- Design each loading, empty, error, success, disabled, and focus state the flow can reach.
+- Make an empty state say why it is empty, such as first use, no results, or a filter hiding results, and name the action that fills it when one exists.
+- Validate forms. Retain user input after a recoverable failure.
+- Preserve semantic roles, keyboard access, visible focus, accessible names, readable contrast, and reduced-motion preferences.
 
-- **Layout:** no changed view clips content its design does not truncate, or scrolls in a direction its design does not scroll, and no interactive element covers another outside an open overlay, such as a dialog or menu.
-- **Flow:** each changed state is reachable through the UI from the flow's entry; focus order follows the visual order; and the form and error-message rules above hold.
-- **Access:** every changed control is reachable and operable by keyboard with visible focus; the platform's accessibility tree exposes each changed element's semantic role and each changed control's accessible name; and changed text meets the platform's accessibility contrast guideline, such as WCAG 2.2 AA for a web app.
-- **Content:** the interface-text, empty-state, numbering, and line-length rules above hold for changed content.
-- **Motion:** the motion rules above hold, including under the platform's reduced-motion preference.
+## Interface text
 
-Save screenshots, and verification scripts that are not the change's tests, outside the project tree, such as under `/tmp`. Never add a test tool to the project's dependencies to run these checks; report the checks left unrun under [CORE.md — Work](CORE.md#work). Material behavior and visual commitments belong in the plan's ACs or DDs.
+- Write in the user's domain terms. Never show internal identifiers, such as field names, error codes, or enum values, except a reference code the user quotes to support.
+- Name an action control by its result, such as "Save changes" rather than "Submit", and keep that name through the flow, such as "Publish" confirming as "Published".
+- Make an error message state what happened and how to fix it, or what the user can do next, such as retry later. Never put an apology in its place.
+- Never present invented figures, reviews, quotes, customers, or names as real; label demonstration data as sample data. Never show filler text, such as lorem ipsum or `TODO`.
+- Give each field a visible label; never use its placeholder as the label.
+- Name the action on a destructive action's confirmation button, never "Yes" or "OK". When the action can be undone, offer undo instead.
+
+## Visual
+
+- Take sizes, colors, spacing, radii, and shadows from the design system or the recorded direction, never a one-off value.
+- Make the content the information hierarchy ranks first the most prominent in its view. Give each form or dialog at most one primary action.
+- Make space between groups larger than space within a group, and space above a heading larger than below it.
+- Use borders, dividers, shadows, and gradients to mark grouping, boundary, order, or state, never as decoration alone.
+- Never convey meaning by color alone. Set numbers that align in columns, such as in a table, in tabular figures. Number only ordered items, such as steps.
+- Keep body text lines under 80 characters, and at most 75 on a Read view, unless the design system sets the measure.
+- Never add these unless the user or the design system asks for one: a page of same-size icon, heading, and text cards; a card nested in a card; gradient text; a colored stripe on one side of a card; emoji in place of icons.
+- Choose typography, spacing, imagery, and motion for the content and primary task. No particular aesthetic or signature effect is required.
+
+## Motion
+
+- Make motion that responds to a user action show what changed.
+- Run motion the user did not trigger, such as an entrance animation, at most one sequence per view, and none on an Operate view. Loading and progress indicators do not count.
+- Keep content visible when its animation does not run, such as under reduced motion.
+- Never use bounce or elastic easing. Give motion the user did not trigger that runs longer than 5 seconds a control that pauses or hides it.
+
+## Verification
+
+When the agent doing the work verifies the UI, it verifies the rendered UI, not only its code, with checks it picks, such as:
+
+- **Layout:** at each supported size, no changed view clips content its design does not truncate, scrolls in a direction its design does not, or lets one control hide another outside an open overlay, such as a dialog or menu.
+- **States:** each changed state is reachable from the flow's entry; force a state that depends on an external result by simulating that result.
+- **Access:** keyboard reach with visible focus, focus order that follows the visual order, accessible names and roles, and contrast that meets the platform's guideline, such as WCAG 2.2 AA on the web.
+- **Interface text and Visual:** the rules above hold for changed views, judged from screenshots.
+
+Use the project's UI test tooling, else a UI automation tool such as Playwright for a web app, run from a directory under `/tmp` with its caches there. Save screenshots, and verification scripts that are not the change's tests, under `/tmp`. Never add a test tool to the project's dependencies to run these checks. Report each check it picked but could not run, with the result.
+
+Material behavior and visual commitments belong in the plan's ACs or DDs. A recorded AC or DD binds like any other; this file's guidance does not.
