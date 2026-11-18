@@ -8,7 +8,8 @@
   - **Operate**, such as an app screen, dashboard, or settings;
   - **Read**, such as documentation or an article;
   - **Persuade**, such as a landing or marketing page.
-- Whoever sets the direction establishes with the user, or under autopilot decides under [autopilot — Decisions](../skills/autopilot/SKILL.md#decisions), the audience, the primary task, the information hierarchy, and any material visual direction. Record the decisions the implementation must preserve.
+- Whoever sets the direction records the screen or window sizes and the themes the product supports.
+- For a new view, or a change the existing screens do not already decide, whoever sets the direction establishes with the user, or under autopilot decides under [autopilot — Decisions](../skills/autopilot/SKILL.md#decisions), the audience, the primary task, the information hierarchy, and any material visual direction. Record the decisions the implementation must preserve.
 - When the project has no design system, the visual direction includes, each chosen for the audience and primary task:
   - a palette: neutrals, one accent color, more only when the user chooses them or for a Persuade view, colors for error, warning, and success, and a data-visualization palette when a view charts data;
   - type roles, such as heading, body, and label, each with one size, weight, and line height per screen or window size;
@@ -32,6 +33,7 @@
 
 ## Interface text
 
+- Write in the user's domain terms.
 - Never show internal identifiers, such as field names, error codes, or enum values. The exception is a reference code the user needs to quote to support.
 - An action control's label must name the result of using it, such as "Save changes" rather than "Submit".
 - An action must keep one name through the flow, such as "Publish" confirming as "Published".
@@ -46,7 +48,7 @@
 
 ## Visual
 
-- Where the design system or the project's existing screens already set a value, style, or pattern, it holds over the Visual and Motion rules. The Access check holds over the design system; report each departure from it.
+- Where the design system or the project's existing screens already set a value, style, or pattern, it holds over the Visual and Motion rules. When a design-system value the change uses fails the Access check, the implementing agent reports it; in plan-backed work, keeping or replacing that value needs a decision under [plan.md — Changes](plan.md#changes).
 - On an Operate view, use the platform's standard controls and navigation, and accent color only on the primary action, links, selection, state, and the ranked-first content.
 - On a Read view, body text must be at least 16 px on the web, unless the design system sets it.
 - Take every font size, color, spacing, radius, and shadow from the design system or the recorded direction, never a one-off value.
@@ -70,7 +72,6 @@
 
 A departure from these rules is never a failed check.
 
-- Write in the user's domain terms.
 - Make the content the information hierarchy ranks first the most prominent in its view, by size, weight, or contrast.
 - Align each element to the layout grid.
 - Use the project's existing tokens, components, layout grid, and density before adding variants, except where the user or the recorded direction chooses otherwise.
@@ -92,21 +93,23 @@ Verify the rendered UI, not only its code.
 
 - **Who:** whoever runs execute-feature; in a direct edit or after a review-code repair, the main agent. Each verifies after integrating any chunks it delegated. A reviewer runs the same checks when its review skill says so.
 - **Tool:** the project's UI test tooling that computes layout and captures screenshots, such as a browser or device test runner. Without one, use a UI automation tool, such as Playwright for a web app. The agent running the checks may run that tool from a fresh directory under `/tmp`, with its package and browser caches there, such as through `BUN_INSTALL_CACHE_DIR` and `PLAYWRIGHT_BROWSERS_PATH`. It must point the app's build and server caches at `/tmp` too, or serve a build output copied there, so the run writes nothing into the worktree or a linked dependency.
-- **Coverage:** each changed state at each screen or window size the product supports in the default theme, each changed state in each other supported theme at one size, and keyboard use. Force each state that depends on an external result by simulating that result. Stress each changed view at one size with text 30% longer, with a single 30-character unbroken word, with 100 items where the view lists items, and at 200% zoom on the web or the platform's largest text size elsewhere; under stress, text must not clip beyond the design's truncation, and elements must not overlap, and the view may scroll sideways.
+- **Coverage:** each changed state at each screen or window size the product supports in the default theme, each changed state in each other supported theme at one size, and keyboard use. Force each state that depends on an external result by simulating that result. Stress each changed view at one size with text 30% longer, with a single 30-character unbroken word, with 100 items where the view lists items, and at 200% zoom on the web or the platform's largest text size elsewhere.
 - **Scope:** for a text-only change, one that alters only interface text, the implementing agent captures each changed state at the narrowest size and runs the Content and Layout checks on those screenshots, with the text-length stress cases. A reviewer captures each changed state at the narrowest and widest supported size in the default theme and skips the stress cases; for a text-only change it runs the Content and Layout checks, otherwise every check.
-- **Review:** capture a full-view screenshot of each case Coverage lists after entrance motion settles. Before judging a screenshot, confirm it shows the state and size its name claims, with no blank or half-loaded region; recapture one that does not. Check Layout, Visual, and Content against each screenshot, and against the code for values. Check Flow, Access, and Motion by driving the UI.
+- **Capture:** screenshot the whole view, scrolled through, for each case Coverage and Scope require, after entrance motion settles. Before judging a screenshot, confirm it shows the state and size its name claims, with no blank or half-loaded region; recapture one that does not. Check Layout, Visual, and Content against each screenshot, and against the code for values. Check Flow, Access, and Motion by driving the UI.
 
 Checks:
 
-- **Layout:** no changed view clips content its design does not truncate. No changed view scrolls in a direction its design does not scroll. No interactive element covers another outside an open overlay, such as a dialog or menu. Images and media, and content inserted above content already on screen other than in response to the user's action, must reserve their space; compare a screenshot taken before they load with one taken after.
+- **Layout:** no changed view clips content its design does not truncate. No changed view scrolls in a direction its design does not scroll. No interactive element covers another outside an open overlay, such as a dialog or menu, or a fixed or sticky element the covered one scrolls clear of. Under Coverage's stress cases, the view may scroll sideways. Images and media must not move content already on screen when they load; compare the bounding boxes of the content already on screen before and after the load.
 - **Flow:** each changed state is reachable through the UI from the flow's entry. Focus order follows the visual order. The [States](#states) rules hold, except those the Access check states.
-- **Access:** every changed control is reachable and operable by keyboard with visible focus. The platform's accessibility tree exposes each changed element's semantic role and each changed control's accessible name. Changed text, and each changed control's boundary, icon, and focus indicator, meets the platform's accessibility contrast guideline, such as WCAG 2.2 AA for a web app. Each changed touch or click target meets the platform's minimum size, such as 24 by 24 CSS px on the web, 44 by 44 pt on iOS, 48 by 48 dp on Android. Both apply with the guideline's exceptions, such as disabled controls and links inside text.
+- **Access:** every changed control is reachable and operable by keyboard with visible focus. The platform's accessibility tree exposes each changed element's semantic role and each changed control's accessible name. Changed text meets the platform's text contrast guideline, and the visual information needed to identify each changed control and its state, such as an input border, an icon, or the focus indicator, meets its non-text contrast guideline, such as WCAG 2.2 AA for a web app; a control identified by its text alone needs no boundary. Each changed touch or click target meets the platform's minimum size, such as 24 by 24 CSS px on the web, 44 by 44 pt on iOS, 48 by 48 dp on Android. Both apply with the guideline's exceptions, such as disabled controls, links inside text, and the guideline's spacing exception.
 - **Visual:** the [Visual](#visual) rules hold for changed views.
 - **Content:** the [Interface text](#interface-text) rules, and the empty-state rules in [States](#states), hold for changed content.
 - **Motion:** the [Motion](#motion) rules hold, including under the platform's reduced-motion preference.
 
-The implementing agent that Who names, never a reviewer, fixes each failed check and verifies again. It fixes every failure one round of screenshots shows before capturing again. A reviewer reports a failed check as [plan.md — Review](plan.md#review) and its review skill specify.
+A check fails only where the change introduces the failure. A failure already present at the change's base, such as the review base for a plan or the base SHA in review-change, or carried by an unchanged component or token, such as a new control's text in an unchanged token's color, is a note that names it.
 
-Save screenshots, and verification scripts that are not the change's tests, outside the project tree, such as under `/tmp`. Never add a test tool to the project's dependencies to run these checks. Report each check left unrun under [CORE.md — Work](CORE.md#work), naming each state and size no screenshot covered.
+The implementing agent that Who names, never a reviewer, fixes each failed check, including one a reviewer reported as a note because [plan.md — Review](plan.md#review) does not make it blocking, and verifies again. A failure the change did not introduce stays unfixed unless a decision under [Visual](#visual) replaces the value; the implementing agent reports it. It fixes every other failure one round of screenshots shows before capturing again. A reviewer reports a failed check as [plan.md — Review](plan.md#review) and its review skill specify.
+
+Save screenshots, and verification scripts that are not the change's tests, outside the project tree, such as under `/tmp`. A verification script takes the checkout's path as an argument and builds or serves the app from it, with its caches under `/tmp` as Tool requires, so its command reruns against another scratch. Never add a test tool to the project's dependencies to run these checks. Report each check left unrun under [CORE.md — Work](CORE.md#work), naming each state and size no screenshot covered.
 
 Material behavior and visual commitments belong in the plan's ACs or DDs.
