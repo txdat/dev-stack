@@ -46,7 +46,7 @@ A finding blocks when it has a location and evidence and is not `asserted`. Orde
 2. **Data integrity:** data loss, corruption, or a race that leaves state inconsistent.
 3. **Correctness:** a wrong result, a crash, or code that fails to build.
 4. **Cost:** unbounded or repeated work on a production path.
-5. **Rendered UI:** a failed [frontend-design.md — Verification](../../rules/frontend-design.md#verification) check.
+5. **Rendered UI:** a failed Layout or Access check under [frontend-design.md — Verification](../../rules/frontend-design.md#verification).
 6. **Project rule:** a rule from an applicable instruction file, quoted, that the change breaks, including a rule that governs style or wording.
 
 Every other finding is a note.

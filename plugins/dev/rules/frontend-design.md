@@ -68,7 +68,7 @@
 
 ## Guidance
 
-A departure from these rules alone is never a failed check. A departure from a recorded DD is judged under [review-code — Behavior](../skills/review-code/SKILL.md#behavior).
+A departure from these rules is never a failed check.
 
 - Write in the user's domain terms.
 - Make the content the information hierarchy ranks first the most prominent in its view, by size, weight, or contrast.
@@ -99,13 +99,13 @@ Verify the rendered UI, not only its code.
 Checks:
 
 - **Layout:** no changed view clips content its design does not truncate. No changed view scrolls in a direction its design does not scroll. No interactive element covers another outside an open overlay, such as a dialog or menu. Images and media, and content inserted above content already on screen other than in response to the user's action, must reserve their space; compare a screenshot taken before they load with one taken after.
-- **Flow:** each changed state is reachable through the UI from the flow's entry. Focus order follows the visual order. The [States](#states) rules hold.
+- **Flow:** each changed state is reachable through the UI from the flow's entry. Focus order follows the visual order. The [States](#states) rules hold, except those the Access check states.
 - **Access:** every changed control is reachable and operable by keyboard with visible focus. The platform's accessibility tree exposes each changed element's semantic role and each changed control's accessible name. Changed text, and each changed control's boundary, icon, and focus indicator, meets the platform's accessibility contrast guideline, such as WCAG 2.2 AA for a web app. Each changed touch or click target meets the platform's minimum size, such as 24 by 24 CSS px on the web, 44 by 44 pt on iOS, 48 by 48 dp on Android. Both apply with the guideline's exceptions, such as disabled controls and links inside text.
 - **Visual:** the [Visual](#visual) rules hold for changed views.
 - **Content:** the [Interface text](#interface-text) rules, and the empty-state rules in [States](#states), hold for changed content.
 - **Motion:** the [Motion](#motion) rules hold, including under the platform's reduced-motion preference.
 
-The implementing agent that Who names, never a reviewer, fixes each failed check and verifies again. It fixes every failure one round of screenshots shows before capturing again. A reviewer reports a failed check as its review skill specifies.
+The implementing agent that Who names, never a reviewer, fixes each failed check and verifies again. It fixes every failure one round of screenshots shows before capturing again. A reviewer reports a failed check as [plan.md — Review](plan.md#review) and its review skill specify.
 
 Save screenshots, and verification scripts that are not the change's tests, outside the project tree, such as under `/tmp`. Never add a test tool to the project's dependencies to run these checks. Report each check left unrun under [CORE.md — Work](CORE.md#work), naming each state and size no screenshot covered.
 
