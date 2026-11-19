@@ -68,17 +68,19 @@ const COMMON_FLAGS_WITH_ARG = new Set([
   "--signal",
 ]);
 
-/** Flags that consume the next token only for specific wrappers (e.g. `pnpm -r`/`-w` are boolean). */
+/**
+ * Flags that consume the next token only for specific wrappers (e.g. `pnpm -r`/`-w` are boolean).
+ * A package manager's entry also applies after its subcommands, as in `npm exec -w <pkg>`.
+ */
 const WRAPPER_FLAGS_WITH_ARG: Readonly<Record<string, ReadonlySet<string>>> = {
   npm: new Set(["-w"]),
+  npx: new Set(["-w"]),
   node: new Set(["-r"]),
   timeout: new Set(["-k", "-s"]),
-  bash: new Set(["-o"]),
-  sh: new Set(["-o"]),
-  zsh: new Set(["-o"]),
-  dash: new Set(["-o"]),
-  ksh: new Set(["-o"]),
 };
+
+/** Package managers whose flags stay in effect after their subcommands (`exec`, `run`, `dlx`). */
+const PACKAGE_MANAGERS = new Set(["npm", "npx", "pnpm", "pnpx", "yarn", "bun", "bunx"]);
 
 /** A word: not preceded or followed by a letter, digit, _, or -. */
 const hasWord = (cmd: string, word: string): boolean =>
@@ -179,8 +181,11 @@ const matchesRunner = (token: string, runner: string): boolean => {
   return new RegExp(`^${runner}(?:@[^/ \\t\\n\\v\\f\\r]+|\\.(?:[cm]?js|ts))?$`, "i").test(base);
 };
 
+/** Whether token starts a redirection: `<`, `>`, or `&>`, optionally after a file descriptor. */
+const REDIR_START = /^(?:[0-9]*[<>]|&>)/;
+
 /** Whether token is a standalone redirection operator whose target is the next token. */
-const REDIR_OP = /^[0-9]*(?:<<?-?|>>?|<>|>&|<&|&>>?)$/;
+const REDIR_OP = /^(?:[0-9]*(?:<<<|<<?-?|>>?|<>|>&|<&)|&>>?)$/;
 
 /**
  * Checks one shell command string (recursing into `sh -c` / `bash -c` arguments) and returns the
@@ -192,6 +197,7 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
     const tokens = tokenize(seg);
     let i = 0;
     let wrapper = "";
+    let pm = "";
     let inShell = false;
     let inTimeout = false;
     while (i < tokens.length) {
@@ -206,7 +212,7 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
         continue;
       }
       // Skip leading redirections (both `</dev/null` and `< /dev/null`) before the command.
-      if (wrapper === "" && /^[0-9]*[<>]/.test(raw)) {
+      if (wrapper === "" && REDIR_START.test(raw)) {
         i += REDIR_OP.test(raw) && i + 1 < tokens.length ? 2 : 1;
         continue;
       }
@@ -215,7 +221,8 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
         if (inner !== undefined) return inner;
         break;
       }
-      if (inShell && tok === "+o") {
+      // `-o opt`, `+o opt`, `-O opt`, and clusters ending in them, such as `-euo pipefail`.
+      if (inShell && /^[-+][A-Za-z]*[oO]$/.test(tok)) {
         i += i + 1 < tokens.length ? 2 : 1;
         continue;
       }
@@ -230,6 +237,7 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
       }
       if (WRAPPERS.has(tok)) {
         wrapper = tok;
+        if (PACKAGE_MANAGERS.has(tok)) pm = tok;
         inShell = SHELL_WRAPPERS.has(tok);
         inTimeout = tok === "timeout";
         i++;
@@ -238,7 +246,9 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
       if (tok.startsWith("-")) {
         i++;
         if (
-          (COMMON_FLAGS_WITH_ARG.has(tok) || WRAPPER_FLAGS_WITH_ARG[wrapper]?.has(tok)) &&
+          (COMMON_FLAGS_WITH_ARG.has(tok) ||
+            WRAPPER_FLAGS_WITH_ARG[wrapper]?.has(tok) ||
+            WRAPPER_FLAGS_WITH_ARG[pm]?.has(tok)) &&
           i < tokens.length
         )
           i++;
