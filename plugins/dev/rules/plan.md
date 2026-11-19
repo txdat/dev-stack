@@ -1,6 +1,6 @@
 # Plan-Backed Delivery
 
-The shared contract for application plans. Phase skills say how to do each phase; this file owns what they share.
+The shared contract for application plans, and the review lifecycle of runbooks and architecture documents ([Documents](#documents)). Phase skills say how to do each phase; this file owns what they share.
 
 ## Scope
 
@@ -19,7 +19,7 @@ A change is contained when it stays in one module (a package, service, or top-le
 | `planning` | design-feature, a revision before approval, the user's `dev-stack.js reopen`, or autopilot's `dev-stack.js auto-reopen` |
 | `needs-changes`, `ready` | review-feature's verdict, recorded with `Spec:` |
 | `approved` | the user only, from `ready` |
-| `auto-approved` | `dev-stack.js approve`, from `ready`, under run-stack `--auto-approve`, which only autopilot passes; gates treat it as `approved` |
+| `auto-approved` | `dev-stack.js approve`, from `ready`, on a stack `dev-stack.js autopilot` claimed under run-stack `--auto-approve`, which only autopilot passes; gates treat it as `approved` |
 | `implemented` | execute-feature, or the main agent after any change to a `reviewed` plan's Branch, such as a merge forward ([Worktree](#worktree)) |
 | `reviewed` | the main agent, after a review-code pass that `dev-stack.js code-review` logged at the Branch tip, with `Tip:` set to that tip |
 | `published` | create-pr's cleanup |
@@ -76,9 +76,9 @@ IDs are `AC`, `TC`, `ST`, `PC`, and `DD`, numbered from 1, never renumbered or r
 
 ## Changes
 
-After approval only `Status:` and `Tip:` change: the spec is frozen. The user approves by changing `ready` to `approved`, leaving `Spec:` as it is. Only autopilot, through run-stack `--auto-approve`, runs `dev-stack.js approve`, which sets `auto-approved`. Execution decides only details that are not design choices, such as names and internal structure.
+After approval only `Status:` and `Tip:` change: the spec is frozen. The user approves by changing `ready` to `approved`, leaving `Spec:` as it is. Only autopilot, through run-stack `--auto-approve`, runs `dev-stack.js autopilot <root>`, which claims the stack in its log, and `dev-stack.js approve`, which sets `auto-approved` and refuses a plan of an unclaimed stack. Execution decides only details that are not design choices, such as names and internal structure.
 
-[dev-stack.js](../bin/dev-stack.js) records each verdict, approval, stop, `resume`, `reopen`, and `auto-reopen` in the stack directory's `log`; only dev-stack.js writes it. It binds each approval, the user's included, to the spec hash approved; `next` and `check` record the user's approval. The gates and `next` block a plan whose spec, or a spec below it, changed since its approval, or whose Status went back below `approved`. A plan is unapproved when its Status is below `approved` and it has no approval since its last reopen. In Claude Code, Pi, DSH, and Antigravity, the plugin's [gate](../core/gate-check.js) refuses an agent's call that sets `approved`, moves an unapproved plan to `approved` or later other than through `dev-stack.js approve`, returns an approved plan below `approved` other than through `dev-stack.js auto-reopen`, changes a frozen plan's spec or a published plan, moves or deletes a plan the stack log names, runs `dev-stack.js resume` or `reopen`, or writes to the stack log. It refuses an edit tool's call before it lands; it snapshots the current repository's plans before a shell call and restores any plan or stack log the call changed that way. It catches mistakes and shortcuts, not an agent set on evading it: a background job that changes plans after its call returns goes unchecked, a change the user makes to the same repository's plans while a shell call runs is restored, so the user makes it again, and a shell command that only contains a stack-log write as text, such as test code in a heredoc, is refused too; edit a file holding such text with an edit tool.
+[dev-stack.js](../bin/dev-stack.js) records each verdict, approval, stop, `resume`, `reopen`, `auto-reopen`, and autopilot's claim in the stack directory's `log`; only dev-stack.js writes it. It binds each approval, the user's included, to the spec hash approved; `next` and `check` record the user's approval. The gates and `next` block a plan whose spec, or a spec below it, changed since its approval, or whose Status went back below `approved`. A plan is unapproved when its Status is below `approved` and it has no approval since its last reopen. In Claude Code, Pi, DSH, and Antigravity, the plugin's [gate](../core/gate-check.js) refuses an agent's call that sets `approved`, moves an unapproved plan to `approved` or later other than through `dev-stack.js approve`, returns an approved plan below `approved` other than through `dev-stack.js auto-reopen`, changes a frozen plan's spec or a published plan, moves or deletes a plan the stack log names, runs `dev-stack.js resume` or `reopen`, or writes to the stack log. It refuses an edit tool's call before it lands; it snapshots the current repository's plans before a shell call and restores any plan or stack log the call changed that way. It catches mistakes and shortcuts, not an agent set on evading it: it cannot tell a verdict or claim that dev-stack.js logged from one no review or autopilot run backs, a claim stays after autopilot's run ends, so `approve` then refuses nothing on that stack, a background job that changes plans after its call returns goes unchecked, a change the user makes to the same repository's plans while a shell call runs is restored, so the user makes it again, and a shell command that only contains a stack-log write as text, such as test code in a heredoc, is refused too; edit a file holding such text with an edit tool.
 
 Each case in the table below, including a failed PC, needs a decision and stops the work it affects until the decision is taken. The main agent brings the user options, tradeoffs, and a recommendation; under autopilot, [autopilot.md — Decisions](../skills/autopilot/SKILL.md#decisions) decides instead unless it stops. The next step depends on the plan:
 
@@ -116,7 +116,7 @@ These rules apply to every review skill. When this session wrote the artifact, r
 
 The main agent keeps one reviewer for a stack's review-feature rounds, plans in dependency order, one per plan for its review-code rounds, and one per review-change target for its rounds, and sends each next plan or round to it through the harness's message or resume tool. It starts a fresh reviewer, given the same inputs, where the harness has no such tool, the reviewer's context is full, or another review is still running in it.
 
-Preferences and style never block, except that in review-change a rule quoted from an applicable instruction file blocks ([review-change.md — Blocking](../skills/review-change/SKILL.md#blocking)). The reviewer may read, run tests, and inspect Git. It edits files only in its review-code round's scratch and under `/tmp`, never inside a linked dependency, and never commits, touches refs, the stash, or status, or installs dependencies. The main agent repairs. A review-only request gets no scratch, returns findings, and changes nothing. The reviewer may start at most one level of child subagents (at most three levels in total from the main agent); it tells each child subagent it never starts further subagents.
+Preferences and style never block, except that in review-change and review-code a rule quoted from an applicable instruction file blocks ([review-change.md — Blocking](../skills/review-change/SKILL.md#blocking)). The reviewer may read, run tests, and inspect Git. It edits files only in its review-code round's scratch and under `/tmp`, never inside a linked dependency, and never commits, touches refs, the stash, or status, or installs dependencies. The main agent repairs. A review-only request gets no scratch, returns findings, and changes nothing. The reviewer may start at most one level of child subagents (at most three levels in total from the main agent); it tells each child subagent it never starts further subagents.
 
 Round 1 covers the whole artifact. A re-review is a delta review: it checks the prior findings, the changed text, what cites or depends on it, and the PC Checks of changed PCs, and, in review-code, the repair diff with the TC and affected tests at the new tip, and nothing else.
 
@@ -128,11 +128,34 @@ A verdict holds while the spec and the specs below it are unchanged: the spec ha
 
 The main agent records each review-feature verdict with `dev-stack.js review <plan> ready|needs-changes` and each review-code verdict with `code-review <plan> pass|needs-changes`; each prints the round as `<k>/<limit>`. The limit starts at 3. A needs-changes verdict at or past the limit stops the plan until the user runs `dev-stack.js resume`, which grants three more rounds (the limit becomes the current round plus 3), or `reopen`. A review-code pass ends its review phase, and the next one counts from 1; a `reopen` or `auto-reopen` restarts both counts. A ready verdict does not reset the count, so a plan ready at its limit, such as `3/3`, whose spec then changes is re-reviewed at `4/3`, where a needs-changes verdict stops it.
 
-A needs-changes verdict counts as a round, never as a failed fix; `Failed fixes` ([CORE.md — Work](CORE.md#work)) counts only a repair whose own verification fails before re-review.
+A needs-changes verdict counts as a round, never as a failed fix; `Failed fixes` ([CORE.md — Work](CORE.md#work)) counts only a repair whose own verification fails before re-review. For a review-code repair, that verification runs, at the repaired tip, the local checks, the plan's TC and affected tests, and each blocking `ran` finding's command in one `scratch <issue>_<slug>-pr<N>-r<round>-fix <tip SHA> <repro> ...`, which whoever runs the verification creates and removes with `scratch-remove` after the run; the main agent reruns them after a delegated repair.
 
 Outside a review-only request, each review-code round runs in a scratch the main agent creates from the plan's worktree with `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-worktree.js scratch <issue>_<slug>-pr<N>-r<round> <tip SHA> [<repro> ...]`, passing each open finding's saved repro, and gives its path to the reviewer, who runs every command there. When `scratch` reports a repro as not applying, the main agent retries without it and gives that finding to the reviewer to rebuild. On a tip that changes a dependency manifest, it runs `isolate-dep` and installs in each scratch it opens. Each `ran` finding carries its repro from `scratch-diff <scratch> -- <its files>`, which the main agent saves under `/tmp` before ending the round with `scratch-remove`.
 
 Before repairing, the main agent reruns the command of every blocking `ran` finding in one fresh `scratch <issue>_<slug>-pr<N>-r<round>-v <tip SHA> <repro> ...`, then removes it. When `scratch` reports a repro as not applying, it retries `-r<round>-v` without that repro and reruns that finding alone in `scratch <issue>_<slug>-pr<N>-r<round>-v<k> <tip SHA> <repro>`, numbering `<k>` from 1, removing each scratch after its run. A repro that does not apply even alone counts as not reproducing. A finding that does not reproduce goes back to the reviewer once, in `scratch <issue>_<slug>-pr<N>-r<round>-f<k> <tip SHA>`, numbering `<k>` from 1, which the main agent removes after saving any rebuilt repro under `/tmp`; the reviewer's answer is not a verdict and records no round. The main agent then reruns the rebuilt repro in `scratch <issue>_<slug>-pr<N>-r<round>-v<k> <tip SHA> <repro>`, continuing the `<k>` numbering; if it still does not reproduce, the main agent relabels it `traced`, `located`, or `asserted` by the evidence left.
+
+## Documents
+
+A runbook ([design-infra](../skills/design-infra/SKILL.md)) lives at `docs/runbook/<issue>_<slug>/rb.md` and an architecture document ([design-system](../skills/design-system/SKILL.md)) at `docs/architecture/<issue>_<slug>.html`, each `<issue>_<slug>` named as a stack's directory ([Artifact](#artifact)); both are committed. A runbook's execution record is the `log` beside it, which is never committed: before its first entry, the main agent runs `git check-ignore -q <log>` and, when that fails, adds `/docs/runbook/*/log` to the file `git rev-parse --git-path info/exclude` names; no gate verifies it. Each document's design skill creates it; the main agent commits each change an agent makes to it, on the branch the project's convention names. Its header follows [Schema](#schema): `Key: value` lines before the first section heading, outside code fences, each key once:
+
+```text
+Status: draft
+Spec: -
+Issue: #N|none
+```
+
+A runbook's section heading is a `## ` line; an architecture document's is an `<h2>`, and it carries these lines in a `<pre>` under its `<h1>`.
+
+| Status | Set by |
+|---|---|
+| `draft` | the design skill when it creates the document, `doc-review` with `needs-changes`, or the user returning an approved document for a change |
+| `ready` | `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js doc-review <document> ready`, which the main agent runs on a passing review |
+| `approved` | the user only, from `ready` |
+| `executed` | a runbook only: the main agent, from `approved`, under [review-infra.md — After execution](../skills/review-infra/SKILL.md#after-execution) |
+
+`Spec:` starts as `-` and holds the hash of the document without its `Status:` and `Spec:` lines, line-ending carriage returns, and trailing blank lines. `doc-review` sets it, or resets it to `-` with `needs-changes`; an agent may also reset a draft's `Spec:` to `-`. A review or approval holds only while `Spec:` equals that hash, so the user approves only a `ready` document whose Spec holds. After approval the document is frozen except for its Status line. A runbook's `log` takes `EX-n` entries, appended with an edit tool, only while the runbook is `approved` or `executed`. `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js doc-check <document>` prints the Status and whether Spec holds, and exits 1 when a `ready` or later document's does not, or the header is malformed. The main agent runs it when it hands a `ready` document to the user for approval, and stops on exit 1. The main agent, before handing an approved runbook to the user to execute and before the after-execution audit, and the agent running design-feature, before planning from an architecture document's `DC-n`, run it and stop on exit 1 or a Status below `approved`.
+
+The [gate](../core/gate-check.js) refuses an agent's edit-tool call that changes a document's `Status:` or `Spec:` line, other than a runbook's `approved` to `executed` or a draft's `Spec:` reset to `-`, drops either line, repeats a header key, creates a document at a Status other than `draft` or a Spec other than `-`, or changes a frozen document, and one that writes a runbook's `log` below `approved` or changes an entry already in it. It never checks a shell command against documents, as they are tracked files that Git operations change: `doc-check` catches a shell change to a reviewed body or to `Spec:`, but nothing catches a shell command that sets `Status:`, such as an agent approving or executing a document itself, or that rewrites a runbook's `log`.
 
 ## Verification
 
@@ -150,6 +173,7 @@ Rules:
 - Restructuring test code must keep each scenario's distinguishing conditions and expected result.
 - Assertions must tell the required result from a plausible wrong one. Snapshots, mock-call checks, and mocked adapters standing in for queries or transactions are weak evidence.
 - At the plan's tip, run the project's local checks (such as lint, build, and the checks CI runs), its TC tests, and affected tests, selected under [CODING.md — Tests](CODING.md#tests).
+- execute-feature's per-TC report gives each TC's test file and name, the proof or `test(update)` commit holding it, the command and failing output (a refactor's passing) where step 1 or the revised-plan rule below runs it, and its result at the Branch tip; for a `Type: config` plan, each TC check's command and result at the tip.
 - A revised plan re-executed on a Branch that already holds commits of an earlier revision proves only its new and changed TCs. Here an implementation commit is any commit other than a proof commit, a merge, or a `test(update): <scope>` commit; for a feature, fix, or refactor plan, the gate counts `test(update)` as neither proof nor implementation.
   - When the Branch's latest proof commit has no implementation commit after it, the new and changed TCs' tests go in a `test(update)` commit, with any throwing stubs step 2 allows, and must fail (a refactor's pass) at that proof commit's parent.
   - Otherwise, the tests of TCs the Branch tip does not meet go in a new proof commit, failing there for the intended missing behavior, and the implementation follows. A refactor whose revision changes its implementation instead puts its new and changed TCs' tests in a new baseline commit, passing at the Branch tip, before that change.
@@ -162,9 +186,11 @@ Rules:
 The plan is never committed, so execute-feature carries its reasons into what ships, from the RED commit on:
 
 - Each test's name must state the behavior its AC requires.
-- An invariant that a DD's `Why:` states, such as an ordering, a state invariant, or why a guard exists, must go in a comment where the code enforces it, or, where the file format has no comments, in the body of the implementation or repair commit that applies it.
-- A choice among a DD's options must go in the body of the implementation or repair commit that applies it: the choice, the options rejected, and why.
-- A DD that sets a boundary, contract, or pattern beyond this plan must go in the project's decision records when the project's instructions or an existing directory, such as `docs/adr/`, name where they go; otherwise in the body of the implementation or repair commit that applies it.
+- An invariant that a DD's `Why:` states, such as an ordering, a state invariant, or why a guard exists, must go in a comment where the code enforces it; where the file format has no comments, write it in the body of the implementation or repair commit that applies it.
+- Write a choice among a DD's options in the body of the implementation or repair commit that applies it: the choice, the options rejected, and why.
+- A DD that sets a boundary, contract, or pattern beyond this plan must go in the project's decision records when the project's instructions or an existing directory, such as `docs/adr/`, name where they go; otherwise write it in the body of the implementation or repair commit that applies it.
+
+review-code reports a missing commit body as a note, never a block, since the Branch is never rewritten ([Worktree](#worktree)).
 
 Never cite this plan's IDs in code, tests, or commits; the plan is never committed, so restate the reason.
 

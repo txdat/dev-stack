@@ -20,7 +20,7 @@ The project's atomic-PR rules, from its AGENTS.md, CLAUDE.md, or the docs they r
 - One PR delivers one independent behavior with its tests, docs, and version notes.
 - These come apart, the prerequisite first: a behavior-preserving refactor from the change it enables; a flag, contract, schema, or generated code from its consumers; a data migration or dependency upgrade from the rest.
 - Call-sites that must change together for one behavior to stay consistent stay together; say what splitting them would break.
-- Each PR is correct and safe to merge after the PRs below it alone, with incomplete behavior unexposed.
+- Each PR meets the merge rule of [design-feature.md — Split PRs](../design-feature/SKILL.md#5-split-prs), with the PRs below it in place of parent plans.
 
 ## 3. Propose
 

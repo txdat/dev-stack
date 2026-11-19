@@ -1,5 +1,6 @@
 // The stack tree of plans (../rules/plan.md#stacks), for design-feature, create-pr, and run-stack.
-// `review` sets a planning plan's Status and Spec; `approve` sets a ready one auto-approved;
+// `review` sets a planning plan's Status and Spec; `autopilot` claims a stack for autopilot, and
+// `approve` sets a ready plan of a claimed stack auto-approved;
 // `reopen` returns approved plans to planning, and `auto-reopen` auto-approved ones once each;
 // `renumber` and `drop` reshape a stack before approval. Each write appends to the stack's log
 // (plan-lib.ts stackLog), as do `code-review`, `stop`, and `resume`, and `next` and `check` when
@@ -8,15 +9,27 @@
 import * as fs from "node:fs";
 import { b, byteCompare, rowsOf } from "./bytes.ts";
 import { type Command, type Ctx, Exit, fail, guard, Output } from "./cli.ts";
+import { DOC_STATUSES, docHash, docKind, FROZEN, parseDoc, withHeader } from "./doc.ts";
 import { gateIndexed } from "./gate-check.ts";
-import { heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
-import { dirname, git, globNames, isFile, isLink, P, readBytes, replaceBytes } from "./sys.ts";
+import { AUTOPILOT_LINE, heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
+import {
+  dirname,
+  git,
+  globNames,
+  isFile,
+  isLink,
+  P,
+  readBytes,
+  realpathM,
+  replaceBytes,
+} from "./sys.ts";
 import { mainRoot } from "./utils.ts";
 
 const USAGE = [
   "Usage: dev-stack.js stack <root plan>",
   "       dev-stack.js next <root plan> [--tab|--tree|--md]",
   "       dev-stack.js review <plan> ready|needs-changes",
+  "       dev-stack.js autopilot <root plan>",
   "       dev-stack.js approve <plan>",
   "       dev-stack.js code-review <plan> pass|needs-changes",
   "       dev-stack.js stop <plan> <reason>",
@@ -26,6 +39,8 @@ const USAGE = [
   "       dev-stack.js renumber <root plan> <old>=<new> ...",
   "       dev-stack.js drop <plan>",
   "       dev-stack.js check <root plan>",
+  "       dev-stack.js doc-review <document> ready|needs-changes",
+  "       dev-stack.js doc-check <document>",
   "stack lists the unpublished plans, or every plan once the root is",
   "published, parents before children. next prints, per listed plan,",
   '"<plan> <status> <parent> <action> <reason>" tab-separated, with "-" for none',
@@ -39,6 +54,8 @@ const USAGE = [
   "and Spec to its hash of the current spec, and logs the round <k>/<limit>;",
   "code-review logs a review-code verdict the same way. A needs-changes verdict",
   "at or past the limit stops the plan. The limit starts at 3; resume at or past the limit sets it to the current round plus 3.",
+  "autopilot records in the stack's log that run-stack --auto-approve drives the",
+  "stack, as autopilot runs it; approve refuses a plan of a stack without it.",
   "approve sets a ready plan, whose review recorded by review holds and whose parent is approved or later,",
   "to auto-approved, the agent's approval; only the user sets approved. An",
   "approved plan is frozen: its Status never returns to planning and its spec",
@@ -56,7 +73,15 @@ const USAGE = [
   "in the stack still in planning, printing PASS or BLOCK and the reason, and",
   "SKIP for a plan approved or later whose review still holds (BLOCK when it",
   "does not); it exits 1 on a block.",
-  "<plan> is <main root>/docs/plans/<issue>_<slug>/pr<N>.spec.md, run from the repository.",
+  "doc-review records a review verdict on a runbook",
+  "(docs/runbook/<issue>_<slug>/rb.md) or an architecture document",
+  "(docs/architecture/<issue>_<slug>.html) at draft or ready: ready sets Status",
+  "ready and Spec to the hash of the document without its Status and Spec lines;",
+  "needs-changes sets Status draft and Spec -. doc-check prints the document's",
+  "Status and whether Spec holds, and exits 1 when a ready or later document's",
+  "does not.",
+  "<plan> is <main root>/docs/plans/<issue>_<slug>/pr<N>.spec.md, run from the repository;",
+  "<document> is resolved from the current directory, in any worktree.",
   "Exit: 0 ok, 1 failure, 2 usage.",
 ].join("\n");
 
@@ -523,11 +548,34 @@ class Stack {
     if (parent !== "" && (this.rank(parent) ?? 0) < 1)
       fail(`${parent} must be approved or auto-approved first.`);
     this.requireOpen(plan);
+    if (!this.lib.autopilotStack(plan))
+      fail(
+        `${plan} is in a stack autopilot has not claimed; outside autopilot only the user approves, by setting 'Status: approved'. Report the plan as waiting on the user (rules/plan.md#changes).`,
+      );
     const hash = this.lib.planHash(plan);
     if (hash === undefined) fail(`Cannot hash ${plan}: a plan below it is missing or unreadable.`);
     this.setHeader(plan, [["Status", "auto-approved"]]);
     this.logEvent(plan, `approve auto-approved at ${hash}`);
     this.o.out(`Status: auto-approved recorded in ${plan}\n`);
+  }
+
+  /**
+   * Claims root's stack for autopilot (../skills/run-stack/SKILL.md), once: the record approve
+   * requires, so an agent outside autopilot that reaches wait-user cannot approve by mistake.
+   */
+  autopilot(root: string): void {
+    const parent = this.stacksOn(root);
+    if (parent !== "") fail(`${root} stacks on ${parent}; autopilot takes the stack's root.`);
+    if (this.lib.autopilotStack(root)) {
+      this.o.out(`Autopilot already recorded in ${stackLog(root)}\n`);
+      return;
+    }
+    try {
+      fs.appendFileSync(P(stackLog(root)), P(`${AUTOPILOT_LINE}\n`));
+    } catch (e) {
+      fail(`Cannot write ${stackLog(root)}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    this.o.out(`Autopilot recorded in ${stackLog(root)}\n`);
   }
 
   // ── check and next ───────────────────────────────────────────────────
@@ -773,6 +821,63 @@ const treeView = (rows: readonly string[], pre: string): string => {
   return out;
 };
 
+// ── documents ────────────────────────────────────────────────────────
+
+/** A runbook or architecture document's path, text, kind, and parse; fails on anything else. */
+const loadDoc = (ctx: Ctx, arg: string) => {
+  const path = realpathM(arg, ctx.cwd);
+  const kind = docKind(path);
+  if (kind === undefined)
+    fail(
+      `${arg} is not a runbook (docs/runbook/<issue>_<slug>/rb.md) or an architecture document (docs/architecture/<issue>_<slug>.html).`,
+    );
+  const text = isFile(path) ? readBytes(path) : undefined;
+  if (text === undefined) fail(`Cannot read ${path}.`);
+  const doc = parseDoc(text, kind);
+  if (!doc.isDoc)
+    fail(`${path} has no 'Status:' and 'Spec:' header lines (rules/plan.md#documents).`);
+  if (doc.dupes.length > 0)
+    fail(
+      `${path} repeats header keys: ${doc.dupes.join("; ")}. Keep each key once (rules/plan.md#documents).`,
+    );
+  if (!DOC_STATUSES[kind].includes(doc.status))
+    fail(
+      `${path} has Status '${doc.status}'; ${kind === "runbook" ? "a runbook" : "an architecture document"} takes ${DOC_STATUSES[kind].join(", ")}.`,
+    );
+  return { path, kind, doc };
+};
+
+const docReview = (ctx: Ctx, o: Output, arg: string, verdict: string): void => {
+  if (verdict !== "ready" && verdict !== "needs-changes") usage();
+  const { path, doc } = loadDoc(ctx, arg);
+  if (FROZEN.has(doc.status))
+    fail(
+      `${path} is '${doc.status}' and frozen; only the user returns it to draft for a change (rules/plan.md#documents).`,
+    );
+  const [status, spec] =
+    verdict === "ready" ? ["ready", docHash(doc, dirname(path), ctx.env)] : ["draft", "-"];
+  if (spec === "") fail(`Cannot hash ${path}.`);
+  try {
+    replaceBytes(path, withHeader(doc, status, spec));
+  } catch {
+    fail(`Cannot write ${path}.`);
+  }
+  o.out(`Status: ${status} and Spec: ${spec} recorded in ${path}\n`);
+};
+
+/** Prints the document's Status and whether its Spec holds; false when a ready or later one's does not. */
+const docCheck = (ctx: Ctx, o: Output, arg: string): boolean => {
+  const { path, doc } = loadDoc(ctx, arg);
+  const hash = docHash(doc, dirname(path), ctx.env);
+  if (hash === "") fail(`Cannot hash ${path}.`);
+  const holds = doc.spec !== "-" && doc.spec === hash;
+  const reviewed = doc.status !== "draft";
+  o.out(
+    `${path} ${doc.status} ${holds ? "spec-holds" : doc.spec === "-" ? "unreviewed" : "spec-changed"}\n`,
+  );
+  return !reviewed || holds;
+};
+
 export const devStack: Command = (ctx) => {
   const o = new Output();
   return guard(o, () => {
@@ -791,7 +896,12 @@ export const devStack: Command = (ctx) => {
           cmd === "stop" ||
           (cmd === "next" && (third === "--tab" || third === "--tree" || third === "--md")))) ||
       (n >= 3 && cmd === "renumber");
-    if (!ok) usage();
+    if (!ok && !(n === 3 && cmd === "doc-review")) usage();
+    if (cmd === "doc-review") {
+      docReview(ctx, o, arg, n === 3 ? (third as string) : usage());
+      return o.done();
+    }
+    if (cmd === "doc-check") return o.done(docCheck(ctx, o, arg) ? 0 : 1);
     const root = mainRoot(ctx.cwd, ctx.env, o);
     const s = new Stack(root, ctx, o);
     const need3 = (): string => (n === 3 ? (third as string) : usage());
@@ -817,6 +927,9 @@ export const devStack: Command = (ctx) => {
         s.review(s.requireLive(arg), v);
         break;
       }
+      case "autopilot":
+        s.autopilot(s.requireLive(arg));
+        break;
       case "approve":
         s.approve(s.requireLive(arg));
         break;

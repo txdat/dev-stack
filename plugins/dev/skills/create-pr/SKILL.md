@@ -1,13 +1,13 @@
 ---
 name: create-pr
-description: "Publish a reviewed plan, with every plan stacked on it, as draft or ready pull requests, one per plan, mark the plans published, and clean up their worktrees and branches."
+description: "Publish a reviewed stack from its root plan as draft or ready pull requests, one per plan, mark the plans published, and clean up their worktrees and branches."
 model: haiku
 effort: medium
 ---
 
 # /create-pr — Publish a Reviewed Stack
 
-Publish a `reviewed` plan, with every plan stacked on it, one PR per plan, draft unless the user asks for ready. Pass the stack's root ([plan.md — Stacks](../../rules/plan.md#stacks)); the gate checks every plan in the stack, including the test-first proof at its reviewed SHA. `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-publish.js` does the mechanical checks; `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js stack <root>` lists the stack's plans, parents before children. Run each step on every plan, parents first except where a step says otherwise, and finish it for all of them before the next step. The user merges the PRs, parents first, once every PR in the stack is open; agents never merge a PR. When a step blocks, fix what it names and rerun that step; a changed branch returns its plan to review-code.
+Publish a stack whose plans are all `reviewed`, one PR per plan, draft unless the user asks for ready. Pass the stack's root ([plan.md — Stacks](../../rules/plan.md#stacks)); the gate checks every plan in the stack, including the test-first proof at its reviewed SHA. `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-publish.js` does the mechanical checks; `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js stack <root>` lists the stack's plans, parents before children. Run each step on every plan, parents first except where a step says otherwise, and finish it for all of them before the next step. The user merges the PRs, parents first, once every PR in the stack is open; agents never merge a PR. When a step blocks, fix what it names and rerun that step; a changed branch returns its plan to review-code.
 
 1. `dev-publish.js check <plan>` — the Branch is at its reviewed SHA, contains its parent's Branch, and has no open PR on another base; it prints the PR target as `base=`.
 2. `git push -u origin <Branch>` (never force), then `gh pr create --base <target> --head <Branch> --title <plan title> --body-file <file> [--draft]`. On a rerun, push again but skip `gh pr create` when the plan's PR is already open on its target.

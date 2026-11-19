@@ -11,7 +11,7 @@ Write a plan another agent can implement test-first without inventing behavior. 
 
 ## 1. Understand
 
-Inspect the relevant code, contracts, and conventions, and pick the Base branch: the default branch unless the user names one, or the parent's for a stacked plan. Name the plan's own Branch after the project's convention.
+Inspect the relevant code, contracts, and conventions; for work from an architecture document's `DC-n`, check the document first under [plan.md — Documents](../../rules/plan.md#documents). Pick the Base branch: the default branch unless the user names one, or the parent's for a stacked plan. Name the plan's own Branch after the project's convention.
 
 Resolve what the requirement means before writing:
 

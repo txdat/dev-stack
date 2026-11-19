@@ -153,11 +153,19 @@ const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): b
   return false;
 };
 
-/** Converts an Antigravity PreToolUse/PostToolUse payload into the Claude-shaped HookInput. */
+/** A JSON string as the UTF-8 text a HookInput carries, which core's str() reads as bytes. */
+const jsonText = (v: Json | undefined): string | undefined =>
+  typeof v === "string" ? v : undefined;
+
+/**
+ * Converts an Antigravity PreToolUse/PostToolUse payload into the Claude-shaped HookInput. Its
+ * values stay UTF-8 text, as Claude Code's are; converting them to bytes here would encode
+ * non-ASCII text twice once core reads them.
+ */
 const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
   const call = raw["toolCall"];
   const name = str(member(call, "name")) ?? "";
-  const id = str(member(call, "id")) ?? "";
+  const id = jsonText(member(call, "id")) ?? "";
   const args = member(call, "args");
   const base: HookInput = {
     hook_event_name: event === "PostToolUse" && raw["error"] ? "PostToolUseFailure" : event,
@@ -168,7 +176,7 @@ const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
     return {
       ...base,
       tool_name: "Bash",
-      tool_input: { command: str(member(args, "CommandLine")) ?? "" },
+      tool_input: { command: jsonText(member(args, "CommandLine")) ?? "" },
     };
   }
   if (event !== "PreToolUse") return undefined;
@@ -178,19 +186,20 @@ const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
       ...base,
       tool_name: "Edit",
       tool_input: {
-        file_path: str(member(args, "Path")) ?? "",
-        old_string: str(member(args, "Target")) ?? "",
-        new_string: str(member(args, "Replacement")) ?? "",
+        file_path: jsonText(member(args, "Path")) ?? "",
+        old_string: jsonText(member(args, "Target")) ?? "",
+        new_string: jsonText(member(args, "Replacement")) ?? "",
         replace_all: true,
       },
     };
   }
   if (name === "write_file") {
-    const filePath = str(member(args, "Path")) ?? "";
-    let content = str(member(args, "Content")) ?? "";
+    const filePath = jsonText(member(args, "Path")) ?? "";
+    let content = jsonText(member(args, "Content")) ?? "";
     if (member(args, "Append") === true && filePath !== "") {
       try {
-        content = b(fs.readFileSync(filePath, "latin1")) + content;
+        content =
+          fs.readFileSync(path.resolve(jsonText(raw["cwd"]) ?? "", filePath), "utf8") + content;
       } catch {}
     }
     return {
@@ -203,12 +212,12 @@ const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
     const slug = skillFromPath(str(member(args, "Path")) ?? "");
     if (slug === "") return undefined;
     const assistant =
-      str(raw["lastAssistantMessage"]) ??
-      str(raw["assistantMessage"]) ??
-      str(member(call, "message")) ??
+      jsonText(raw["lastAssistantMessage"]) ??
+      jsonText(raw["assistantMessage"]) ??
+      jsonText(member(call, "message")) ??
       "";
-    const user = str(raw["lastUserInput"]) ?? "";
-    const text = planMentions(assistant).length > 0 ? assistant : user;
+    const user = jsonText(raw["lastUserInput"]) ?? "";
+    const text = planMentions(b(assistant)).length > 0 ? assistant : user;
     return {
       ...base,
       tool_name: "Skill",

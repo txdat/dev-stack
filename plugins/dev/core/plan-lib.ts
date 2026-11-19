@@ -77,6 +77,9 @@ export const planNumber = (plan: string): string => {
 /** The stack's log path. */
 export const stackLog = (plan: string): string => `${dirname(plan)}/log`;
 
+/** The stack log line dev-stack autopilot writes; approve requires it. */
+export const AUTOPILOT_LINE = "stack: autopilot";
+
 /** awk's default field splitting. */
 const fields = (line: string): string[] => line.split(/[ \t\n]+/).filter((f) => f !== "");
 
@@ -507,6 +510,15 @@ export class PlanLib {
     const prefix = `pr${planNumber(plan)}: `;
     const rows = rowsOf(text);
     return rows.filter((r) => r.startsWith(prefix)).map((r) => r.slice(prefix.length));
+  }
+
+  /**
+   * Whether autopilot claimed plan's stack with dev-stack autopilot. The claim is an unprefixed
+   * line, so renumber and drop, which rewrite "pr<N>: " prefixes, keep it.
+   */
+  autopilotStack(plan: string): boolean {
+    const text = readBytes(stackLog(plan));
+    return text !== undefined && rowsOf(text).includes(AUTOPILOT_LINE);
   }
 
   /** What a stop record is bound to; undefined when the plan cannot be hashed. */
