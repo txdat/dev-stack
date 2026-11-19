@@ -63,15 +63,30 @@ export const parseDoc = (text: string, kind: DocKind): Doc => {
   let statusRow = -1;
   let specRow = -1;
   let fenced = false;
+  let inPre = false;
   const seen = new Map<string, number>();
   const dupes: string[] = [];
   for (const [i, row] of rows.entries()) {
-    if (kind === "runbook" && /^[ \t\n\v\f\r]*(```|~~~)/.test(row)) {
-      fenced = !fenced;
-      continue;
+    if (kind === "runbook") {
+      if (/^[ \t\n\v\f\r]*(```|~~~)/.test(row)) {
+        fenced = !fenced;
+        continue;
+      }
+      if (fenced) continue;
+      if (row.startsWith("## ")) break;
+    } else {
+      if (/<h2[ >]/i.test(row)) break;
+      const open = /<pre(?:[ \t>]|$)/i.test(row);
+      const close = /<\/pre>/i.test(row);
+      if (!inPre) {
+        if (open && !close) inPre = true;
+        continue;
+      }
+      if (close) {
+        inPre = false;
+        continue;
+      }
     }
-    if (fenced) continue;
-    if (kind === "runbook" ? row.startsWith("## ") : /<h2[ >]/i.test(row)) break;
     const m = /^([A-Z][A-Za-z ]*):[ \t]*(.*?)[ \t]*\r?$/.exec(row);
     if (!m?.[1]) continue;
     const at = seen.get(m[1]);

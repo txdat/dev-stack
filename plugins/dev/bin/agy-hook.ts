@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
-import { gateCheck, gateIndexed, isPhaseCall, skillSlug } from "../core/gate-check.ts";
+import { gateCheck, gateIndexed, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
 import { PlanLib, planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
@@ -94,11 +94,6 @@ const isOrchestratorInput = (text: string): boolean =>
   /^[ \t\n\v\f\r]*\/?(?:skill:(?:dev[:-])?|dev[:-])?(?:autopilot|run-stack)(?:[^a-z0-9_-]|$)/i.test(
     text.replace(/_/g, "-"),
   );
-
-/** Whether `text` names `slug` as a phase (either as a slash/prefix command or a standalone word). */
-const namesPhase = (text: string, slug: string): boolean =>
-  skillSlug(text) === slug ||
-  new RegExp(`(^|[^a-z0-9_-])${slug}([^a-z0-9_-]|$)`, "i").test(text.replace(/_/g, "-"));
 
 const PHASE_ENTRY_STATUSES: Record<string, readonly string[]> = {
   "review-feature": ["planning", "needs-changes", "ready"],
@@ -292,15 +287,18 @@ const run = (raw: HookInput): void => {
     const verdict = gateCheck(mapped, ctx);
     if (verdict && "block" in verdict) {
       const skill = str(member(mapped["tool_input"], "skill")) ?? "";
-      const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
       const args = str(member(mapped["tool_input"], "arguments")) ?? "";
-      const namedWrongPlan =
-        !isOrchestratorInput(args) && namesPhase(args, slug) && planMentions(args).length > 0;
-      if (isPhaseCall(mapped) && !namedWrongPlan && hasRunnablePlan(skill, ctx)) {
+      const runnable = isPhaseCall(mapped) && hasRunnablePlan(skill, ctx);
+      if (runnable && (isOrchestratorInput(args) || planMentions(args).length === 0)) {
         writeJson({ decision: "allow" });
         return;
       }
-      writeJson({ decision: "deny", reason: utf8(verdict.block) });
+      // A plan the message names blocked the call while another plan can run this phase.
+      const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
+      const hint = runnable
+        ? ` To run ${slug} on a runnable plan, read its SKILL.md in a message that says \`Starting ${slug} on <plan path>\` and names no other plan (skills/run-stack/SKILL.md, step 2).`
+        : "";
+      writeJson({ decision: "deny", reason: utf8(verdict.block) + hint });
       return;
     }
     writeJson({ decision: "allow" });

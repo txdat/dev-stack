@@ -12,6 +12,23 @@ const SERIAL_FLAG: readonly (readonly [string, string])[] = [
   ["vitest", "--no-file-parallelism"],
 ];
 
+/** Shell executables whose `-c` (or combined short flag ending in `c`) runs a command string. */
+const SHELL_WRAPPERS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
+
+/** Shell keywords and prefixes that precede a command in the same segment. */
+const SHELL_PREFIXES = new Set([
+  "!",
+  "if",
+  "then",
+  "elif",
+  "else",
+  "do",
+  "while",
+  "until",
+  "coproc",
+  "{",
+]);
+
 /** Wrapper commands and subcommands that precede a runner in command position. */
 const WRAPPERS = new Set([
   "npx",
@@ -31,24 +48,39 @@ const WRAPPERS = new Set([
   "command",
   "nohup",
   "sudo",
-  "bash",
-  "sh",
+  ...SHELL_WRAPPERS,
 ]);
 
-/** Wrapper flags that consume the next token as their argument. */
-const FLAG_WITH_ARG = new Set([
-  "-c",
+/** Wrapper flags that consume the next token as their argument across wrappers. */
+const COMMON_FLAGS_WITH_ARG = new Set([
   "-C",
   "--cwd",
   "--dir",
   "--filter",
+  "-F",
   "--prefix",
   "--workspace",
-  "-w",
   "-u",
   "-p",
   "--package",
+  "--require",
+  "--import",
+  "--signal",
 ]);
+
+/**
+ * Flags that consume the next token only for specific wrappers (e.g. `pnpm -r`/`-w` are boolean).
+ * A package manager's entry also applies after its subcommands, as in `npm exec -w <pkg>`.
+ */
+const WRAPPER_FLAGS_WITH_ARG: Readonly<Record<string, ReadonlySet<string>>> = {
+  npm: new Set(["-w"]),
+  npx: new Set(["-w"]),
+  node: new Set(["-r"]),
+  timeout: new Set(["-k", "-s"]),
+};
+
+/** Package managers whose flags stay in effect after their subcommands (`exec`, `run`, `dlx`). */
+const PACKAGE_MANAGERS = new Set(["npm", "npx", "pnpm", "pnpx", "yarn", "bun", "bunx"]);
 
 /** A word: not preceded or followed by a letter, digit, _, or -. */
 const hasWord = (cmd: string, word: string): boolean =>
@@ -89,11 +121,19 @@ const splitSegments = (cmd: string): string[] => {
       cur = "";
       continue;
     }
-    if (ch === "&" && flat[i + 1] === "&") {
-      if (cur.trim() !== "") segments.push(cur);
-      cur = "";
-      i++;
-      continue;
+    if (ch === "&") {
+      if (flat[i + 1] === "&") {
+        if (cur.trim() !== "") segments.push(cur);
+        cur = "";
+        i++;
+        continue;
+      }
+      // Split standalone background `&`, keeping redirections such as `2>&1`, `>&2`, and `&>`.
+      if (flat[i - 1] !== ">" && flat[i + 1] !== ">") {
+        if (cur.trim() !== "") segments.push(cur);
+        cur = "";
+        continue;
+      }
     }
     cur += ch;
   }
@@ -133,13 +173,19 @@ const tokenize = (segment: string): string[] => {
   return tokens;
 };
 
-/** Whether token invokes `runner`: bare, `runner@ver`, or a path ending in `/runner(.js|.mjs|.cjs)?`. */
+/** Whether token invokes `runner`: bare, `runner@ver`, or a path ending in `/runner(.js|.mjs|.cjs|.ts)?`. */
 const matchesRunner = (token: string, runner: string): boolean => {
   const clean = unquote(token);
   const slash = clean.lastIndexOf("/");
   const base = slash >= 0 ? clean.slice(slash + 1) : clean;
-  return new RegExp(`^${runner}(?:@[^/\\s]+|\\.(?:[cm]?js|ts))?$`, "i").test(base);
+  return new RegExp(`^${runner}(?:@[^/ \\t\\n\\v\\f\\r]+|\\.(?:[cm]?js|ts))?$`, "i").test(base);
 };
+
+/** Whether token starts a redirection: `<`, `>`, or `&>`, optionally after a file descriptor. */
+const REDIR_START = /^(?:[0-9]*[<>]|&>)/;
+
+/** Whether token is a standalone redirection operator whose target is the next token. */
+const REDIR_OP = /^(?:[0-9]*(?:<<<|<<?-?|>>?|<>|>&|<&)|&>>?)$/;
 
 /**
  * Checks one shell command string (recursing into `sh -c` / `bash -c` arguments) and returns the
@@ -150,33 +196,66 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
   for (const seg of splitSegments(cmd)) {
     const tokens = tokenize(seg);
     let i = 0;
+    let wrapper = "";
+    let pm = "";
     let inShell = false;
+    let inTimeout = false;
     while (i < tokens.length) {
       const raw = tokens[i] as string;
       const tok = unquote(raw);
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok)) {
+      if (
+        /^[A-Za-z_][A-Za-z0-9_]*=/.test(tok) ||
+        tok === "--" ||
+        (wrapper === "" && SHELL_PREFIXES.has(tok))
+      ) {
         i++;
         continue;
       }
-      if (tok === "--") {
-        i++;
+      // Skip leading redirections (both `</dev/null` and `< /dev/null`) before the command.
+      if (wrapper === "" && REDIR_START.test(raw)) {
+        i += REDIR_OP.test(raw) && i + 1 < tokens.length ? 2 : 1;
         continue;
       }
-      if (inShell && tok === "-c" && i + 1 < tokens.length) {
+      if (inShell && /^-[A-Za-z]*c$/.test(tok) && i + 1 < tokens.length) {
         const inner = checkCommand(unquote(tokens[i + 1] as string), depth + 1);
         if (inner !== undefined) return inner;
         break;
       }
-      if (WRAPPERS.has(tok)) {
-        inShell = tok === "bash" || tok === "sh";
+      // `-o opt`, `+o opt`, and clusters ending in them, such as `-euo pipefail`; bash's `-O opt`
+      // too (zsh's `-O` is a boolean option).
+      if (
+        inShell &&
+        (/^[-+][A-Za-z]*o$/.test(tok) || (wrapper === "bash" && /^[-+][A-Za-z]*O$/.test(tok)))
+      ) {
+        i += i + 1 < tokens.length ? 2 : 1;
+        continue;
+      }
+      if (wrapper === "yarn" && tok === "workspace" && i + 1 < tokens.length) {
+        i += 2;
+        continue;
+      }
+      if (inTimeout && /^[0-9]/.test(tok)) {
+        inTimeout = false;
         i++;
-        if (tok === "timeout" && i < tokens.length && /^[0-9]/.test(unquote(tokens[i] as string)))
-          i++;
+        continue;
+      }
+      if (WRAPPERS.has(tok)) {
+        wrapper = tok;
+        if (PACKAGE_MANAGERS.has(tok)) pm = tok;
+        inShell = SHELL_WRAPPERS.has(tok);
+        inTimeout = tok === "timeout";
+        i++;
         continue;
       }
       if (tok.startsWith("-")) {
         i++;
-        if (FLAG_WITH_ARG.has(tok) && i < tokens.length) i++;
+        if (
+          (COMMON_FLAGS_WITH_ARG.has(tok) ||
+            WRAPPER_FLAGS_WITH_ARG[wrapper]?.has(tok) ||
+            WRAPPER_FLAGS_WITH_ARG[pm]?.has(tok)) &&
+          i < tokens.length
+        )
+          i++;
         continue;
       }
       for (const [runner, flag] of SERIAL_FLAG) {

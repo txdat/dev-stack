@@ -321,7 +321,6 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     [`/dev:run-stack ${spec}`, "review-feature"],
     [`run-stack ${spec}`, "execute-feature"],
     ["autopilot issue 37088", "execute-feature"],
-    [`finished ${spec}, continue with the stack`, "execute-feature"],
   ]) {
     const res = runHook({
       hookEventName: "PreToolUse",
@@ -388,9 +387,14 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
   });
   assert.equal(subagentReviewCodeDeny["decision"], "deny", JSON.stringify(subagentReviewCodeDeny));
 
-  // Explicit wrong-status plan mention (slash command or prose naming the phase) is denied
-  // even when another plan is runnable.
-  for (const input of [`/dev:execute-feature ${spec}`, `please execute-feature on ${spec}`]) {
+  // Explicit wrong-status plan mention (slash command or prose, with or without the phase name)
+  // is denied even when another plan is runnable.
+  for (const input of [
+    `/dev:execute-feature ${spec}`,
+    `please execute-feature on ${spec}`,
+    `implement ${spec}`,
+    `finished ${spec}, continue with the stack`,
+  ]) {
     const explicitDeny = runHook({
       hookEventName: "PreToolUse",
       cwd: dir,
@@ -404,11 +408,25 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     assert.equal(explicitDeny["decision"], "deny", `${input}: ${JSON.stringify(explicitDeny)}`);
   }
 
-  // Assistant message naming a plan takes precedence over lastUserInput.
+  // Assistant message naming a wrong-status plan is denied even without the phase name.
+  const assistantWrongDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "continue with the stack",
+    lastAssistantMessage: `Working on ${spec}`,
+    toolCall: {
+      id: "s8b",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+    },
+  });
+  assert.equal(assistantWrongDeny["decision"], "deny", JSON.stringify(assistantWrongDeny));
+
+  // Assistant message naming a runnable plan takes precedence over lastUserInput.
   const assistantOverride = runHook({
     hookEventName: "PreToolUse",
     cwd: dir,
-    lastUserInput: `/dev:execute-feature ${spec}`,
+    lastUserInput: `finished ${spec}, continue with the stack`,
     lastAssistantMessage: `Starting execute-feature on ${pr2}`,
     toolCall: {
       id: "s9",
@@ -417,6 +435,25 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     },
   });
   assert.equal(assistantOverride["decision"], "allow", JSON.stringify(assistantOverride));
+
+  // Under an orchestrator, a message naming more than the runnable plan is denied with the
+  // message form that unblocks it.
+  const maskedDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: `/dev:run-stack ${spec}`,
+    lastAssistantMessage: `Reviewed ${spec}; next ${pr2}`,
+    toolCall: {
+      id: "s9b",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+    },
+  });
+  assert.equal(maskedDeny["decision"], "deny", JSON.stringify(maskedDeny));
+  assert.match(
+    String(maskedDeny["reason"]),
+    /`Starting execute-feature on <plan path>` and names no other plan/,
+  );
 
   // A current ready plan awaiting approval does not unlock review-feature, while a stale ready
   // plan (edited after review) does.
@@ -520,6 +557,13 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   for (const orch of ["autopilot", "run-stack"]) {
     const text = read(path.join(out, `skills/${orch}/SKILL.md`));
     assert.match(text, /^## Antigravity Delegation \(`swarm` default\)$/m, orch);
+    assert.doesNotMatch(text, /\(not `swarm`\)/, orch);
+    assert.match(
+      text,
+      /The main agent never messages or kills a worker a `reviewer` started/,
+      orch,
+    );
+    assert.match(text, /for a `reviewer`, the child-subagent permission above\./, orch);
   }
 
   const agent = read(path.join(out, "agents/planner.md"));

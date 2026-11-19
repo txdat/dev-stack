@@ -34,15 +34,17 @@ plugins/dev/                      the plugin's sources; their build ships alone
   agents/<name>.md                subagents (Claude); Pi's main agent reads them directly
   rules/                          CORE.md, CODING.md, plan.md, frontend-design.md
   core/                           the workflow logic: plans, stacks, gates (Node APIs, synchronous)
-  bin/                            CLIs over core (`bun --no-env-file --config=/dev/null $DEV_LIB/bin/<name>.js` once built); bin/hook.ts is the gate
+  bin/                            CLIs over core (`bun --no-env-file --config=/dev/null $DEV_LIB/bin/<name>.js` once built); bin/hook.ts and bin/agy-hook.ts are the gates
   hooks/                          Claude Code plugin module (no Node): rules, and gates and commands
                                   that run bin/ through $.process.run; commands.ts, the rules text
                                   and /dev-stack-* commands the other adapters share
+  agy/                            Antigravity hook manifest (hooks.json) wired to bin/agy-hook.js
   pi/                             Pi extension: rules, gates, and commands, calling core in-process
   dsh/                            DSH Host plugin: rules, skills, commands, and gates, calling core in-process
-scripts/build.ts                  compiles plugins/dev into dist/dev and copies its rules, skills, agents,
-                                  and manifests beside the output
-dist/dev/                         the built plugin every harness loads (gitignored)
+scripts/build.ts                  compiles plugins/dev into dist/dev and dist/dev-agy and copies its
+                                  rules, skills, agents, and manifests beside each output
+dist/dev/, dist/dev-agy/          the built plugins: dist/dev (Claude Code, Pi, DSH) and dist/dev-agy
+                                  (Antigravity), gitignored
 test/                             bun test suites
 ```
 
