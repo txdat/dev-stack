@@ -5,7 +5,7 @@ model: opus
 effort: medium
 ---
 
-# /review-feature — Try to Break the Plan
+# /review-feature — Break the Plan
 
 Review a `planning` plan independently under [plan.md — Review](../../rules/plan.md#review), against the rules in [design-feature.md](../design-feature/SKILL.md). The goal is to find what would make a correct-looking plan deliver the wrong thing.
 

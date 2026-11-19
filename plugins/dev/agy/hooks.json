@@ -29,6 +29,12 @@
           }
         ]
       }
+    ],
+    "PostInvocation": [
+      {
+        "type": "command",
+        "command": "bun --no-env-file --config=/dev/null ./bin/agy-hook.js"
+      }
     ]
   }
 }

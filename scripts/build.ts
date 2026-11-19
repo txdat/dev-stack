@@ -18,10 +18,23 @@ const CLAUDE_COPY = [".claude-plugin/plugin.json", "hooks/hooks.json"];
 const MARK = ".dev-stack-build";
 
 const AGY_MODELS: Record<string, string> = {
-  haiku: "flash", // "gemini-4-hydrogen",
-  sonnet: "flash", // "gemini-4-hydrogen",
-  opus: "pro", // "gemini-4-argon",
+  haiku: "gemini-4-hydrogen",
+  sonnet: "gemini-4-hydrogen",
+  opus: "gemini-4-neon",
 };
+
+const ORCHESTRATOR_SKILLS = new Set(["autopilot", "run-stack"]);
+
+const AGY_SWARM_DELEGATION = `## Antigravity Delegation (\`swarm\` default)
+
+Use \`swarm\` by default whenever this skill delegates to a subagent (\`planner\`, \`executor\`, \`reviewer\`, \`inspector\`); fall back to \`invoke_subagent\` only when \`swarm\` is unavailable or the user asks not to use it.
+
+- Spawn each delegated role with \`swarm(action="add", name=<role-or-step>, model=<phase skill model>, workspace="inherit", brief=<...>)\`:
+  - Pass the exact \`model:\` from the delegated phase skill's \`SKILL.md\` frontmatter (such as \`gemini-4-neon-medium\` for \`design-feature\`/\`review-feature\`, \`gemini-4-hydrogen-high\` for \`execute-feature\`/\`review-code\`/\`review-change\`).
+  - Use \`workspace: "inherit"\` for all workers, since \`dev-worktree.js\` already isolates each plan or direct-edit branch in its own worktree under \`~/wt/\`; \`executor\` works directly in the worktree path the main agent passes.
+  - A \`reviewer\` worker may start at most one level of child subagents (three levels in total from the main agent: main agent → \`reviewer\` → child); use \`invoke_subagent\` (not \`swarm\`) for those child passes and candidate verifiers so they stay isolated from the main swarm board, and tell each child subagent it must not start further subagents ([plan.md — Review](../../rules/plan.md#review)).
+- Because \`swarm\` workers start fresh without conversation history, put the full handoff in \`brief\`: the agent file (\`$DEV_LIB/agents/<role>.md\`), the phase skill path (\`$DEV_LIB/skills/<phase>/SKILL.md\`), [CODING.md](../../rules/CODING.md) (\`$DEV_LIB/rules/CODING.md\`), inputs, exclusive files, delegated commits, off-limits actions, and expected return.
+- Keep \`planner\` and \`reviewer\` workers alive across rounds (message them on the board instead of killing and re-adding them); \`kill\` workers only after their work lands or the run ends.`;
 
 // Antigravity's native tool for each Claude Code grant, as its plugin import maps them. A grant with
 // no native tool, such as Skill, is dropped: agy surfaces a skill as a read of its SKILL.md.
@@ -33,6 +46,7 @@ const AGY_TOOLS: Record<string, readonly string[]> = {
   MultiEdit: ["edit_file"],
   Write: ["write_file"],
   Bash: ["run_command", "manage_task"],
+  Agent: ["invoke_subagent", "send_message", "manage_subagents", "swarm"],
   WebSearch: ["search_web"],
   WebFetch: ["search_web"],
 };
@@ -97,6 +111,19 @@ const target = (arg: string): { out: string } | { refuse: string } => {
 };
 
 /** Rewrites frontmatter in `work` for Antigravity: skill models, agent tool lists, rule triggers. */
+const adaptSkill = (name: string, text: string): string => {
+  const effort = text.match(/^effort:\s*(\S+)\s*$/m)?.[1];
+  let next = text.replace(/^model:\s*(\S+)\s*$/m, (line, m: string) => {
+    const base = AGY_MODELS[m];
+    if (!base) return line;
+    return `model: ${effort ? `${base}-${effort}` : base}`;
+  });
+  if (ORCHESTRATOR_SKILLS.has(name)) {
+    next = next.replace(/^(# \/[^\n]+\n)/m, `$1\n${AGY_SWARM_DELEGATION}\n`);
+  }
+  return next;
+};
+
 const adaptForAgy = (work: string): void => {
   const skillsDir = path.join(work, "skills");
   for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
@@ -104,9 +131,7 @@ const adaptForAgy = (work: string): void => {
     const file = path.join(skillsDir, entry.name, "SKILL.md");
     if (!fs.existsSync(file)) continue;
     const text = fs.readFileSync(file, "utf8");
-    const next = text.replace(/^model:\s*(\S+)\s*$/m, (line, m: string) =>
-      AGY_MODELS[m] ? `model: ${AGY_MODELS[m]}` : line,
-    );
+    const next = adaptSkill(entry.name, text);
     if (next !== text) fs.writeFileSync(file, next);
   }
 

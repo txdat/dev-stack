@@ -41,7 +41,7 @@ export type GateResult = { block: string } | { postBlock: string } | undefined;
 const EM = b("—");
 const ARROW = b("→");
 const SLUG_RE =
-  "create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explore|fix-bug|review-code|review-feature|review-infra|review-system";
+  "autopilot|create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explore|fix-bug|handoff|recap|review-change|review-code|review-feature|review-infra|review-system|run-stack|split-pr-atomic";
 
 /**
  * The dev phase a skill name or slash command names; "" for none. Only this plugin's forms name
@@ -644,7 +644,7 @@ class Gate {
     const s = this.status;
     if (s === "planning")
       block(
-        `Plan status is 'planning' ${EM} not approved. Run review-feature; then the user sets 'Status: approved', or dev-autopilot 'auto-approved'.`,
+        `Plan status is 'planning' ${EM} not approved. Run review-feature; then the user sets 'Status: approved', or autopilot 'auto-approved'.`,
       );
     if (s === "needs-changes")
       block(
@@ -652,7 +652,7 @@ class Gate {
       );
     if (s === "ready")
       block(
-        `Plan status is 'ready' ${EM} awaiting approval: the user sets 'Status: approved', or dev-autopilot 'auto-approved'.`,
+        `Plan status is 'ready' ${EM} awaiting approval: the user sets 'Status: approved', or autopilot 'auto-approved'.`,
       );
     if (s === "implemented") block("Plan is already implemented. Run review-code next.");
     if (s === "reviewed") block("Plan is already reviewed. Run create-pr next.");

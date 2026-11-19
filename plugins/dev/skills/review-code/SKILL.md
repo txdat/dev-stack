@@ -1,7 +1,7 @@
 ---
 name: review-code
 description: "Independently review an implemented plan for TDD proof, test results, correctness, security, scope, and hygiene, and return the verdict the main agent records."
-model: haiku
+model: sonnet
 effort: high
 ---
 
@@ -18,7 +18,7 @@ A re-review covers only what [plan.md — Review](../../rules/plan.md#review) li
 - Compare each test with its approved TC: fixture, distinguishing conditions, action, and expected result, which you check against the contract yourself. Apply the assertion rules in [plan.md — Verification](../../rules/plan.md#verification), and check each proof and `test(update)` commit with `dev-check.js proof`, reading the diff of each `--test` path for non-test changes; every TC has its test in one of them, except under plan.md — Verification's `Type: config` rule. Check that the reported result of each TC's test was taken where plan.md — Verification requires it; without a report, report each such TC as an `asserted` finding that names the run at that commit which would settle it.
 - Passing tests do not override a violated obligation. Code that departs from an AC, TC, step, or DD blocks; a needed spec change follows [plan.md — Changes](../../rules/plan.md#changes).
 - Check rationale under [plan.md — Rationale](../../rules/plan.md#rationale). An ID of this plan that the diff adds to code, tests, or commit messages, a missing comment for an invariant a DD's `Why:` states, or a missing decision record that plan.md — Rationale requires, is `located` and blocks. A missing commit body is a note, since [plan.md — Worktree](../../rules/plan.md#worktree) forbids rewriting the Branch.
-- Try to break the behavior, not only confirm it. Prove each runtime-behavior finding, including an AC violation, with a run: in the round's scratch, or, for a review-only request, an existing command with crafted inputs that changes no file or shared state. Give the command, its output, the output the contract requires, and the repro. Label each finding `ran`, `traced` (failure walked through cited code), `located` (cited `file:line`), or `asserted`; an `asserted` finding names the run that would settle it and never blocks. A step, DD, or TC departure visible in the plan or diff is `located`.
+- Break the behavior, not only confirm it. Prove each runtime-behavior finding, including an AC violation, with a run: in the round's scratch, or, for a review-only request, an existing command with crafted inputs that changes no file or shared state. Give the command, its output, the output the contract requires, and the repro. Label each finding `ran`, `traced` (failure walked through cited code), `located` (cited `file:line`), or `asserted`; an `asserted` finding names the run that would settle it and never blocks. A step, DD, or TC departure visible in the plan or diff is `located`.
 
 ## Affected paths
 

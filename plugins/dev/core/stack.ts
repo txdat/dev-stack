@@ -47,7 +47,7 @@ const USAGE = [
   "stack's log why run-stack stopped a plan; it holds until the plan changes",
   'or resume clears it, and a round limit or one citing "Failed fixes: <n>/<limit>"',
   "with n at or past the limit holds until resume. Only the user runs resume and reopen.",
-  "auto-reopen, dev-autopilot's reopen, returns plans to planning as reopen does when",
+  "auto-reopen, autopilot's reopen, returns plans to planning as reopen does when",
   "the approval of each is auto-approved, once per plan; it clears no stop: the",
   "Status change ends ordinary stops, and it refuses a held stop.",
   "renumber renames unapproved plans never executed, with the Stacks On lines",
@@ -638,7 +638,7 @@ class Stack {
             reason = `${parent} must be approved or auto-approved first`;
           } else if (state === "ready" && status === "ready") {
             action = "wait-user";
-            reason = `review-feature ready (${rounds}); the user approves it, or dev-autopilot auto-approves it`;
+            reason = `review-feature ready (${rounds}); the user approves it, or autopilot auto-approves it`;
           } else if (state === "needs-changes") {
             action = "revise";
             reason = `review-feature needs-changes (${rounds}); revise it (${revise}), then review it again`;

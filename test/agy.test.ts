@@ -273,6 +273,7 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     [`/dev:run-stack ${spec}`, "review-feature"],
     [`run-stack ${spec}`, "execute-feature"],
     ["autopilot issue 37088", "execute-feature"],
+    [`finished ${spec}, continue with the stack`, "execute-feature"],
   ]) {
     const res = runHook({
       hookEventName: "PreToolUse",
@@ -339,28 +340,81 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
   });
   assert.equal(subagentReviewCodeDeny["decision"], "deny", JSON.stringify(subagentReviewCodeDeny));
 
-  // Explicit wrong-status plan mention is still denied even if another plan is runnable.
-  const explicitDeny = runHook({
+  // Explicit wrong-status plan mention (slash command or prose naming the phase) is denied
+  // even when another plan is runnable.
+  for (const input of [`/dev:execute-feature ${spec}`, `please execute-feature on ${spec}`]) {
+    const explicitDeny = runHook({
+      hookEventName: "PreToolUse",
+      cwd: dir,
+      lastUserInput: input,
+      toolCall: {
+        id: "s8",
+        name: "read_file",
+        args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+      },
+    });
+    assert.equal(explicitDeny["decision"], "deny", `${input}: ${JSON.stringify(explicitDeny)}`);
+  }
+
+  // Assistant message naming a plan takes precedence over lastUserInput.
+  const assistantOverride = runHook({
     hookEventName: "PreToolUse",
     cwd: dir,
     lastUserInput: `/dev:execute-feature ${spec}`,
+    lastAssistantMessage: `Starting execute-feature on ${pr2}`,
     toolCall: {
-      id: "s8",
+      id: "s9",
       name: "read_file",
       args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
     },
   });
-  assert.equal(explicitDeny["decision"], "deny", JSON.stringify(explicitDeny));
+  assert.equal(assistantOverride["decision"], "allow", JSON.stringify(assistantOverride));
+
+  // A current ready plan awaiting approval does not unlock review-feature, while a stale ready
+  // plan (edited after review) does.
+  const readyReview = exec(
+    [...BUN, path.join(PLUGIN, "bin/dev-stack.ts"), "review", spec, "ready"],
+    {
+      cwd: dir,
+    },
+  );
+  assert.equal(readyReview.code, 0, readyReview.all);
+  const currentReadyDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "",
+    toolCall: {
+      id: "s10",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+    },
+  });
+  assert.equal(currentReadyDeny["decision"], "deny", JSON.stringify(currentReadyDeny));
+
+  write(spec, `${read(spec)}\n# edited\n`);
+  const staleReadyAllow = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: "",
+    toolCall: {
+      id: "s11",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/review-feature/SKILL.md") },
+    },
+  });
+  assert.equal(staleReadyAllow["decision"], "allow", JSON.stringify(staleReadyAllow));
 });
 
-test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot", () => {
+test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot and PostInvocation reports it", () => {
   const dir = repo(tmp("dev-agy-post"));
   const spec = path.join(dir, "docs/plans/1_test/pr1.spec.md");
   const original = planText({ Status: "ready", Base: "main", Branch: "p1", PR: "none" });
   write(spec, original);
+  const convId = `conv-${Date.now()}`;
 
   const pre = runHook({
     hookEventName: "PreToolUse",
+    conversationId: convId,
     cwd: dir,
     toolCall: { id: "b1", name: "run_command", args: { CommandLine: "echo tamper" } },
   });
@@ -369,11 +423,29 @@ test("PostToolUse restores unauthorized plan edits from PreToolUse snapshot", ()
   write(spec, planText({ Status: "approved", Base: "main", Branch: "p1", PR: "none" }));
   const post = runHook({
     hookEventName: "PostToolUse",
+    conversationId: convId,
     cwd: dir,
     toolCall: { id: "b1", name: "run_command", args: { CommandLine: "echo tamper" } },
   });
   assert.deepEqual(post, {});
   assert.equal(read(spec), original);
+
+  const postInv = runHook({
+    hookEventName: "PostInvocation",
+    conversationId: convId,
+    cwd: dir,
+  });
+  const steps = postInv["injectSteps"] as Array<{ systemMessage?: { systemMessage?: string } }>;
+  assert.equal(steps?.length, 1);
+  assert.match(steps[0]?.systemMessage?.systemMessage ?? "", /Restored from before the command/);
+
+  // Drained after reporting once.
+  const postInvAgain = runHook({
+    hookEventName: "PostInvocation",
+    conversationId: convId,
+    cwd: dir,
+  });
+  assert.deepEqual(postInvAgain, {});
 });
 
 test("malformed stdin fails open with decision allow", () => {
@@ -391,7 +463,16 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   assert.ok(fs.existsSync(path.join(out, "bin/agy-hook.js")));
 
   const skill = read(path.join(out, "skills/design-feature/SKILL.md"));
-  assert.match(skill, /^model: pro$/m);
+  assert.match(skill, /^model: gemini-4-neon-medium$/m);
+  assert.doesNotMatch(skill, /Antigravity Delegation/);
+
+  const reviewCode = read(path.join(out, "skills/review-code/SKILL.md"));
+  assert.match(reviewCode, /^model: gemini-4-hydrogen-high$/m);
+
+  for (const orch of ["autopilot", "run-stack"]) {
+    const text = read(path.join(out, `skills/${orch}/SKILL.md`));
+    assert.match(text, /^## Antigravity Delegation \(`swarm` default\)$/m, orch);
+  }
 
   const agent = read(path.join(out, "agents/planner.md"));
   assert.match(
@@ -399,6 +480,12 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
     /^tools:\n {2}- read_file\n {2}- run_command\n {2}- manage_task\n {2}- edit_file\n {2}- write_file\nsubagent: true\nmainAgent: false$/m,
   );
   assert.doesNotMatch(agent, /^ {2}- (Read|Grep|Glob|Bash|Skill|Edit|Write)$/m);
+
+  const reviewer = read(path.join(out, "agents/reviewer.md"));
+  assert.match(
+    reviewer,
+    /^tools:\n {2}- read_file\n {2}- run_command\n {2}- manage_task\n {2}- edit_file\n {2}- write_file\n {2}- invoke_subagent\n {2}- send_message\n {2}- manage_subagents\n {2}- swarm\nsubagent: true\nmainAgent: false$/m,
+  );
 
   const rule = read(path.join(out, "rules/CORE.md"));
   assert.ok(rule.startsWith("---\ntrigger: manual\n---\n"));

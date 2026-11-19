@@ -1,6 +1,6 @@
 # dev-stack
 
-A plan-backed development workflow for Claude Code, Pi, and DeepSeek Harness (DSH): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. It ships as one package holding one plugin, `dev`, that each harness installs natively. The sources are TypeScript, type-checked with TypeScript 7 and linted with Biome; `bun run build` compiles them to JavaScript in `dist/dev/`, the plugin every harness loads.
+A plan-backed development workflow for Claude Code, Pi, DeepSeek Harness (DSH), and Antigravity (`agy`): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. It ships as one package holding one plugin, `dev`, that each harness installs natively. The sources are TypeScript, type-checked with TypeScript 7 and linted with Biome; `bun run build` compiles them to JavaScript in `dist/dev/` (Claude Code, Pi, DSH) and `dist/dev-agy/` (Antigravity).
 
 ## Install
 

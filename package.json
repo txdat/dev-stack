@@ -2,7 +2,7 @@
   "name": "dev-stack",
   "private": true,
   "type": "module",
-  "description": "Plan-backed dev workflow for Claude Code, Pi, and DeepSeek Harness: rules, skills, phase gates, and /dev-stack-* commands",
+  "description": "Plan-backed dev workflow for Claude Code, Pi, DeepSeek Harness, and Antigravity: rules, skills, phase gates, and /dev-stack-* commands",
   "engines": {
     "bun": ">=1.4"
   },

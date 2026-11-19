@@ -4,11 +4,12 @@
 // and gateCheck; PostToolUse runs bashPostCheck so unauthorized plan edits are restored.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
-import { gateCheck, gateIndexed, isPhaseCall } from "../core/gate-check.ts";
+import { gateCheck, gateIndexed, isPhaseCall, skillSlug } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
 import { PlanLib, planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
@@ -19,6 +20,43 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const writeJson = (value: unknown): void => {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+};
+
+/** Temporary file holding pending post-check notices for a conversation until PostInvocation. */
+const noticeFile = (conversationId: string): string | undefined => {
+  if (conversationId === "") return undefined;
+  const safe = conversationId.replace(/[^A-Za-z0-9_-]/g, "_");
+  const uid = process.getuid?.() ?? 0;
+  const dir = path.join(
+    process.env["XDG_RUNTIME_DIR"] || process.env["TMPDIR"] || os.tmpdir(),
+    `dev-agy-notices-${uid}`,
+  );
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    return path.join(dir, `${safe}.txt`);
+  } catch {
+    return undefined;
+  }
+};
+
+const pushNotice = (conversationId: string, text: string): void => {
+  const file = noticeFile(conversationId);
+  if (!file) return;
+  try {
+    fs.appendFileSync(file, `${text}\n\n`, "utf8");
+  } catch {}
+};
+
+const drainNotices = (conversationId: string): string => {
+  const file = noticeFile(conversationId);
+  if (!file || !fs.existsSync(file)) return "";
+  try {
+    const text = fs.readFileSync(file, "utf8").trim();
+    fs.rmSync(file, { force: true });
+    return text;
+  } catch {
+    return "";
+  }
 };
 
 const pluginRoot = (env: Record<string, string | undefined>): string =>
@@ -51,14 +89,19 @@ const skillFromPath = (filePath: string): string => {
   return m?.[1] ?? "";
 };
 
-/** Whether `lastUserInput` invokes an orchestrator (`autopilot` or `run-stack`). */
-const isOrchestratorInput = (lastUserInput: string): boolean =>
+/** Whether `text` invokes an orchestrator (`autopilot` or `run-stack`). */
+const isOrchestratorInput = (text: string): boolean =>
   /^[ \t\n\v\f\r]*\/?(?:skill:(?:dev[:-])?|dev[:-])?(?:autopilot|run-stack)(?:[^a-z0-9_-]|$)/i.test(
-    lastUserInput.replace(/_/g, "-"),
+    text.replace(/_/g, "-"),
   );
 
+/** Whether `text` names `slug` as a phase (either as a slash/prefix command or a standalone word). */
+const namesPhase = (text: string, slug: string): boolean =>
+  skillSlug(text) === slug ||
+  new RegExp(`(^|[^a-z0-9_-])${slug}([^a-z0-9_-]|$)`, "i").test(text.replace(/_/g, "-"));
+
 const PHASE_ENTRY_STATUSES: Record<string, readonly string[]> = {
-  "review-feature": ["planning", "needs-changes"],
+  "review-feature": ["planning", "needs-changes", "ready"],
   "execute-feature": ["approved", "auto-approved"],
   "review-code": ["implemented"],
   "create-pr": ["reviewed"],
@@ -66,9 +109,8 @@ const PHASE_ENTRY_STATUSES: Record<string, readonly string[]> = {
 
 /**
  * Checks whether any plan in the main root's `docs/plans/` passes `gateIndexed` for `skill`.
- * Used when `read_file` on a gated `SKILL.md` runs under an orchestrator (`autopilot`,
- * `run-stack`), inside a subagent (where `lastUserInput` does not carry the subagent's prompt
- * or plan path), or after a non-slash resume reply.
+ * A `Status: ready` plan counts as runnable for `review-feature` only when its review is stale
+ * (not current `ready`), so a plan awaiting user approval does not permanently unlock the gate.
  */
 const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): boolean => {
   const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
@@ -97,11 +139,14 @@ const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): b
     for (const entry of entries) {
       if (!entry.isFile() || !/^pr[1-9][0-9]*\.spec\.md$/.test(entry.name)) continue;
       const planPath = path.join(stackDir, entry.name);
-      if (!allowedStatuses.includes(lib.status(planPath))) continue;
+      const status = lib.status(planPath);
+      if (!allowedStatuses.includes(status)) continue;
       if (!indexed.has(stackDir)) {
         lib.indexStack(planPath);
         indexed.add(stackDir);
       }
+      if (slug === "review-feature" && status === "ready" && lib.reviewState(planPath) === "ready")
+        continue;
       if (gateIndexed(slug, planPath, lib) === undefined) return true;
     }
   }
@@ -157,12 +202,19 @@ const toHookInput = (raw: HookInput, event: string): HookInput | undefined => {
   if (name === "read_file") {
     const slug = skillFromPath(str(member(args, "Path")) ?? "");
     if (slug === "") return undefined;
+    const assistant =
+      str(raw["lastAssistantMessage"]) ??
+      str(raw["assistantMessage"]) ??
+      str(member(call, "message")) ??
+      "";
+    const user = str(raw["lastUserInput"]) ?? "";
+    const text = planMentions(assistant).length > 0 ? assistant : user;
     return {
       ...base,
       tool_name: "Skill",
       tool_input: {
         skill: `dev:${slug}`,
-        arguments: str(raw["lastUserInput"]) ?? "",
+        arguments: text,
       },
     };
   }
@@ -180,11 +232,35 @@ const run = (raw: HookInput): void => {
     return;
   }
 
+  const conversationId = str(raw["conversationId"]) ?? "";
+  if (event === "PostInvocation") {
+    const notice = drainNotices(conversationId);
+    writeJson(
+      notice === ""
+        ? {}
+        : {
+            injectSteps: [
+              {
+                systemMessage: {
+                  systemMessage: `[dev] ${notice}`,
+                },
+              },
+            ],
+          },
+    );
+    return;
+  }
+
   const mapped = toHookInput(raw, event);
   if (event === "PostToolUse") {
     if (mapped !== undefined) {
       try {
-        gateCheck(mapped, ctx);
+        const result = gateCheck(mapped, ctx);
+        if (result && "postBlock" in result) {
+          const text = utf8(result.postBlock);
+          pushNotice(conversationId, text);
+          process.stderr.write(`[dev] ${text}\n`);
+        }
       } catch (e) {
         process.stderr.write(`agy-hook.js: ${e instanceof Error ? e.message : String(e)}\n`);
       }
@@ -207,12 +283,11 @@ const run = (raw: HookInput): void => {
     const verdict = gateCheck(mapped, ctx);
     if (verdict && "block" in verdict) {
       const skill = str(member(mapped["tool_input"], "skill")) ?? "";
+      const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
       const args = str(member(mapped["tool_input"], "arguments")) ?? "";
-      if (
-        isPhaseCall(mapped) &&
-        (isOrchestratorInput(args) || planMentions(args).length === 0) &&
-        hasRunnablePlan(skill, ctx)
-      ) {
+      const namedWrongPlan =
+        !isOrchestratorInput(args) && namesPhase(args, slug) && planMentions(args).length > 0;
+      if (isPhaseCall(mapped) && !namedWrongPlan && hasRunnablePlan(skill, ctx)) {
         writeJson({ decision: "allow" });
         return;
       }

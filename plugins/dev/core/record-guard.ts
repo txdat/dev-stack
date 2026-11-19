@@ -212,7 +212,7 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
     block(`Plan ${real} is published; no phase resumes or edits it (rules/plan.md#sequence).`);
   if (newStatus === "approved" && oldStatus !== "approved")
     block(
-      "Only the user sets 'Status: approved' (rules/plan.md#sequence). Under dev-autopilot, run-stack --auto-approve runs dev-stack.js approve, which sets auto-approved.",
+      "Only the user sets 'Status: approved' (rules/plan.md#sequence). Under autopilot, run-stack --auto-approve runs dev-stack.js approve, which sets auto-approved.",
     );
   if (newStatus === "auto-approved" && oldStatus !== "auto-approved")
     block(

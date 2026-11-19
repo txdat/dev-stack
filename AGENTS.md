@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## What this repository is
 
-The `dev` plugin for Claude Code, Pi, and DeepSeek Harness (DSH): rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
+The `dev` plugin for Claude Code, Pi, DeepSeek Harness (DSH), and Antigravity: rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
 
 Edits to this repository are direct edits, not plan-backed work. See [plan.md — Scope](plugins/dev/rules/plan.md#scope).
 
@@ -13,7 +13,7 @@ Edits to this repository are direct edits, not plan-backed work. See [plan.md �
 - **Each policy has one owner.** Each file owns the policy it states. Other files link to it as `[file — Section](path#anchor)` instead of paraphrasing it. A copied rule drifts from its source. Before adding a rule, find the file that already owns that topic and edit it there.
 - **Links resolve from the source file's directory.** Files under `plugins/dev/` ship as their build, `dist/dev/`, which loads without the rest of the checkout, so their links must resolve inside `dist/dev/`. There, CLIs and modules are `.js`: rules, skills, agents, manifests, and user-facing messages name `bin/<name>.js`, never the `.ts` source.
 - **Headings and paths are load-bearing.** Before renaming a heading, a file, or a `bin/` CLI, grep for links in `plugins/dev/` (agents cite anchors such as `CORE.md#work`) and for anchors and paths in `core/` block messages (they cite anchors such as `rules/plan.md#schema`).
-- **Rules must be harness-neutral.** Claude Code, Pi, and DSH read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool", "where the harness has one".
+- **Rules must be harness-neutral.** Claude Code, Pi, DSH, and Antigravity read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool", "where the harness has one".
 - **Style:** terse, declarative, and imperative, without filler or rigid templates. Word choice follows [Wording](#wording).
 - **Skill files** start with frontmatter (`name`, `description`, and optional `model` and `effort`), then `# /<name> — <summary>`, and stay short. Agent files carry `name`, `description`, and `tools`.
 

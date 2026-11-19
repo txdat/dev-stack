@@ -6,13 +6,13 @@ This file is guidance for UI work. The agent doing the work decides how to apply
 
 - Use the project's existing design system, components, layout grid, and density. When the project has none but depends on a component library, build with that library before writing new components.
 - Before designing a new view, read the project's existing screens.
-- For a new view, or a change the existing screens do not already decide, establish with the user, where the existing screens and the requirement leave them open, the audience, the primary task, the information hierarchy, and any material visual direction. Under autopilot, decide them under [autopilot.md — Decisions](../skills/autopilot/SKILL.md#decisions).
+- For a new view, or a change the existing screens do not already decide, pick the audience, the primary task, the information hierarchy, and any material visual direction from the existing screens and the requirement; ask the user only when a material product choice is open and blocks the work. Under autopilot, decide open choices under [autopilot.md — Decisions](../skills/autopilot/SKILL.md#decisions).
 - For each new view, name its mode, which sets how far the design goes beyond the platform's conventions:
   - **Operate**, such as an app screen, dashboard, or settings: standard controls and navigation, and accent color only on the primary action, links, selection, and state;
   - **Read**, such as documentation or an article: body text at least 16 px on the web;
   - **Persuade**, such as a landing or marketing page: palette, type, and composition may carry the brand.
 - When the project has no design system, the visual direction includes a palette (neutrals, one accent color, and colors for error, warning, and success), type roles such as heading, body, and label, a spacing scale, at most two font families, and a layout grid.
-- In plan-backed work, design-feature records these decisions, including each view's mode, as DDs. In a direct edit, the main agent reports them with its result.
+- In plan-backed work, design-feature records material visual choices that the requirement, the user, or autopilot establishes — including a new view's mode — as DDs. In a direct edit, the main agent reports any material visual choices with its result.
 
 ## States
 
@@ -33,7 +33,7 @@ This file is guidance for UI work. The agent doing the work decides how to apply
 
 ## Visual
 
-- Take sizes, colors, spacing, radii, and shadows from the design system or the recorded direction, never a one-off value.
+- Take sizes, colors, spacing, radii, and shadows from the design system or the chosen direction, never a one-off value.
 - Make the content the information hierarchy ranks first the most prominent in its view. Give each form or dialog at most one primary action.
 - Make space between groups larger than space within a group, and space above a heading larger than below it.
 - Use borders, dividers, shadows, and gradients to mark grouping, boundary, order, or state, never as decoration alone.

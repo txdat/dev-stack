@@ -28,8 +28,13 @@ const CASES: [want: "deny" | "pass", command: string][] = [
   ["deny", "jest -i"],
   ["deny", "jest --runInBandX"],
   ["deny", "npx jest@29 src"],
-  ["deny", "cat jest.config.js"],
-  ["deny", "grep -r jest src"],
+  ["deny", 'bash -c "jest"'],
+  ["deny", "NODE_ENV=test pnpm --filter web exec jest src/a.test.ts"],
+  // Non-execution mentions pass.
+  ["pass", "cat jest.config.js"],
+  ["pass", "grep -r jest src"],
+  ["pass", 'git commit -m "fix jest timeout"'],
+  ["pass", "npm i -D jest"],
   // Names jest with --runInBand.
   ["pass", "jest --runInBand"],
   ["pass", "npx jest --runInBand src/a.test.ts"],
@@ -56,7 +61,10 @@ const CASES: [want: "deny" | "pass", command: string][] = [
   ["deny", "vitest run --no-file-parallelismX"],
   ["deny", "vitest run --runInBand"],
   ["deny", "npx vitest@3 run"],
-  ["deny", "cat vitest.config.ts"],
+  ["deny", 'sh -c "vitest run"'],
+  ["pass", "cat vitest.config.ts"],
+  ["pass", "git diff -- vitest.config.ts"],
+  ["pass", "pnpm add -D vitest"],
   // Names vitest with --no-file-parallelism.
   ["pass", "vitest run --no-file-parallelism"],
   ["pass", "npx vitest --no-file-parallelism src/a.test.ts"],
