@@ -848,13 +848,18 @@ test("doc-review and doc-check: runbooks and architecture documents", () => {
 
   const AD = `${REPO}/docs/architecture/12_events.html`;
   const html = (status: string) =>
-    `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>Events</title></head><body>\n<h1>Events</h1>\n<pre>\nStatus: ${status}\nSpec: -\nIssue: #12\n</pre>\n<h2>Contracts</h2>\n<pre>\nStatus: not a header line\n</pre>\n</body></html>\n`;
+    `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>Events</title></head><body>\n<!--\nNote: one\nNote: two\n-->\n<h1>Events</h1>\n<pre>\nStatus: ${status}\nSpec: -\nIssue: #12\n</pre>\n<p>\nNote: outside pre\n</p>\n<h2>Contracts</h2>\n<pre>\nStatus: not a header line\n</pre>\n</body></html>\n`;
   write(AD, html("draft"));
   ok("doc-review", AD, "ready");
   assert.ok(hasLine(AD, "Status: ready"), read(AD));
   assert.match(read(AD), /^Spec: [0-9a-f]{40}$/m);
   assert.ok(hasLine(AD, "Status: not a header line"), "a body line was rewritten");
   assert.equal(ok("doc-check", AD), `${AD} ready spec-holds`);
+  // Duplicate keys inside <pre> before <h2> still fail, while prose outside <pre> does not.
+  edit(AD, (t) => t.replace("Issue: #12", "Issue: #12\nStatus: approved"));
+  fails("repeats header keys: 'Status'", "doc-check", AD);
+  write(AD, html("draft"));
+  ok("doc-review", AD, "ready");
   edit(AD, (t) => t.replace("Status: ready", "Status: executed"));
   fails("an architecture document takes draft, ready, approved", "doc-check", AD);
   // A worktree's copy is checked as written, never through the main root.

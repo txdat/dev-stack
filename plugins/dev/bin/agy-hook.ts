@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
-import { gateCheck, gateIndexed, isPhaseCall, skillSlug } from "../core/gate-check.ts";
+import { gateCheck, gateIndexed, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
 import { PlanLib, planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
@@ -94,11 +94,6 @@ const isOrchestratorInput = (text: string): boolean =>
   /^[ \t\n\v\f\r]*\/?(?:skill:(?:dev[:-])?|dev[:-])?(?:autopilot|run-stack)(?:[^a-z0-9_-]|$)/i.test(
     text.replace(/_/g, "-"),
   );
-
-/** Whether `text` names `slug` as a phase (either as a slash/prefix command or a standalone word). */
-const namesPhase = (text: string, slug: string): boolean =>
-  skillSlug(text) === slug ||
-  new RegExp(`(^|[^a-z0-9_-])${slug}([^a-z0-9_-]|$)`, "i").test(text.replace(/_/g, "-"));
 
 const PHASE_ENTRY_STATUSES: Record<string, readonly string[]> = {
   "review-feature": ["planning", "needs-changes", "ready"],
@@ -292,11 +287,12 @@ const run = (raw: HookInput): void => {
     const verdict = gateCheck(mapped, ctx);
     if (verdict && "block" in verdict) {
       const skill = str(member(mapped["tool_input"], "skill")) ?? "";
-      const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
       const args = str(member(mapped["tool_input"], "arguments")) ?? "";
-      const namedWrongPlan =
-        !isOrchestratorInput(args) && namesPhase(args, slug) && planMentions(args).length > 0;
-      if (isPhaseCall(mapped) && !namedWrongPlan && hasRunnablePlan(skill, ctx)) {
+      if (
+        isPhaseCall(mapped) &&
+        (isOrchestratorInput(args) || planMentions(args).length === 0) &&
+        hasRunnablePlan(skill, ctx)
+      ) {
         writeJson({ decision: "allow" });
         return;
       }
