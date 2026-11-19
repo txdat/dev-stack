@@ -69,6 +69,7 @@ write(
 const stack = (...argv: string[]) =>
   assert.equal(run(devStack, argv, { cwd: REPO, env: ENV }).code, 0, argv.join(" "));
 stack("review", P, "ready");
+stack("autopilot", P);
 stack("approve", P);
 
 let notes: [string, string][] = [];
@@ -357,6 +358,7 @@ test("tool_call: an edit to a CRLF or BOM plan is judged as the text Pi writes",
     const header = { Status: "planning", Spec: "-", Tip: "-", Type: "feature", Base: "main" };
     write(plan, form(planText({ ...header, Branch: `feat/${dir}`, Issue: "#12" }, GRAPH)));
     stack("review", plan, "ready");
+    stack("autopilot", plan);
     stack("approve", plan);
     // dev-stack.ts writes its header lines with LF; this plan's line breaks are all CRLF again.
     if (dir === "12_crlfonly") write(plan, read(plan).replace(/\r?\n/g, "\r\n"));

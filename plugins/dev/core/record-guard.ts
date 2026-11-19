@@ -27,7 +27,7 @@ import {
 import { tryMainRoot } from "./utils.ts";
 
 const LOG_BLOCK =
-  "The stack log is written only by dev-stack.js (review, code-review, approve, stop, and autopilot's auto-reopen; resume and reopen are the user's). Read it, never write it (rules/plan.md#changes).";
+  "The stack log is written only by dev-stack.js (review, code-review, approve, stop, and autopilot's claim and auto-reopen; resume and reopen are the user's). Read it, never write it (rules/plan.md#changes).";
 
 // ── shell commands, before they run ──────────────────────────────────
 

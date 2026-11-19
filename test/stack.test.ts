@@ -302,6 +302,17 @@ test("approve: an agent's approval, as auto-approved", () => {
   fails("is stopped", "approve", S);
   ok("resume", S);
   const spec = fieldOf(S, "Spec");
+  fails("in a stack autopilot has not claimed", "approve", S);
+  assert.ok(hasLine(S, "Status: ready"), "a refused approve changed the plan");
+  fails("autopilot takes the stack's root", "autopilot", S);
+  assert.equal(ok("autopilot", R), `Autopilot recorded in ${DIR}/log`);
+  assert.equal(ok("autopilot", R), `Autopilot already recorded in ${DIR}/log`);
+  assert.equal(
+    read(`${DIR}/log`)
+      .split("\n")
+      .filter((l) => l === "stack: autopilot").length,
+    1,
+  );
   assert.equal(ok("approve", S), `Status: auto-approved recorded in ${S}`);
   assert.ok(hasLine(S, "Status: auto-approved") && hasLine(S, `Spec: ${spec}`));
   fails(holds, "approve", S);
@@ -567,6 +578,7 @@ test("the stack log: review rounds, approvals, and code-review rounds", () => {
   assert.equal(rowOf(L1), "review-feature|round 4/6");
   assert.ok(ok("review", L1, "ready").endsWith("round 4/6"));
   const spec = fieldOf(L1, "Spec");
+  ok("autopilot", L1);
   ok("approve", L1);
   assert.ok(hasLine(`${L}/log`, `pr1: approve auto-approved at ${spec}`), read(`${L}/log`));
   fails("review-code verdicts record on an implemented plan", "code-review", L1, "pass");
@@ -594,6 +606,7 @@ test("reopen", () => {
   writePlan(Q2, "planning", "feat/q2", "pr1");
   writePlan(Q3, "planning", "feat/q3", "pr1");
   ok("review", Q1, "ready");
+  ok("autopilot", Q1);
   ok("approve", Q1);
   ok("review", Q2, "ready");
   setStatus(Q2, "approved");
@@ -617,6 +630,7 @@ test("auto-reopen", () => {
   writePlan(A2, "planning", "feat/a2", "pr1");
   writePlan(A3, "planning", "feat/a3", "pr2");
   ok("review", A1, "ready");
+  ok("autopilot", A1);
   ok("approve", A1);
   ok("review", A2, "ready");
   setStatus(A2, "approved");
@@ -647,6 +661,7 @@ test("auto-reopen", () => {
   const U1 = `${REPO}/docs/plans/12_auto-user/pr1.spec.md`;
   writePlan(U1, "planning", "feat/u1");
   ok("review", U1, "ready");
+  ok("autopilot", U1);
   ok("approve", U1);
   setStatus(U1, "approved");
   ok("next", U1);
@@ -662,6 +677,7 @@ test("renumber and drop", () => {
   writePlan(k(2), "planning", "feat/k2", "pr1");
   writePlan(k(3), "planning", "feat/k3", "pr2");
   ok("review", k(1), "ready");
+  ok("autopilot", k(1));
   ok("approve", k(1));
   ok("review", k(2), "needs-changes");
   fs.chmodSync(`${K}/log`, 0o640);
@@ -689,6 +705,7 @@ test("renumber and drop", () => {
   assert.ok(!fs.existsSync(k(3)) && hasLine(k(4), "Stacks On: pr1"));
   log = read(`${K}/log`);
   assert.ok(/^dropped pr3: review/m.test(log) && !/^pr3:/m.test(log), log);
+  assert.ok(hasLine(`${K}/log`, "stack: autopilot"), "renumber or drop lost autopilot's claim");
   fails("only an unapproved plan", "drop", k(1));
 
   const D = `${REPO}/docs/plans/12_droproot`;
@@ -696,6 +713,7 @@ test("renumber and drop", () => {
   writePlan(`${D}/pr2.spec.md`, "planning", "feat/d2", "pr1");
   writePlan(`${D}/pr3.spec.md`, "planning", "feat/d3", "pr1");
   fs.chmodSync(`${D}/pr2.spec.md`, 0o640);
+  ok("autopilot", `${D}/pr1.spec.md`);
   const out = ok("drop", `${D}/pr1.spec.md`);
   assert.equal(fs.statSync(`${D}/pr2.spec.md`).mode & 0o777, 0o640, "the new root keeps its mode");
   assert.ok(out.endsWith(`; ${D}/pr2.spec.md is the root`), out);
@@ -703,6 +721,8 @@ test("renumber and drop", () => {
     !/^Stacks On:/m.test(read(`${D}/pr2.spec.md`)) && hasLine(`${D}/pr3.spec.md`, "Stacks On: pr2"),
   );
   assert.equal(ok("stack", `${D}/pr2.spec.md`).split("\n").length, 2);
+  ok("review", `${D}/pr2.spec.md`, "ready");
+  ok("approve", `${D}/pr2.spec.md`);
 });
 
 test("header fields", () => {

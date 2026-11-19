@@ -1717,6 +1717,7 @@ test("stops and the approval ratchet", () => {
   useRepo();
   writePlan(P, "planning");
   stack("review", P, "ready");
+  stack("autopilot", P);
   stack("approve", P);
   const stale = (skill: string) => runGate(repo, skill, P, { staleOk: true });
   passes(stale("dev-execute-feature"), "an auto-approved plan executes");
@@ -2107,6 +2108,7 @@ test("record guard: shell commands are checked after they run", () => {
   const SP = `${SD}/pr1.spec.md`;
   writePlan(SP, "planning", VALID, "feature", "#14");
   stack("review", SP, "ready");
+  stack("autopilot", SP);
   stack("approve", SP);
   blocks(
     shellRun(`sed -i 's/^Status: auto-approved/Status: planning/' ${SP}`),
@@ -2134,6 +2136,7 @@ test("record guard: shell commands are checked after they run", () => {
   fs.rmSync(SD, { recursive: true });
   writePlan(SP, "planning", VALID, "feature", "#14");
   stack("review", SP, "ready");
+  stack("autopilot", SP);
   stack("approve", SP);
   sub(SP, /^Status: auto-approved/m, "Status: approved");
   blocks(
@@ -2228,15 +2231,15 @@ test("record guard: shell commands are checked after they run", () => {
   );
   fs.rmSync(`${D}/log`, { force: true });
   passes(
-    shellRun(`${DS} review ${P} ready && ${DS} approve ${P}`),
-    "dev-stack.ts review and approve pass the check",
+    shellRun(`${DS} review ${P} ready && ${DS} autopilot ${P} && ${DS} approve ${P}`),
+    "dev-stack.ts review, autopilot, and approve pass the check",
   );
   assert.ok(hasLine(P, "Status: auto-approved"));
   // One call may run review and approve from planning: the snapshot never sees ready.
   fs.rmSync(`${D}/log`, { force: true });
   writePlan(P, "planning");
   passes(
-    shellRun(`${DS} review ${P} ready && ${DS} approve ${P}`),
+    shellRun(`${DS} review ${P} ready && ${DS} autopilot ${P} && ${DS} approve ${P}`),
     "review and approve in one call pass from planning",
   );
   assert.ok(hasLine(P, "Status: auto-approved"));
@@ -2268,7 +2271,7 @@ test("record guard: shell commands are checked after they run", () => {
   writePlan(P, "planning");
   blocks(
     shellRun(
-      `${DS} review ${P} ready && ${DS} approve ${P} && sed -i 's/Gate the phases\\./Gate all./' ${P}`,
+      `${DS} review ${P} ready && ${DS} autopilot ${P} && ${DS} approve ${P} && sed -i 's/Gate the phases\\./Gate all./' ${P}`,
     ),
     autoOnly,
     "a spec change after approve in one call is refused",
@@ -2300,7 +2303,7 @@ test("record guard: shell commands are checked after they run", () => {
       "feat/p2",
     );
   };
-  const approveBoth = `${DS} review ${SD}/pr1.spec.md ready && ${DS} approve ${SD}/pr1.spec.md && ${DS} review ${SD}/pr2.spec.md ready && ${DS} approve ${SD}/pr2.spec.md`;
+  const approveBoth = `${DS} review ${SD}/pr1.spec.md ready && ${DS} autopilot ${SD}/pr1.spec.md && ${DS} approve ${SD}/pr1.spec.md && ${DS} review ${SD}/pr2.spec.md ready && ${DS} approve ${SD}/pr2.spec.md`;
   pair();
   blocks(
     shellRun(`${approveBoth} && sed -i 's/Gate the phases\\./Gate all./' ${SD}/pr2.spec.md`),
@@ -2334,7 +2337,7 @@ test("record guard: shell commands are checked after they run", () => {
   // directory left at the plan's path, holding a file it cannot delete.
   writePlan(`${SD}/pr1.spec.md`, "planning");
   const out = shellRun(
-    `${DS} review ${SD}/pr1.spec.md ready && ${DS} approve ${SD}/pr1.spec.md && rm ${SD}/pr1.spec.md && mkdir ${SD}/pr1.spec.md && touch ${SD}/pr1.spec.md/x && chmod 500 ${SD}/pr1.spec.md`,
+    `${DS} review ${SD}/pr1.spec.md ready && ${DS} autopilot ${SD}/pr1.spec.md && ${DS} approve ${SD}/pr1.spec.md && rm ${SD}/pr1.spec.md && mkdir ${SD}/pr1.spec.md && touch ${SD}/pr1.spec.md/x && chmod 500 ${SD}/pr1.spec.md`,
   );
   fs.chmodSync(`${SD}/pr1.spec.md`, 0o700);
   blocks(out, "Could not restore it", "a plan that cannot be restored is reported");
@@ -2349,7 +2352,7 @@ test("record guard: shell commands are checked after they run", () => {
   fs.rmSync(`${D}/log`, { force: true });
   writePlan(P, "planning");
   passes(
-    shellRun(`${DS} review ${P} ready && ${DS} approve ${P}`),
+    shellRun(`${DS} review ${P} ready && ${DS} autopilot ${P} && ${DS} approve ${P}`),
     "approval before an auto-reopen",
   );
   fs.chmodSync(`${D}/log`, 0o640);
@@ -2368,7 +2371,7 @@ test("record guard: shell commands are checked after they run", () => {
   passes(shellRun(`${DS} review ${SD}/pr2.spec.md needs-changes`), "a verdict before a renumber");
   blocks(
     shellRun(
-      `${DS} renumber ${SD}/pr1.spec.md 2=3 && ${DS} review ${SD}/pr1.spec.md ready && ${DS} approve ${SD}/pr1.spec.md && sed -i 's/^Status: auto-approved/Status: implemented/' ${SD}/pr1.spec.md`,
+      `${DS} renumber ${SD}/pr1.spec.md 2=3 && ${DS} review ${SD}/pr1.spec.md ready && ${DS} autopilot ${SD}/pr1.spec.md && ${DS} approve ${SD}/pr1.spec.md && sed -i 's/^Status: auto-approved/Status: implemented/' ${SD}/pr1.spec.md`,
     ),
     "rewrote it alongside a change undone above",
     "a rewritten log is left and reported",

@@ -15,4 +15,4 @@ Implement an `approved` or `auto-approved` plan test-first under [plan.md](../..
 
 Only the main agent delegates chunks, using [executor](../../agents/executor.md) where installed; a subagent running this skill never starts further subagents. Whoever runs this skill owns the RED tests, their commit, and the plan; chunk workers never edit them. Give each chunk worker the DD invariants its files enforce.
 
-When the plan passes its checks, set `Status: implemented`, report each TC's test with its result where [plan.md — Verification](../../rules/plan.md#verification) requires it, or for `Type: config` its check result. Then hand off to [review-code.md](../review-code/SKILL.md).
+When the plan passes its checks, set `Status: implemented` and give the per-TC report under [plan.md — Verification](../../rules/plan.md#verification). Then hand off to [review-code.md](../review-code/SKILL.md).

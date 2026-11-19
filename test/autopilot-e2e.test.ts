@@ -262,6 +262,12 @@ const planBacked = async (
     );
     assert.match(read(plan), /^Status: ready$/m, "a refused edit ran");
     await runs(
+      "run-stack --auto-approve claims the stack",
+      h,
+      `${RUN} ${STACK} autopilot ${plan}`,
+      dir,
+    );
+    await runs(
       "run-stack --auto-approve runs dev-stack approve",
       h,
       `${RUN} ${STACK} approve ${plan}`,

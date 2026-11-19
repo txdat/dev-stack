@@ -9,7 +9,7 @@ effort: medium
 
 Use for changed service boundaries, communication patterns, or cross-system integrations; ordinary features use [design-feature.md](../design-feature/SKILL.md). Assess impact under [CODING.md — Impact](../../rules/CODING.md#impact).
 
-Write `docs/architecture/<issue>_<slug>.html` with `Status: draft`, in the language [plan.md — Artifact](../../rules/plan.md#artifact) prescribes, with these sections:
+Write `docs/architecture/<issue>_<slug>.html` with `Status: draft` and an empty `Review:`, in the language [plan.md — Artifact](../../rules/plan.md#artifact) prescribes, with these sections:
 
 - **`Goal and Constraints`:** current pain, affected boundaries, and each measurable success criterion as `SC-n`, with its baseline or the `PH-n` that establishes it.
 - **`Options`:** each viable choice as `OP-n`, compared against the same constraints, including a simpler starting system. Cite the recommended one and justify its complexity by current needs. Diagram the current system's components as a `flowchart` before `OP-1`, and the recommended option's under it.
@@ -26,17 +26,19 @@ Write one HTML file, optionally with inline `<style>`, loading nothing but the M
 <html lang="{language code}"><head><meta charset="utf-8"><title>{title}</title></head><body>
 <h1>{title}</h1>
 <p>Status: draft</p>
+<p>Review:</p>
 <h2>Contracts</h2>
 <h3 id="CT-1">CT-1 — {contract}</h3>
 <pre class="mermaid">sequenceDiagram
   Client->>Orders: POST /orders</pre>
-<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs";</script>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@{mmdc major}/dist/mermaid.esm.min.mjs";</script>
 </body></html>
 ```
 
-- Each section is an `<h2>` named as above; `Status: <status>` is the whole text of its own `<p>`.
+- Each section is an `<h2>` named as above; `Status: <status>` and `Review: READY <date>`, or `Review:` while no passing review holds, are each the whole text of their own `<p>`.
+- Pin the import to the major version of the local `mmdc --version`, such as `mermaid@12`, so the browser renders what the render check accepted.
 - `OP-n`, `CT-n`, and `PH-n` start their own `<h3>`; `SC-n` and `DC-n` start their own `<li>`. Each element carries its ID as `id`; cite another artifact's as `<a href="<path>#ID">`.
 - A diagram shows only what its text states. Open each with exactly `<pre class="mermaid">`. In its source, write `<` as `#lt;` and `&` as `#amp;`, never as raw characters or HTML entities.
 - Render each diagram, numbered from 1 in document order, by piping its source unchanged to `mmdc -i - -o /tmp/<slug>-<n>.svg`; a nonzero exit is a rejection. Fix every rejected diagram. Without `mmdc`, stop and report that the diagrams are unrendered.
 
-Finish when the recommendation meets the constraints, every contract has an owner, and migration and decomposition can deliver the measured outcome. Hand off to [review-system.md](../review-system/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the draft, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-system; [plan.md — Review](../../rules/plan.md#review) owns the round limit. Feature plans start only after the user sets `Status: approved`. An approved document is frozen: a needed change goes to the user with options and a recommendation, then back to `draft`, review, and approval.
+Finish when the recommendation meets the constraints, every contract has an owner, and migration and decomposition can deliver the measured outcome. Hand off to [review-system.md](../review-system/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the draft, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-system; [plan.md — Review](../../rules/plan.md#review) owns the round limit. Feature plans start only after the user sets `Status: approved` ([review-system.md](../review-system/SKILL.md)). An approved document is frozen: a needed change goes to the user with options and a recommendation, then back to `draft`, review, and approval.

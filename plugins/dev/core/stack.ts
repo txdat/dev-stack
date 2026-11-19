@@ -1,5 +1,6 @@
 // The stack tree of plans (../rules/plan.md#stacks), for design-feature, create-pr, and run-stack.
-// `review` sets a planning plan's Status and Spec; `approve` sets a ready one auto-approved;
+// `review` sets a planning plan's Status and Spec; `autopilot` claims a stack for autopilot, and
+// `approve` sets a ready plan of a claimed stack auto-approved;
 // `reopen` returns approved plans to planning, and `auto-reopen` auto-approved ones once each;
 // `renumber` and `drop` reshape a stack before approval. Each write appends to the stack's log
 // (plan-lib.ts stackLog), as do `code-review`, `stop`, and `resume`, and `next` and `check` when
@@ -9,7 +10,7 @@ import * as fs from "node:fs";
 import { b, byteCompare, rowsOf } from "./bytes.ts";
 import { type Command, type Ctx, Exit, fail, guard, Output } from "./cli.ts";
 import { gateIndexed } from "./gate-check.ts";
-import { heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
+import { AUTOPILOT_LINE, heldStop, PlanLib, planNumber, stackLog, statusRank } from "./plan-lib.ts";
 import { dirname, git, globNames, isFile, isLink, P, readBytes, replaceBytes } from "./sys.ts";
 import { mainRoot } from "./utils.ts";
 
@@ -17,6 +18,7 @@ const USAGE = [
   "Usage: dev-stack.js stack <root plan>",
   "       dev-stack.js next <root plan> [--tab|--tree|--md]",
   "       dev-stack.js review <plan> ready|needs-changes",
+  "       dev-stack.js autopilot <root plan>",
   "       dev-stack.js approve <plan>",
   "       dev-stack.js code-review <plan> pass|needs-changes",
   "       dev-stack.js stop <plan> <reason>",
@@ -39,6 +41,8 @@ const USAGE = [
   "and Spec to its hash of the current spec, and logs the round <k>/<limit>;",
   "code-review logs a review-code verdict the same way. A needs-changes verdict",
   "at or past the limit stops the plan. The limit starts at 3; resume at or past the limit sets it to the current round plus 3.",
+  "autopilot records in the stack's log that run-stack --auto-approve drives the",
+  "stack, as autopilot runs it; approve refuses a plan of a stack without it.",
   "approve sets a ready plan, whose review recorded by review holds and whose parent is approved or later,",
   "to auto-approved, the agent's approval; only the user sets approved. An",
   "approved plan is frozen: its Status never returns to planning and its spec",
@@ -523,11 +527,34 @@ class Stack {
     if (parent !== "" && (this.rank(parent) ?? 0) < 1)
       fail(`${parent} must be approved or auto-approved first.`);
     this.requireOpen(plan);
+    if (!this.lib.autopilotStack(plan))
+      fail(
+        `${plan} is in a stack autopilot has not claimed; outside autopilot only the user approves, by setting 'Status: approved'. Report the plan as waiting on the user (rules/plan.md#changes).`,
+      );
     const hash = this.lib.planHash(plan);
     if (hash === undefined) fail(`Cannot hash ${plan}: a plan below it is missing or unreadable.`);
     this.setHeader(plan, [["Status", "auto-approved"]]);
     this.logEvent(plan, `approve auto-approved at ${hash}`);
     this.o.out(`Status: auto-approved recorded in ${plan}\n`);
+  }
+
+  /**
+   * Claims root's stack for autopilot (../skills/run-stack/SKILL.md), once: the record approve
+   * requires, so an agent outside autopilot that reaches wait-user cannot approve by mistake.
+   */
+  autopilot(root: string): void {
+    const parent = this.stacksOn(root);
+    if (parent !== "") fail(`${root} stacks on ${parent}; autopilot takes the stack's root.`);
+    if (this.lib.autopilotStack(root)) {
+      this.o.out(`Autopilot already recorded in ${stackLog(root)}\n`);
+      return;
+    }
+    try {
+      fs.appendFileSync(P(stackLog(root)), P(`${AUTOPILOT_LINE}\n`));
+    } catch (e) {
+      fail(`Cannot write ${stackLog(root)}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    this.o.out(`Autopilot recorded in ${stackLog(root)}\n`);
   }
 
   // ── check and next ───────────────────────────────────────────────────
@@ -817,6 +844,9 @@ export const devStack: Command = (ctx) => {
         s.review(s.requireLive(arg), v);
         break;
       }
+      case "autopilot":
+        s.autopilot(s.requireLive(arg));
+        break;
       case "approve":
         s.approve(s.requireLive(arg));
         break;

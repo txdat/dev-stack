@@ -264,6 +264,10 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
     cwd: dir,
   });
   assert.equal(reviewRes.code, 0, reviewRes.all);
+  const claimRes = exec([...BUN, path.join(PLUGIN, "bin/dev-stack.ts"), "autopilot", pr2], {
+    cwd: dir,
+  });
+  assert.equal(claimRes.code, 0, claimRes.all);
   const approveRes = exec([...BUN, path.join(PLUGIN, "bin/dev-stack.ts"), "approve", pr2], {
     cwd: dir,
   });
