@@ -221,8 +221,12 @@ const checkCommand = (cmd: string, depth = 0): string | undefined => {
         if (inner !== undefined) return inner;
         break;
       }
-      // `-o opt`, `+o opt`, `-O opt`, and clusters ending in them, such as `-euo pipefail`.
-      if (inShell && /^[-+][A-Za-z]*[oO]$/.test(tok)) {
+      // `-o opt`, `+o opt`, and clusters ending in them, such as `-euo pipefail`; bash's `-O opt`
+      // too (zsh's `-O` is a boolean option).
+      if (
+        inShell &&
+        (/^[-+][A-Za-z]*o$/.test(tok) || (wrapper === "bash" && /^[-+][A-Za-z]*O$/.test(tok)))
+      ) {
         i += i + 1 < tokens.length ? 2 : 1;
         continue;
       }

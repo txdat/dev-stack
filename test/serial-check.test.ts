@@ -57,6 +57,7 @@ const CASES: [want: "deny" | "pass", command: string][] = [
   ["deny", "<<< x jest"],
   ["deny", 'bash -euo pipefail -c "jest"'],
   ["deny", 'bash -O extglob -c "jest"'],
+  ["deny", 'zsh -O -c "jest src"'],
   ["deny", "NODE_ENV=test pnpm --filter web exec jest src/a.test.ts"],
   // Non-execution mentions pass.
   ["pass", "cat jest.config.js"],
