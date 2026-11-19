@@ -1,6 +1,8 @@
 ---
 name: handoff
 description: "Write or read a session handoff snapshot (Goal, Current State, Current Plan, Blockers, Remaining Work) so a fresh session can continue without the old conversation."
+model: haiku
+effort: medium
 ---
 
 # /handoff — Session Snapshot

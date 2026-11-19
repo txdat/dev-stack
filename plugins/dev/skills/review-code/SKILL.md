@@ -2,7 +2,7 @@
 name: review-code
 description: "Independently review an implemented plan for TDD proof, test results, correctness, security, scope, and hygiene, and return the verdict the main agent records."
 model: haiku
-effort: high
+effort: xhigh
 ---
 
 # /review-code — Verify the Implementation

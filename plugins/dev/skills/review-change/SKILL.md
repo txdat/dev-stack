@@ -2,7 +2,7 @@
 name: review-change
 description: "Independently review a direct edit's change before its PR, or an open PR, for security, data integrity, correctness, cost, and project rules, verifying each finding, and return every blocking finding ordered by impact, then notes."
 model: haiku
-effort: high
+effort: xhigh
 ---
 
 # /review-change — Review a Change
@@ -24,6 +24,8 @@ Run three passes over the change, each given [CODING.md](../../rules/CODING.md),
 2. **Context bugs:** read the changed code with its callers, callees, and the contracts it relies on under [CODING.md — Impact](../../rules/CODING.md#impact). Report security, data-integrity, concurrency, and failure-path defects, a wrong result or crash for a concrete input or state the changed code can receive, and unbounded or repeated work on a production path.
 3. **Project rules:** read the project's instruction files, such as AGENTS.md and CLAUDE.md, in each changed file's directory and its parents, for a PR at `headRefOid` as in Target; a file applies only to the files under its directory. Report each rule the change breaks, quoting the rule.
 
+When the change has more than 10 changed files, untracked files included, split the context-bugs pass into groups of at most 10 related files, such as an interface with its implementations or a resource with its locale variants, each group given the pass's inputs and the list of its files. Where you can start subagents, run each group in its own fresh subagent; otherwise run the groups here, one after another. Each pass, and each group, lists every changed file it was given as `reviewed`, or as `skipped` with its reason when the file has no source of its own to read, such as a binary or a file generated from another changed file; a file `skipped` for any other reason counts as left off the list. Before Verify, rerun each pass or group once on each file it left off its list; list each file still left off as `unreviewed`.
+
 Never report:
 
 - an issue that exists before the change, or code the change does not touch or affect;
@@ -35,7 +37,7 @@ Never report:
 
 ## Verify
 
-Check each candidate before reporting it. Where you can start subagents, give each candidate to a fresh subagent with the diff, the author's intent, and the candidate alone; otherwise re-check it against the code, not against the reasoning that found it. Confirm that the cited code does what the finding says, that the failure follows for a concrete input or state, and, for a project rule, that the rule applies to the file and the change breaks it. Prove runtime behavior with a run where an existing command, such as an affected test with crafted inputs, shows it without changing a file or shared state; for a PR, only when the current checkout is at `headRefOid`, else the finding is at most `traced`. Label each finding `ran`, `traced`, `located`, or `asserted` as [review-code.md — Behavior](../review-code/SKILL.md#behavior) defines them. Drop a candidate the check refutes; one it cannot settle is `asserted`.
+Merge candidates that name the same defect at the same `file:line` into one, keeping the evidence of each. Check each candidate before reporting it. Where you can start subagents, give each candidate to a fresh subagent with the diff, the author's intent, and the candidate alone; otherwise re-check it against the code, not against the reasoning that found it. Confirm that the cited code does what the finding says, that the failure follows for a concrete input or state, and, for a project rule, that the rule applies to the file and the change breaks it. Prove runtime behavior with a run where an existing command, such as an affected test with crafted inputs, shows it without changing a file or shared state; for a PR, only when the current checkout is at `headRefOid`, else the finding is at most `traced`. Label each finding `ran`, `traced`, `located`, or `asserted` as [review-code.md — Behavior](../review-code/SKILL.md#behavior) defines them. Drop a candidate only when it falls under Never report, or when the check cites the `file:line`, instruction file, or run that refutes it; a candidate the check cannot settle is `asserted`.
 
 ## Blocking
 
@@ -51,4 +53,4 @@ Every other finding is a note.
 
 ## Report
 
-Name the target with its base SHA, its head SHA, and, for a branch, whether it has uncommitted or untracked changes; for a PR, `baseRefOid` and `headRefOid` from `gh pr view <PR> --json baseRefOid,headRefOid`. List every blocking finding in the order above, none dropped or capped, each with its class, `file:line`, the defect in one sentence, the failure scenario as the input or state and the wrong result, its evidence, and its label. Then list the notes. When nothing blocks, say so and name the passes that ran. Return `PASS` when nothing blocks, else `NEEDS CHANGES`. The main agent counts rounds under plan.md — Review.
+Name the target with its base SHA, its head SHA, and, for a branch, whether it has uncommitted or untracked changes; for a PR, `baseRefOid` and `headRefOid` from `gh pr view <PR> --json baseRefOid,headRefOid`. List every blocking finding in the order above, none dropped or capped, each with its class, `file:line`, the defect in one sentence, the failure scenario as the input or state and the wrong result, its evidence, and its label. Then list the notes. List each file a pass skipped, with the pass and its reason; each file left `unreviewed`, with the pass; and the number of changed files each pass reviewed. When nothing blocks, say so and name the passes that ran. Return `PASS` when nothing blocks, else `NEEDS CHANGES`. The main agent counts rounds under plan.md — Review.
