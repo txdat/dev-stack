@@ -288,15 +288,17 @@ const run = (raw: HookInput): void => {
     if (verdict && "block" in verdict) {
       const skill = str(member(mapped["tool_input"], "skill")) ?? "";
       const args = str(member(mapped["tool_input"], "arguments")) ?? "";
-      if (
-        isPhaseCall(mapped) &&
-        (isOrchestratorInput(args) || planMentions(args).length === 0) &&
-        hasRunnablePlan(skill, ctx)
-      ) {
+      const runnable = isPhaseCall(mapped) && hasRunnablePlan(skill, ctx);
+      if (runnable && (isOrchestratorInput(args) || planMentions(args).length === 0)) {
         writeJson({ decision: "allow" });
         return;
       }
-      writeJson({ decision: "deny", reason: utf8(verdict.block) });
+      // A plan the message names blocked the call while another plan can run this phase.
+      const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
+      const hint = runnable
+        ? ` To run ${slug} on a runnable plan, read its SKILL.md in a message that says \`Starting ${slug} on <plan path>\` and names no other plan (skills/run-stack/SKILL.md, step 2).`
+        : "";
+      writeJson({ decision: "deny", reason: utf8(verdict.block) + hint });
       return;
     }
     writeJson({ decision: "allow" });

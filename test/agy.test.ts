@@ -436,6 +436,25 @@ test("PreToolUse allows read_file on gated SKILL.md when autopilot/run-stack del
   });
   assert.equal(assistantOverride["decision"], "allow", JSON.stringify(assistantOverride));
 
+  // Under an orchestrator, a message naming more than the runnable plan is denied with the
+  // message form that unblocks it.
+  const maskedDeny = runHook({
+    hookEventName: "PreToolUse",
+    cwd: dir,
+    lastUserInput: `/dev:run-stack ${spec}`,
+    lastAssistantMessage: `Reviewed ${spec}; next ${pr2}`,
+    toolCall: {
+      id: "s9b",
+      name: "read_file",
+      args: { Path: path.join(PLUGIN, "skills/execute-feature/SKILL.md") },
+    },
+  });
+  assert.equal(maskedDeny["decision"], "deny", JSON.stringify(maskedDeny));
+  assert.match(
+    String(maskedDeny["reason"]),
+    /`Starting execute-feature on <plan path>` and names no other plan/,
+  );
+
   // A current ready plan awaiting approval does not unlock review-feature, while a stale ready
   // plan (edited after review) does.
   const readyReview = exec(
@@ -539,6 +558,12 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
     const text = read(path.join(out, `skills/${orch}/SKILL.md`));
     assert.match(text, /^## Antigravity Delegation \(`swarm` default\)$/m, orch);
     assert.doesNotMatch(text, /\(not `swarm`\)/, orch);
+    assert.match(
+      text,
+      /The main agent never messages or kills a worker a `reviewer` started/,
+      orch,
+    );
+    assert.match(text, /for a `reviewer`, the child-subagent permission above\./, orch);
   }
 
   const agent = read(path.join(out, "agents/planner.md"));
