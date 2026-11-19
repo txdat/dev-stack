@@ -2482,3 +2482,131 @@ test("record guard: shell commands are checked after they run", () => {
   );
   passes(editGuard(`${repo}/README.md`, "seed", "x"), "files outside docs/plans pass");
 });
+
+test("record guard: runbook and architecture document edits", () => {
+  useRepo();
+  const RB = `${repo}/docs/runbook/14_db-move/rb.md`;
+  const LOG = `${repo}/docs/runbook/14_db-move/log`;
+  const AD = `${repo}/docs/architecture/14_events.html`;
+  const runbook = (status: string, spec = "-") =>
+    `# Move the database\nStatus: ${status}\nSpec: ${spec}\nIssue: none\n\n## Phases\nPH-1 — copy\n`;
+  const html = (status: string, spec = "-") =>
+    `<html><body>\n<h1>Events</h1>\n<pre>\nStatus: ${status}\nSpec: ${spec}\nIssue: none\n</pre>\n<h2>Contracts</h2>\n<p>CT-1</p>\n</body></html>\n`;
+  const writeGuard = (file: string, content: string) =>
+    guard("Write", { file_path: file, content });
+  const statusOnly = "Status changes only through dev-stack.js doc-review or the user";
+  const logLate = "takes execution entries only once";
+
+  // A new document starts at draft with no Spec and each key once.
+  passes(writeGuard(RB, runbook("draft")), "a new runbook at draft");
+  blocks(writeGuard(RB, runbook("ready")), "starts as 'Status: draft'", "a new runbook at ready");
+  blocks(
+    writeGuard(AD, html("draft", "abc")),
+    "starts as 'Status: draft'",
+    "a new doc with a Spec",
+  );
+  blocks(
+    writeGuard(RB, runbook("draft").replace("Issue: none", "Issue: none\nIssue: #3")),
+    "keeps each header key once",
+    "a new runbook with a repeated key",
+  );
+  write(RB, runbook("draft"));
+  passes(editGuard(RB, "PH-1 — copy", "PH-1 — copy the rows"), "a draft's body changes");
+  blocks(editGuard(RB, "Status: draft", "Status: ready"), statusOnly, "an agent sets ready");
+  blocks(
+    editGuard(RB, "Issue: none", "Issue: none\nStatus: approved"),
+    "keeps each header key once: 'Status' on lines 2 and 5",
+    "a second Status line",
+  );
+  blocks(
+    editGuard(RB, "Spec: -", "Spec: abc"),
+    "Only dev-stack.js doc-review sets",
+    "Spec by hand",
+  );
+  blocks(editGuard(RB, "Spec: -\n", ""), "keeps its 'Status:' and 'Spec:'", "Spec line dropped");
+  blocks(writeGuard(LOG, "EX-1 — PH-1 ran\n"), logLate, "a log beside a draft runbook");
+
+  stack("doc-review", RB, "ready");
+  const spec = /^Spec: (.*)$/m.exec(read(RB))?.[1] ?? "";
+  blocks(writeGuard(LOG, "EX-1 — PH-1 ran\n"), logLate, "a log beside a ready runbook");
+  blocks(
+    editGuard(RB, "Status: ready", "Status: approved"),
+    "Only the user sets 'Status: approved'",
+    "an agent approves",
+  );
+  // The user approves outside the agent's tools.
+  write(RB, runbook("approved", spec));
+  blocks(editGuard(RB, "PH-1 — copy", "PH-1 — move"), "is 'approved' and frozen", "frozen body");
+  blocks(
+    editGuard(RB, "PH-1 — copy\n", "PH-1 — copy\n\n## Execution Record\nEX-1 — ok\n"),
+    "is 'approved' and frozen",
+    "a record written into an approved runbook",
+  );
+  blocks(editGuard(RB, "Status: approved", "Status: draft"), statusOnly, "back below approved");
+  passes(writeGuard(LOG, "EX-1 — PH-1 ran\n"), "a log started beside an approved runbook");
+  write(LOG, "EX-1 — PH-1 ran\n");
+  passes(editGuard(LOG, "PH-1 ran\n", "PH-1 ran\nEX-2 — PH-2 ran\n"), "a log entry appended");
+  blocks(editGuard(LOG, "PH-1 ran", "PH-1 skipped"), "only grows", "a log entry changed");
+  blocks(writeGuard(LOG, "EX-2 — PH-2 ran\n"), "only grows", "a log rewritten");
+  blocks(
+    guard("Write", { file_path: LOG }),
+    "only grows",
+    "a log emptied by a Write without content",
+  );
+  write(LOG, "EX-1 — PH-1 ran\r\nEX-2 — PH-2 ran\r\n");
+  blocks(
+    editGuard(LOG, "EX-1 — PH-1 ran\nEX-2", "EX-1 — PH-1 skipped\nEX-2"),
+    "only grows",
+    "a CRLF log entry changed",
+  );
+  passes(
+    editGuard(LOG, "EX-2 — PH-2 ran\n", "EX-2 — PH-2 ran\nEX-3 — PH-3 ran\n"),
+    "a CRLF log entry appended",
+  );
+  write(LOG, "EX-1 — PH-1 ran");
+  blocks(writeGuard(LOG, "EX-1 — PH-1 ran, then failed\n"), "only grows", "a last line extended");
+  passes(writeGuard(LOG, "EX-1 — PH-1 ran\nEX-2 — PH-2 ran\n"), "an entry after a last line");
+  write(LOG, "EX-1 — PH-1 ran\n");
+  passes(editGuard(RB, "Status: approved", "Status: executed"), "a runbook's approved to executed");
+  write(RB, runbook("executed", spec));
+  passes(
+    editGuard(LOG, "PH-1 ran\n", "PH-1 ran\nEX-2 — residue removed\n"),
+    "an executed runbook's log grows",
+  );
+  blocks(
+    editGuard(RB, "Status: executed", "Status: approved"),
+    "Only the user sets 'Status: approved'",
+    "executed undone",
+  );
+  write(RB, runbook("approved", spec).replace(/\n/g, "\r\n"));
+  passes(editGuard(RB, "Status: approved", "Status: executed"), "a CRLF runbook executed");
+  blocks(editGuard(RB, "PH-1 — copy", "PH-1 — move"), "frozen", "a CRLF runbook's frozen body");
+
+  // The user returned an approved runbook to draft; an agent resets its stale Spec.
+  write(RB, runbook("draft", spec));
+  passes(editGuard(RB, `Spec: ${spec}`, "Spec: -"), "a draft's Spec reset to '-'");
+  blocks(
+    editGuard(RB, `Spec: ${spec}`, "Spec: abc"),
+    "Only dev-stack.js doc-review sets",
+    "a draft's Spec set",
+  );
+
+  write(AD, html("draft"));
+  stack("doc-review", AD, "ready");
+  const adSpec = /^Spec: (.*)$/m.exec(read(AD))?.[1] ?? "";
+  write(AD, html("approved", adSpec));
+  blocks(
+    editGuard(AD, "Status: approved", "Status: executed"),
+    statusOnly,
+    "an architecture document is never executed",
+  );
+  blocks(editGuard(AD, "<p>CT-1</p>", "<p>CT-2</p>"), "frozen", "a frozen architecture document");
+
+  // Another project's runbook, or a log beside one, passes.
+  const OLD = `${repo}/docs/runbook/13_old/rb.md`;
+  write(OLD, "# Old\nStatus: approved | Issue: none\n\n## Phases\n");
+  passes(editGuard(OLD, "## Phases", "## Phases\nPH-1 — x"), "a foreign runbook");
+  passes(writeGuard(`${repo}/docs/runbook/13_old/log`, "anything\n"), "a foreign runbook's log");
+  fs.rmSync(`${repo}/docs/runbook`, { recursive: true });
+  fs.rmSync(`${repo}/docs/architecture`, { recursive: true });
+});

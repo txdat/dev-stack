@@ -1,6 +1,6 @@
 # Plan-Backed Delivery
 
-The shared contract for application plans. Phase skills say how to do each phase; this file owns what they share.
+The shared contract for application plans, and the review lifecycle of runbooks and architecture documents ([Documents](#documents)). Phase skills say how to do each phase; this file owns what they share.
 
 ## Scope
 
@@ -133,6 +133,29 @@ A needs-changes verdict counts as a round, never as a failed fix; `Failed fixes`
 Outside a review-only request, each review-code round runs in a scratch the main agent creates from the plan's worktree with `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-worktree.js scratch <issue>_<slug>-pr<N>-r<round> <tip SHA> [<repro> ...]`, passing each open finding's saved repro, and gives its path to the reviewer, who runs every command there. When `scratch` reports a repro as not applying, the main agent retries without it and gives that finding to the reviewer to rebuild. On a tip that changes a dependency manifest, it runs `isolate-dep` and installs in each scratch it opens. Each `ran` finding carries its repro from `scratch-diff <scratch> -- <its files>`, which the main agent saves under `/tmp` before ending the round with `scratch-remove`.
 
 Before repairing, the main agent reruns the command of every blocking `ran` finding in one fresh `scratch <issue>_<slug>-pr<N>-r<round>-v <tip SHA> <repro> ...`, then removes it. When `scratch` reports a repro as not applying, it retries `-r<round>-v` without that repro and reruns that finding alone in `scratch <issue>_<slug>-pr<N>-r<round>-v<k> <tip SHA> <repro>`, numbering `<k>` from 1, removing each scratch after its run. A repro that does not apply even alone counts as not reproducing. A finding that does not reproduce goes back to the reviewer once, in `scratch <issue>_<slug>-pr<N>-r<round>-f<k> <tip SHA>`, numbering `<k>` from 1, which the main agent removes after saving any rebuilt repro under `/tmp`; the reviewer's answer is not a verdict and records no round. The main agent then reruns the rebuilt repro in `scratch <issue>_<slug>-pr<N>-r<round>-v<k> <tip SHA> <repro>`, continuing the `<k>` numbering; if it still does not reproduce, the main agent relabels it `traced`, `located`, or `asserted` by the evidence left.
+
+## Documents
+
+A runbook ([design-infra](../skills/design-infra/SKILL.md)) lives at `docs/runbook/<issue>_<slug>/rb.md` and an architecture document ([design-system](../skills/design-system/SKILL.md)) at `docs/architecture/<issue>_<slug>.html`, each `<issue>_<slug>` named as a stack's directory ([Artifact](#artifact)); both are committed. A runbook's execution record is the `log` beside it, which is never committed: before its first entry, the main agent runs `git check-ignore -q <log>` and, when that fails, adds `/docs/runbook/*/log` to the file `git rev-parse --git-path info/exclude` names; no gate verifies it. Each document's design skill creates it; the main agent commits each change an agent makes to it, on the branch the project's convention names. Its header follows [Schema](#schema): `Key: value` lines before the first section heading, outside code fences, each key once:
+
+```text
+Status: draft
+Spec: -
+Issue: #N|none
+```
+
+A runbook's section heading is a `## ` line; an architecture document's is an `<h2>`, and it carries these lines in a `<pre>` under its `<h1>`.
+
+| Status | Set by |
+|---|---|
+| `draft` | the design skill when it creates the document, `doc-review` with `needs-changes`, or the user returning an approved document for a change |
+| `ready` | `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js doc-review <document> ready`, which the main agent runs on a passing review |
+| `approved` | the user only, from `ready` |
+| `executed` | a runbook only: the main agent, from `approved`, under [review-infra.md — After execution](../skills/review-infra/SKILL.md#after-execution) |
+
+`Spec:` starts as `-` and holds the hash of the document without its `Status:` and `Spec:` lines, line-ending carriage returns, and trailing blank lines. `doc-review` sets it, or resets it to `-` with `needs-changes`; an agent may also reset a draft's `Spec:` to `-`. A review or approval holds only while `Spec:` equals that hash, so the user approves only a `ready` document whose Spec holds. After approval the document is frozen except for its Status line. A runbook's `log` takes `EX-n` entries, appended with an edit tool, only while the runbook is `approved` or `executed`. `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js doc-check <document>` prints the Status and whether Spec holds, and exits 1 when a `ready` or later document's does not, or the header is malformed. The main agent runs it when it hands a `ready` document to the user for approval, and stops on exit 1. The main agent, before handing an approved runbook to the user to execute and before the after-execution audit, and the agent running design-feature, before planning from an architecture document's `DC-n`, run it and stop on exit 1 or a Status below `approved`.
+
+The [gate](../core/gate-check.js) refuses an agent's edit-tool call that changes a document's `Status:` or `Spec:` line, other than a runbook's `approved` to `executed` or a draft's `Spec:` reset to `-`, drops either line, repeats a header key, creates a document at a Status other than `draft` or a Spec other than `-`, or changes a frozen document, and one that writes a runbook's `log` below `approved` or changes an entry already in it. It never checks a shell command against documents, as they are tracked files that Git operations change: `doc-check` catches a shell change to a reviewed body or to `Spec:`, but nothing catches a shell command that sets `Status:`, such as an agent approving or executing a document itself, or that rewrites a runbook's `log`.
 
 ## Verification
 

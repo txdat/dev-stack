@@ -1,14 +1,18 @@
 // The record guard (../rules/plan.md#changes): resume and reopen are the user's, only dev-stack
 // writes the stack log, only the user sets `approved` and only dev-stack approve `auto-approved`
 // (no unapproved plan reaches a later Status otherwise), and an approved plan's Status never
-// returns to planning nor its spec changes. An edit tool's call is simulated and refused before it
-// lands. A shell command is matched as text only for resume, reopen, and log writes; its plan
-// writes are judged after it runs, against a snapshot. Anything it cannot read passes: it never
-// gates a phase. It is a guardrail against an agent's mistakes and shortcuts, not a sandbox.
+// returns to planning nor its spec changes; a runbook's or architecture document's Status and Spec
+// lines and frozen body hold, and a runbook's log only grows after approval
+// (../rules/plan.md#documents), checked for edit tools only. An edit tool's call is simulated and
+// refused before it lands. A shell command is matched as text only for resume, reopen, and log
+// writes; its plan writes are judged after it runs, against a snapshot. Anything it cannot read
+// passes: it never gates a phase. It is a guardrail against an agent's mistakes and shortcuts, not
+// a sandbox.
 
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { b, byteCompare, rowsOf, stripNewlines } from "./bytes.ts";
+import { type DocKind, docKind, FROZEN, parseDoc, runbookOfLog } from "./doc.ts";
 import { block, type GateCtx, type HookInput, type Json, member, str } from "./hook-input.ts";
 import { PlanLib, statusRank } from "./plan-lib.ts";
 import {
@@ -171,11 +175,113 @@ const applyEdits = (
   return out;
 };
 
+/**
+ * An edit tool's call on a runbook or architecture document (../rules/plan.md#documents): its Status
+ * and Spec lines change only through dev-stack doc-review or the user, except a runbook's approved
+ * to executed; a new document starts at draft with Spec -; a frozen one keeps its body. A file
+ * that is no document before or after the call passes.
+ */
+const docGuard = (kind: DocKind, real: string, tool: string, t: Json | undefined): void => {
+  let text: string | undefined;
+  let cur: string | undefined;
+  if (isFile(real)) cur = readBytes(real);
+  if (tool === "Write") {
+    const c = member(t, "content");
+    text = c === undefined || c === null ? "" : (str(c) ?? undefined);
+  } else {
+    if (cur === undefined) return;
+    text = applyEdits(cur, t);
+    if (text === undefined && cur.includes("\r")) {
+      text = applyEdits(lf(cur), t, lf);
+      cur = lf(cur);
+    }
+  }
+  if (text === undefined) return;
+  const now = parseDoc(text, kind);
+  const was = cur === undefined ? undefined : parseDoc(cur, kind);
+  const owner = "(rules/plan.md#documents)";
+  if (!was?.isDoc) {
+    if (now.isDoc && (now.status !== "draft" || now.spec !== "-"))
+      block(
+        `${real} starts as 'Status: draft' and 'Spec: -'; dev-stack.js doc-review records a verdict, and only the user approves ${owner}.`,
+      );
+    if (now.isDoc && now.dupes.length > 0)
+      block(`${real} keeps each header key once: ${now.dupes.join("; ")} ${owner}.`);
+    return;
+  }
+  if (!now.isDoc) block(`${real} keeps its 'Status:' and 'Spec:' header lines ${owner}.`);
+  if (now.dupes.length > was.dupes.length)
+    block(`${real} keeps each header key once: ${now.dupes.join("; ")} ${owner}.`);
+  const reset = was.status === "draft" && now.status === "draft" && now.spec === "-";
+  if (now.spec !== was.spec && !reset)
+    block(
+      `Only dev-stack.js doc-review sets ${real}'s 'Spec:', other than a draft's reset to '-' ${owner}.`,
+    );
+  if (now.status !== was.status) {
+    const executed = kind === "runbook" && was.status === "approved" && now.status === "executed";
+    if (!executed)
+      block(
+        now.status === "approved"
+          ? `Only the user sets 'Status: approved' on ${real} ${owner}.`
+          : `${real}'s Status changes only through dev-stack.js doc-review or the user, except a runbook's approved to executed after its audit ${owner}.`,
+      );
+  }
+  if (FROZEN.has(was.status) && now.body !== was.body)
+    block(
+      `${real} is '${was.status}' and frozen: only its Status line changes. A needed change goes to the user, who returns it to draft ${owner}.`,
+    );
+};
+
+/**
+ * An edit tool's call on a runbook's log (../rules/plan.md#documents): it takes entries only while
+ * the runbook beside it is approved or executed, and only by appending. A log whose runbook is no
+ * document passes.
+ */
+const runbookLogGuard = (rb: string, real: string, tool: string, t: Json | undefined): void => {
+  const text = isFile(rb) ? readBytes(rb) : undefined;
+  const doc = text === undefined ? undefined : parseDoc(text, "runbook");
+  if (!doc?.isDoc) return;
+  const owner = "(rules/plan.md#documents)";
+  if (!FROZEN.has(doc.status))
+    block(`${real} takes execution entries only once ${rb} is approved ${owner}.`);
+  let cur = isFile(real) ? readBytes(real) : undefined;
+  if (cur === undefined || cur === "") return;
+  let next: string | undefined;
+  if (tool === "Write") {
+    const c = member(t, "content");
+    next = c === undefined || c === null ? "" : str(c);
+  } else {
+    next = applyEdits(cur, t);
+    if (next === undefined && cur.includes("\r")) {
+      next = applyEdits(lf(cur), t, lf);
+      cur = lf(cur);
+    }
+  }
+  // An entry starts on its own line: text joined to the last line would change that entry.
+  const joined =
+    !cur.endsWith("\n") &&
+    next !== undefined &&
+    next.length > cur.length &&
+    next[cur.length] !== "\n";
+  if (next !== undefined && (!next.startsWith(cur) || joined))
+    block(`${real} only grows: append an entry, never change or remove one ${owner}.`);
+};
+
 const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
   const t = input["tool_input"];
   const path = str(member(t, "file_path")) ?? "";
   if (path === "") return;
   const real = realpathM(path, ctx.cwd);
+  const kind = docKind(real);
+  if (kind !== undefined) {
+    docGuard(kind, real, tool, t);
+    return;
+  }
+  const rb = runbookOfLog(real);
+  if (rb !== undefined) {
+    runbookLogGuard(rb, real, tool, t);
+    return;
+  }
   const m = /^(\/.*)\/docs\/plans\/[0-9]+_[a-z0-9-]+\/[^/]+$/s.exec(real);
   if (!m?.[1]) return;
   const name = basename(real);

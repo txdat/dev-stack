@@ -794,3 +794,72 @@ test("a plan path resolves written absolute or as a @ file mention", () => {
     "a relative path without @ does not resolve",
   );
 });
+
+test("doc-review and doc-check: runbooks and architecture documents", () => {
+  const RB = `${REPO}/docs/runbook/12_db-move/rb.md`;
+  const runbook = (status: string, spec: string) =>
+    `# Move the database\nStatus: ${status}\nSpec: ${spec}\nIssue: #12\n\n## Success Criteria\nSC-1 — reads succeed — Check: true\n`;
+  write(RB, runbook("draft", "-"));
+  assert.equal(ok("doc-check", RB), `${RB} draft unreviewed`);
+  fails("Usage", "doc-review", RB);
+  fails("Usage", "doc-review", RB, "maybe");
+  assert.match(ok("doc-review", RB, "ready"), /^Status: ready and Spec: [0-9a-f]{40} recorded in /);
+  const spec = fieldOf(RB, "Spec") ?? "";
+  assert.ok(hasLine(RB, "Status: ready") && hasLine(RB, "Issue: #12"));
+  assert.equal(ok("doc-check", RB), `${RB} ready spec-holds`);
+  // The hash leaves out the Status and Spec lines, nothing else; the log is no part of it.
+  write(RB, runbook("approved", spec));
+  write(`${REPO}/docs/runbook/12_db-move/log`, "EX-1 — PH-1 ran\n");
+  assert.equal(ok("doc-check", RB), `${RB} approved spec-holds`);
+  write(RB, runbook("executed", spec));
+  assert.equal(ok("doc-check", RB), `${RB} executed spec-holds`);
+  fails("frozen; only the user returns it to draft", "doc-review", RB, "ready");
+  edit(RB, (t) => `${t}\n## Execution Record\nEX-2 — drop the table\n`);
+  const out = fails("spec-changed", "doc-check", RB);
+  assert.ok(out.includes(`${RB} executed spec-changed`), out);
+  write(RB, runbook("ready", spec).replace("reads succeed", "writes succeed"));
+  fails("spec-changed", "doc-check", RB);
+  ok("doc-review", RB, "needs-changes");
+  assert.ok(hasLine(RB, "Status: draft") && hasLine(RB, "Spec: -"));
+  assert.equal(ok("doc-check", RB), `${RB} draft unreviewed`);
+  write(RB, runbook("draft", "-").replace("Issue: #12", "Issue: #12\nStatus: approved"));
+  fails("repeats header keys: 'Status' on lines 2 and 5", "doc-check", RB);
+  // Line endings are no content: a CRLF copy hashes as its LF original.
+  write(RB, runbook("draft", "-").replace(/\n/g, "\r\n"));
+  ok("doc-review", RB, "ready");
+  assert.ok(read(RB).includes("Status: ready\r\nSpec: "), JSON.stringify(read(RB)));
+  assert.match(ok("doc-check", RB), / ready spec-holds$/);
+  write(RB, runbook("ready", fieldOf(RB, "Spec")?.replace("\r", "") ?? ""));
+  assert.match(ok("doc-check", RB), / ready spec-holds$/);
+  write(RB, runbook("executed", "-").replace("Status: executed", "Status: published"));
+  fails("a runbook takes draft, ready, approved, executed", "doc-check", RB);
+
+  // A file without both header lines, or outside the two layouts, is no document.
+  write(RB, "# Old\nStatus: draft | Issue: none\n");
+  fails("has no 'Status:' and 'Spec:' header lines", "doc-check", RB);
+  fails("is not a runbook", "doc-check", `${REPO}/docs/runbook/12_db-move/log`);
+  fails("is not a runbook", "doc-check", `${REPO}/README.md`);
+  fails("is not a runbook", "doc-check", `${REPO}/docs/runbook/db-move/rb.md`);
+  // Fixed segments match in any case, as a case-insensitive filesystem opens them.
+  const upper = `${REPO}/docs/Runbook/12_db-move/RB.md`;
+  write(upper, runbook("draft", "-"));
+  assert.equal(ok("doc-check", upper), `${upper} draft unreviewed`);
+  fails("is not a runbook", "doc-check", `${REPO}/docs/architecture/events.html`);
+
+  const AD = `${REPO}/docs/architecture/12_events.html`;
+  const html = (status: string) =>
+    `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>Events</title></head><body>\n<h1>Events</h1>\n<pre>\nStatus: ${status}\nSpec: -\nIssue: #12\n</pre>\n<h2>Contracts</h2>\n<pre>\nStatus: not a header line\n</pre>\n</body></html>\n`;
+  write(AD, html("draft"));
+  ok("doc-review", AD, "ready");
+  assert.ok(hasLine(AD, "Status: ready"), read(AD));
+  assert.match(read(AD), /^Spec: [0-9a-f]{40}$/m);
+  assert.ok(hasLine(AD, "Status: not a header line"), "a body line was rewritten");
+  assert.equal(ok("doc-check", AD), `${AD} ready spec-holds`);
+  edit(AD, (t) => t.replace("Status: ready", "Status: executed"));
+  fails("an architecture document takes draft, ready, approved", "doc-check", AD);
+  // A worktree's copy is checked as written, never through the main root.
+  const wt = `${ROOT}/elsewhere/docs/runbook/12_db-move/rb.md`;
+  write(wt, runbook("draft", "-"));
+  ok("doc-review", wt, "ready");
+  assert.equal(ok("doc-check", wt), `${wt} ready spec-holds`);
+});

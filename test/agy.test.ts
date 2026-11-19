@@ -80,6 +80,50 @@ test("PreToolUse enforces serialCheck and recordGuard on run_command, edit_file,
   assert.equal(writeDeny["decision"], "deny");
 });
 
+test("PreToolUse passes non-ASCII edit text to the record guard as written", () => {
+  const dir = repo(tmp("dev-agy-utf8"));
+  const rb = path.join(dir, "docs/runbook/1_db/rb.md");
+  const log = path.join(dir, "docs/runbook/1_db/log");
+  write(rb, "# Move\nStatus: approved\nSpec: abc\nIssue: none\n\n## Phases\nPH-1 — copy\n");
+  write(log, "EX-1 — PH-1 ran\n");
+  const call = (id: string, name: string, args: Record<string, unknown>) =>
+    runHook({ hookEventName: "PreToolUse", cwd: dir, toolCall: { id, name, args } });
+  const frozen = call("u1", "edit_file", {
+    Path: rb,
+    Target: "PH-1 — copy",
+    Replacement: "PH-1 — move",
+  });
+  assert.equal(frozen["decision"], "deny");
+  assert.match(String(frozen["reason"]), /frozen/);
+  const rewrite = call("u2", "edit_file", {
+    Path: log,
+    Target: "EX-1 — PH-1 ran",
+    Replacement: "EX-1 — skipped",
+  });
+  assert.equal(rewrite["decision"], "deny");
+  const append = call("u3", "write_file", {
+    Path: log,
+    Content: "EX-2 — PH-2 ran\n",
+    Append: true,
+  });
+  assert.equal(append["decision"], "allow", String(append["reason"]));
+  // A relative Path's Append prefix is read from the payload's cwd, not the hook's.
+  const relative = runHook(
+    {
+      hookEventName: "PreToolUse",
+      cwd: dir,
+      toolCall: {
+        id: "u4",
+        name: "write_file",
+        args: { Path: "docs/runbook/1_db/rb.md", Content: "PH-2 — drop\n", Append: true },
+      },
+    },
+    { cwd: "/tmp" },
+  );
+  assert.equal(relative["decision"], "deny");
+  assert.match(String(relative["reason"]), /frozen/);
+});
+
 test("PreToolUse gates read_file on gated dev skills and allows ungated skills", () => {
   const dir = repo(tmp("dev-agy-skill"));
   const deny = runHook({

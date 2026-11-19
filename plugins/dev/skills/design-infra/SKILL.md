@@ -7,9 +7,9 @@ effort: high
 
 # /design-infra — Infrastructure Runbook
 
-Use for migrations, deployments, DNS, IaC, and database operations within established boundaries; architecture changes use [design-system.md](../design-system/SKILL.md). The lane is design → review → human execution → optional post-execution audit. This skill writes a runbook from read-only live-state checks; it never mutates infrastructure.
+Use for migrations, deployments, DNS, IaC, and database operations within established boundaries; architecture changes use [design-system.md](../design-system/SKILL.md). The lane is design → review → the user's approval → human execution → post-execution audit. This skill writes a runbook from read-only live-state checks; it never mutates infrastructure.
 
-Write `docs/runbooks/<issue>_<slug>.md` with `Status: draft | Date: <date> | Issue: #N|none | Review:`, in the language [plan.md — Artifact](../../rules/plan.md#artifact) prescribes. Declare each ID at the start of a line in its section, outside code fences; write the phase template unfenced. `Status` stays `draft` until the main agent sets `executed` under [review-infra.md — After execution](../review-infra/SKILL.md#after-execution); `Review:` holds the passing review ([review-infra.md](../review-infra/SKILL.md)).
+Write `docs/runbook/<issue>_<slug>/rb.md` with its `# ` title and the header [plan.md — Documents](../../rules/plan.md#documents) gives, in the language [plan.md — Artifact](../../rules/plan.md#artifact) prescribes. Declare each ID at the start of a line in its section, outside code fences; write the phase template unfenced.
 
 - **`## Success Criteria`:** each measurable criterion as `SC-n` with its read-only verification command.
 - **`## Evidence`:** each material live-state claim as `CL-n`: value, source command, observation time, and status — verified, assumed, or revalidate before execution. An assumed claim needs a verification gate before any phase relies on it.
@@ -29,4 +29,4 @@ Time window: <duration, rollback deadline>
 
 Order phases so backups and baselines precede mutation, healthy replacements precede cutover and drain, and gated destruction comes last; keep the rollback target until cutover is verified. Mark irreversible actions; never promise rollback after its prerequisites are gone. Check source and target coexistence and duplicate processing, pinned versions, dependent resources, DNS and traffic mappings, IaC changes, and CI/CD placement. A destruction phase accounts for dependencies, deletion protection, backups, and explicit human confirmation.
 
-Finish when the operation is concrete and reviewable; hand off to [review-infra.md](../review-infra/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the runbook, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-infra; [plan.md — Review](../../rules/plan.md#review) owns the round limit. The main agent adds `## Execution Record` when execution happens.
+Finish when the operation is concrete and reviewable; hand off to [review-infra.md](../review-infra/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the runbook, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-infra; [plan.md — Review](../../rules/plan.md#review) owns the round limit.
