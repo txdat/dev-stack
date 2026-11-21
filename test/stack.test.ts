@@ -327,7 +327,7 @@ test("approve: an agent's approval, as auto-approved", () => {
   assert.equal(skillGate("dev-review-feature", G), "");
   assert.equal(
     ok("next", R, "--md").split("\n")[2],
-    "| pr1 | 🔷 auto-approved | - | ▶ execute-feature | - |",
+    "| pr1 | 🔷 auto-approved | - | ⏩ execute-feature | - |",
   );
   assert.equal(ok("check", R).split("\n")[0], `SKIP ${R} (auto-approved)`);
   assert.ok(skillGate("dev-review-code", R).includes("not yet implemented"));
@@ -349,6 +349,7 @@ test("approve: an agent's approval, as auto-approved", () => {
     rowOf(R, G).startsWith("revise|"),
     "a plan returned to planning with a ready Spec goes to revise",
   );
+  assert.ok(ok("next", R, "--tree").includes("pr4 ⚪ planning  📝 revise — "));
   ok("review", G, "needs-changes");
   fails(holds, "approve", G);
   assert.equal(
@@ -370,7 +371,7 @@ test("next views", () => {
     "| plan | status | parent | action | reason |",
     "|---|---|---|---|---|",
   ]);
-  assert.equal(md[2], "| pr1 | 🔵 approved | - | ▶ execute-feature | - |");
+  assert.equal(md[2], "| pr1 | 🔵 approved | - | ⏩ execute-feature | - |");
   assert.equal(md[3], "| pr2 | 🔵 approved | pr1 | ⏳ wait-parent | pr1 must be reviewed first |");
   assert.equal(md.length, 6);
   fails("Usage", "next", R, "--json");
@@ -378,10 +379,10 @@ test("next views", () => {
   assert.equal(
     ok("next", R, "--tree"),
     [
-      "pr1 🔵 approved  ▶ execute-feature",
+      "pr1 🔵 approved  ⏩ execute-feature",
       "├─ pr2 🔵 approved  ⏳ wait-parent — pr1 must be reviewed first",
-      "│  └─ pr4 ⚪ planning  ▶ review-feature",
-      "└─ pr3 ⚪ planning  ▶ review-feature",
+      "│  └─ pr4 ⚪ planning  ⏩ review-feature",
+      "└─ pr3 ⚪ planning  ⏩ review-feature",
     ].join("\n"),
   );
 });
@@ -403,11 +404,21 @@ test("runnable actions are the gate's", () => {
   for (const p of [R, C, S]) setStatus(p, "reviewed", seed);
   expectNext("root done child done sib done grand review-feature");
   setStatus(R, "implemented");
-  expectNext("root blocked child blocked sib blocked grand review-feature");
+  // A reviewed plan whose parent is no longer reviewed merges forward; its parent stays blocked.
+  expectNext("root blocked child merge-forward sib merge-forward grand review-feature");
+  assert.ok(
+    rowOf(R, C).startsWith(`merge-forward|${R} is 'implemented'; merge it forward into this plan`),
+    rowOf(R, C),
+  );
+  assert.equal(ok("next", R, "--md").split("\n")[3]?.split(" | ")[3], "🔀 merge-forward");
+  assert.ok(ok("next", R, "--tree").includes("├─ pr2 🟢 reviewed  🔀 merge-forward — "));
+  setStatus(R, "bogus");
+  assert.equal(rowOf(R, C), `blocked|${R} has unknown status 'bogus'`);
+  setStatus(R, "implemented");
   git(REPO, "commit", "-q", "--allow-empty", "-m", "fix: root repair");
   setStatus(R, "reviewed", head("HEAD"));
   assert.ok(
-    rowOf(R, C).startsWith(`blocked|its reviewed SHA does not contain ${R}'s`),
+    rowOf(R, C).startsWith(`merge-forward|its reviewed SHA does not contain ${R}'s`),
     rowOf(R, C),
   );
   for (const p of [C, S, G]) setStatus(p, "reviewed", head("HEAD"));
