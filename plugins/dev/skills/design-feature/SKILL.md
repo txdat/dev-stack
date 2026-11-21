@@ -54,7 +54,7 @@ Do not write facts that unrelated merges can falsify: line numbers, counts, "the
 
 ## 4. Keep it simple
 
-Reuse code that implements the same concept, per [CODING.md](../../rules/CODING.md#changes-and-evidence), and handle cases the contract treats alike through one path. For each decision that adds abstraction, a scan or unbounded read, state, a dependency, or coordination, its DD names the failure that would occur without it and why a narrower variant would not do; drop the decision otherwise. Of options that meet the same requirement, the narrowest adds the fewest of these, then changes the fewest files. Count every place that must separately enforce a new rule as a cost. Name the code the change deletes.
+Reuse code that implements the same concept, per [CODING.md — Changes and evidence](../../rules/CODING.md#changes-and-evidence), and handle cases the contract treats alike through one path. For each decision that adds abstraction, a scan or unbounded read, state, a dependency, or coordination, its DD names the failure that would occur without it and why a narrower variant would not do; drop the decision otherwise. Of options that meet the same requirement, the narrowest adds the fewest of these, then changes the fewest files. Count every place that must separately enforce a new rule as a cost. Name the code the change deletes.
 
 ## 5. Split PRs
 

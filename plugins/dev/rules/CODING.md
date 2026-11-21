@@ -12,7 +12,7 @@ Report inspected facts, inference, and unrun checks distinctly, with decisive fi
 
 ## Tests
 
-Tests assert required observable behavior; never special-case test inputs or replace behavior with canned results. Plan-backed work adds [test-first proof](plan.md#verification).
+Tests assert required observable behavior; never special-case test inputs or replace behavior with canned results. Plan-backed work adds test-first proof under [plan.md — Verification](plan.md#verification).
 
 Affected tests are the tests the change adds or edits, plus existing tests that exercise the changed code or its callers. Find them through references and imports, or the runner's related-test selection, such as Jest `--findRelatedTests`. Unless the user or the project's instructions, such as AGENTS.md or CLAUDE.md, require the full suite, run only affected tests, selected by file or test name, such as `go test ./changed/pkg -run '^(TestA|TestB)$'` or a pytest node id; when the runner cannot select them, run the smallest unit that contains them and report what else it ran. A CI workflow or test script that runs the full suite is not such a requirement. When a project check runs a full suite that neither the user nor the project's instructions require, run the check's other steps and the affected tests instead, and report the full suite as unrun; the full suite is then not a required check under [CORE.md — Work](CORE.md#work).
 
