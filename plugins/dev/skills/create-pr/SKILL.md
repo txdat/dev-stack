@@ -14,6 +14,6 @@ Publish a stack whose plans are all `reviewed`, one PR per plan, draft unless th
 3. `dev-publish.js verify <plan>` — one open PR on the target; its head, `origin`, and the local Branch at the reviewed SHA; a body linking the PR of each plan below.
 4. Once every plan verifies, `dev-publish.js cleanup <plan>`, children before parents — it removes the plan's worktree, deletes the local Branch when it matches `origin`, and sets `Status: published`. If it lists ignored files, check them for unrelated work, then rerun with `--ignored-checked`. If it stops partway, rerun it on the unpublished plans.
 
-PR bodies follow the project template and [artifact.md](../../rules/artifact.md#naming-and-language)'s language rule: the change, why, how it was verified, and limitations. Add `Refs #N` when an issue is linked, never a closing keyword. List the PRs below this one in the stack, in order. The plan stays out of the PR; the body carries what a reader needs.
+PR bodies follow the project template and [artifact.md — Naming and language](../../rules/artifact.md#naming-and-language): the change, why, how it was verified, and limitations. Add `Refs #N` when an issue is linked, never a closing keyword. List the PRs below this one in the stack, in order. The plan stays out of the PR; the body carries what a reader needs.
 
 Return the PR URLs.

@@ -7,7 +7,7 @@ effort: medium
 
 # /split-pr-atomic — Split a PR into Atomic PRs
 
-Split one open PR into a stack of smaller PRs that together carry exactly its diff, then close the original with a link to them. Run only on the user's explicit request; no phase starts or suggests it. Pass a PR number or URL, or a `published` plan path, whose PR is `gh pr list --head <Branch> --state open`. A published plan is frozen ([plan.md — Sequence](../../rules/plan.md#sequence)): read it, never edit it or run `dev-stack.js` or `dev-publish.js` on it. Slices are PRs, not plans. Write PR bodies and comments under [artifact.md](../../rules/artifact.md#naming-and-language)'s language rule.
+Split one open PR into a stack of smaller PRs that together carry exactly its diff, then close the original with a link to them. Run only on the user's explicit request; no phase starts or suggests it. Pass a PR number or URL, or a `published` plan path, whose PR is `gh pr list --head <Branch> --state open`. A published plan is frozen ([plan.md — Sequence](../../rules/plan.md#sequence)): read it, never edit it or run `dev-stack.js` or `dev-publish.js` on it. Slices are PRs, not plans. Write PR bodies and comments under [artifact.md — Naming and language](../../rules/artifact.md#naming-and-language).
 
 ## 1. Resolve
 

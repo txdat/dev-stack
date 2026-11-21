@@ -1,13 +1,13 @@
 ---
 name: design-infra
-description: "Design a runnable infrastructure operations plan from live-state evidence, verification gates, and rollback requirements."
+description: "Design a runnable infrastructure runbook from live-state evidence, verification gates, and rollback requirements."
 model: haiku
 effort: high
 ---
 
 # /design-infra — Infrastructure Runbook
 
-Use for migrations, deployments, DNS, IaC, and database operations within established boundaries; architecture changes use [design-system.md](../design-system/SKILL.md). The lane is design → review → the user's approval → the user's execution → post-execution audit. This skill writes a runbook from read-only live-state checks; it never mutates infrastructure.
+Use for migrations, deployments, DNS, IaC, and database operations within established boundaries; architecture changes use [design-system.md](../design-system/SKILL.md). The lane is design → review → the user's approval → the user's execution → after-execution audit. This skill writes a runbook from read-only live-state checks; it never mutates infrastructure.
 
 Write `docs/runbook/<issue>_<slug>/rb.md` with its `# ` title and the header [documents.md](../../rules/documents.md) gives, in the language [artifact.md — Naming and language](../../rules/artifact.md#naming-and-language) prescribes. Declare each ID at the start of a line in its section, outside code fences; write the phase template unfenced.
 

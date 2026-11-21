@@ -23,7 +23,7 @@ Return `READY` or `NEEDS CHANGES` with findings ranked by severity and the decis
 
 Run when the user reports what ran, in full or in part; the runbook is not proof of execution. Work in a checkout of the branch that holds the runbook, such as an open PR's branch; its `log` lives there. Run `node $DEV_LIB/bin/dev-stack.js doc-check <runbook>` first; the audit continues on any result. On exit 1 or a Status below `approved`, report the execution of an unapproved or changed runbook as a blocking finding that names the missing condition: the Status, or a Spec that no longer holds.
 
-Check each `SC-n`, remaining `RS-n`, divergence from the plan, and prerequisites of unfinished phases. For irreversible actions, determine whether their gates held beforehand; current health cannot prove that. Mark what you cannot verify `UNVERIFIED`.
+Check each `SC-n`, remaining `RS-n`, divergence from the runbook, and prerequisites of unfinished phases. For irreversible actions, determine whether their gates held beforehand; current health cannot prove that. Mark what you cannot verify `UNVERIFIED`.
 
 Return, in order:
 
