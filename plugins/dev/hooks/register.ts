@@ -1,11 +1,11 @@
 // The dev plugin's Claude Code module: the rules as a context block, the phase gates, record guard,
 // and serial-test check on tool calls and typed skill commands, and the /dev-stack-* commands.
-// The module has no Node, so it runs the core through bin/ CLIs under bun: bin/hook.ts reads a
+// The module has no Node APIs, so it runs the core through bin/ CLIs under node: bin/hook.ts reads a
 // Claude-shaped hook JSON on stdin and prints the verdict, as the old settings hooks did, and
 // bin/dev-stack-command.ts runs a command. commands.ts holds what the Pi extension shares.
 
 import type { EngineInterface as Engine, Register } from "claude-code";
-import { BUN, COMMANDS, mayNamePhase, RULE_FILES, rulesText, usage } from "./commands.ts";
+import { COMMANDS, mayNamePhase, NODE, RULE_FILES, rulesText, usage } from "./commands.ts";
 
 /** hook.ts's verdict: a refusal, a post-check report, or a pass; `error` when it could not run. */
 type Verdict = { deny: string } | { report: string } | { error: string } | Record<string, never>;
@@ -30,7 +30,7 @@ const hook = async ($: Engine, input: Record<string, unknown>): Promise<Verdict>
   let out: string;
   try {
     // A run past the timeout rejects, so a hung gate passes the call with a warning.
-    const ran = await $.process.run([...BUN, `${$.plugin.root}/bin/hook.js`], {
+    const ran = await $.process.run([...NODE, `${$.plugin.root}/bin/hook.js`], {
       cwd: await $.session.cwd(),
       stdin: JSON.stringify(input),
       timeoutMs: HOOK_TIMEOUT_MS,
@@ -104,7 +104,7 @@ export const register: Register = (on) => {
       agentId?: string;
       requestMeta?: unknown;
     };
-    // Only a gated phase needs the gate; any other skill runs without starting bun.
+    // Only a gated phase needs the gate; any other skill runs without starting node.
     if (tool === "Skill" && !mayNamePhase(args)) return next(e);
     const pre = await hook($, {
       hook_event_name: "PreToolUse",
@@ -186,7 +186,7 @@ export const register: Register = (on) => {
       }
       try {
         const ran = await $.process.run(
-          [...BUN, `${$.plugin.root}/bin/dev-stack-command.js`, c.name, e.args],
+          [...NODE, `${$.plugin.root}/bin/dev-stack-command.js`, c.name, e.args],
           { cwd: await $.session.cwd(), timeoutMs: 120_000 },
         );
         if (ran.exitCode !== 0)

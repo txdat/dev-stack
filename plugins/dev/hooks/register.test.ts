@@ -1,6 +1,6 @@
 import type { On } from "claude-code";
 import { expect, test } from "claude-code/testing";
-import { BUN } from "./commands.ts";
+import { NODE } from "./commands.ts";
 
 // The session's directory, where every CLI runs.
 const CWD = "/home/u/repo/sub";
@@ -46,7 +46,7 @@ function engine(
       cwds.push(e.init?.cwd);
       answer = ran;
     }
-    if (answer === "throw") throw new Error("spawn bun ENOENT");
+    if (answer === "throw") throw new Error("spawn node ENOENT");
     return { value: { ...answer, isStdoutTruncated: false, isStderrTruncated: false } };
   });
   return Object.assign(calls, { hooks, cwds });
@@ -67,8 +67,8 @@ test("a command runs bin/dev-stack-command.js once, in the session directory", a
   await $.command.run(typed("dev-stack-stop", `${PLAN}  flaky test`));
   await $.command.run(typed("dev-stack-next", `${PLAN} --md`));
   expect(calls).toEqual([
-    [...BUN, "bin/dev-stack-command.js", "dev-stack-stop", `${PLAN}  flaky test`],
-    [...BUN, "bin/dev-stack-command.js", "dev-stack-next", `${PLAN} --md`],
+    [...NODE, "bin/dev-stack-command.js", "dev-stack-stop", `${PLAN}  flaky test`],
+    [...NODE, "bin/dev-stack-command.js", "dev-stack-next", `${PLAN} --md`],
   ]);
   expect(new Set(calls.cwds)).toEqual(new Set([CWD]));
 });

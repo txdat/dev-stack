@@ -17,7 +17,7 @@ Validate each `CL-n` claim and `RS-n` resource against live workloads, images, n
 
 Failed collection is `UNVERIFIED`, never proof of absence. Check the phases against design-infra's ordering and gate rules, especially coexistence and duplicate processing, traffic dependencies, and whether rollback resources survive their promised window. Gates need observable pass and stop conditions: a phase's Prerequisites gate its Commands, and its Verification gates the next phase. Missing evidence that affects execution safety blocks.
 
-Return `READY` or `NEEDS CHANGES` with findings ranked by severity and the decisive command evidence; a re-review is a delta review under [plan.md — Review](../../rules/plan.md#review). Unless the request is review-only, the main agent records the verdict with `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js doc-review <runbook> ready|needs-changes` under [plan.md — Documents](../../rules/plan.md#documents).
+Return `READY` or `NEEDS CHANGES` with findings ranked by severity and the decisive command evidence; a re-review is a delta review under [plan.md — Review](../../rules/plan.md#review). Unless the request is review-only, the main agent records the verdict with `node $DEV_LIB/bin/dev-stack.js doc-review <runbook> ready|needs-changes` under [plan.md — Documents](../../rules/plan.md#documents).
 
 ## After execution
 

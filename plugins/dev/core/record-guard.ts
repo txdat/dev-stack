@@ -62,12 +62,9 @@ const WRITE_RE = new RegExp(
   "s",
 );
 
-/**
- * `node <path>` or `bun <path>` in command position, the path's quote, and the path. Bun may carry
- * only the flags the plugin runs it with; any other option, such as a preload, makes it any script.
- */
-const RUNTIME_RE = new RegExp(
-  `(^|[;&|(\\n])${SP}*(?:node|bun(?:${SP}+(?:--no-env-file|--config=/dev/null))*)${SP}+(['"]?)([^ \\t\\n\\v\\f\\r;&|'"]*)\\2(?=[ \\t\\n\\v\\f\\r;&|)]|$)`,
+/** `node <path>` in command position, the path's quote, and the path. */
+const NODE_RE = new RegExp(
+  `(^|[;&|(\\n])${SP}*node${SP}+(['"]?)([^ \\t\\n\\v\\f\\r;&|'"]*)\\2(?=[ \\t\\n\\v\\f\\r;&|)]|$)`,
   "g",
 );
 // The CLIs carry this module's own extension: .ts run from the sources, .js in the built plugin.
@@ -123,9 +120,9 @@ const shellGuard = (input: HookInput, ctx: GateCtx): void => {
       )
       .join("\n"),
   );
-  // The dev CLIs run under node or bun write the log only through dev-stack, so the runtime in that
-  // position is no writing tool; node -e, bun -e, and other scripts still are.
-  const tools = probe.replace(RUNTIME_RE, (all, lead: string, _q, path: string) =>
+  // The dev CLIs run under node write the log only through dev-stack, so node in that position is
+  // no writing tool; node -e, other scripts, and bun in any form still are.
+  const tools = probe.replace(NODE_RE, (all, lead: string, _q, path: string) =>
     isDevCli(path, ctx) ? lead : all,
   );
   if (REDIR_RE.test(probe) || (LOG_RE.test(probe) && WRITE_RE.test(tools))) block(LOG_BLOCK);

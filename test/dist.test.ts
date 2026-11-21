@@ -7,11 +7,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
-import { BUN, exec, PLUGIN, RUN, tmp } from "./helpers.ts";
+import { exec, NODE, PLUGIN, RUN, tmp } from "./helpers.ts";
 
 const ROOT = path.resolve(PLUGIN, "../..");
 const OUT = path.join(tmp("dev-dist-test"), "dev");
-const built = exec([...BUN, path.join(ROOT, "scripts/build.ts"), "--out", OUT]);
+const built = exec([...NODE, path.join(ROOT, "scripts/build.ts"), "--out", OUT]);
 
 const files = (dir: string): string[] =>
   fs
@@ -21,7 +21,7 @@ const files = (dir: string): string[] =>
 
 test("the build replaces only an earlier build or an empty directory outside the checkout", () => {
   const build = (out: string) =>
-    exec([...BUN, path.join(ROOT, "scripts/build.ts"), "--out", out], { cwd: ROOT });
+    exec([...NODE, path.join(ROOT, "scripts/build.ts"), "--out", out], { cwd: ROOT });
   const other = tmp("dev-dist-other");
   fs.writeFileSync(path.join(other, "keep"), "");
   // A plugin of the same shape without the build's marker is not an earlier build.
@@ -123,7 +123,7 @@ test("the built hook guards the user's commands and trusts its own .js CLIs", ()
   const cwd = tmp("dev-dist-cwd");
   const plans = `${cwd}/docs/plans/1_dist`;
   const hook = (command: string) => {
-    const r = exec([...BUN, path.join(OUT, "bin/hook.js")], {
+    const r = exec([...NODE, path.join(OUT, "bin/hook.js")], {
       cwd,
       input: JSON.stringify({
         hook_event_name: "PreToolUse",
@@ -140,7 +140,7 @@ test("the built hook guards the user's commands and trusts its own .js CLIs", ()
     "",
   );
   const fake = tmp("dev-dist-fake");
-  assert.equal(hook(`bun ${fake}/dev-stack.js ${plans}/log`), "deny");
+  assert.equal(hook(`node ${fake}/dev-stack.js ${plans}/log`), "deny");
 });
 
 test("the built Pi extension loads", async () => {
@@ -148,32 +148,4 @@ test("the built Pi extension loads", async () => {
   fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(path.dirname(OUT), "node_modules"));
   const mod = await import(pathToFileURL(path.join(OUT, "pi/dev.js")).href);
   assert.equal(typeof mod.default, "function");
-});
-
-// Last: importing from the build before the Pi test links node_modules beside it would leave Bun
-// resolving that directory without it.
-test("the shipped bun invocation ignores the working directory's .env and bunfig.toml", async () => {
-  const cwd = tmp("dev-dist-hostile");
-  // A preload that answers for the gate with a pass, and an env value a CLI would inherit.
-  fs.writeFileSync(`${cwd}/pre.js`, 'process.stdout.write("{}"); process.exit(0);\n');
-  fs.writeFileSync(`${cwd}/bunfig.toml`, 'preload = ["./pre.js"]\n');
-  fs.writeFileSync(`${cwd}/.env`, "DEV_HOSTILE=leaked\n");
-  const { BUN: shipped } = await import(pathToFileURL(path.join(OUT, "hooks/commands.js")).href);
-  const input = JSON.stringify({
-    hook_event_name: "PreToolUse",
-    tool_name: "Bash",
-    tool_input: { command: `${RUN} '${OUT}/bin/dev-stack.js' resume ${cwd}/pr1.spec.md` },
-  });
-  const verdict = (argv: readonly string[]) =>
-    exec([...argv, path.join(OUT, "bin/hook.js")], { cwd, input }).out.trim();
-  assert.equal(verdict(["bun"]), "{}", "bare bun runs the preload, so the flags are what matter");
-  assert.equal(JSON.parse(verdict(shipped)).hookSpecificOutput.permissionDecision, "deny");
-  const env = exec([...shipped, "-e", 'process.stdout.write(process.env.DEV_HOSTILE ?? "unset")'], {
-    cwd,
-  });
-  assert.equal(env.out, "unset");
-  const agy = JSON.parse(fs.readFileSync(path.join(PLUGIN, "agy/hooks.json"), "utf8"));
-  const commands = JSON.stringify(agy).match(/"command":"[^"]*"/g) ?? [];
-  assert.ok(commands.length > 0);
-  for (const c of commands) assert.ok(c.startsWith(`"command":"${shipped.join(" ")} `), c);
 });

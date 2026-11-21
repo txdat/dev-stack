@@ -32,9 +32,9 @@ const isLink = (p: string) => {
   }
 };
 
-/** A bun script on PATH as `name`. */
+/** A node script on PATH as `name`. */
 const stub = (dir: string, name: string, body: string) => {
-  write(`${dir}/${name}`, `#!/usr/bin/env bun\n${body}\n`);
+  write(`${dir}/${name}`, `#!/usr/bin/env node\n${body}\n`);
   fs.chmodSync(`${dir}/${name}`, 0o755);
 };
 

@@ -63,13 +63,13 @@ A harness is supported when its adapter runs the gates, injects `rules/`, and lo
 
 ## Code
 
-All code is TypeScript; Bun runs the CLIs, the gate, the build, and the tests. `bun run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Bun, and `test/dist.test.ts` checks a fresh build.
+All code is TypeScript; Node 24 runs the CLIs, the gate, the build, and the tests. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Node, and `test/dist.test.ts` checks a fresh build.
 
 - Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers; the build rewrites them to `.js`.
-- `core/` holds the workflow logic as synchronous code on Node's APIs (`node:*` modules), which Bun and the Pi and DSH hosts provide. Pi's extension and the DSH Host plugin in `dsh/` import core directly. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`. Every caller of a `bin/` CLI, including that module, the Antigravity hooks, the rules, and the skills, runs it as [CODING.md — Tools](plugins/dev/rules/CODING.md#tools) requires; code takes the invocation from `BUN` in `hooks/commands.ts`. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
+- `core/` holds the workflow logic as synchronous code on Node's APIs (`node:*` modules), which Node and the Pi and DSH hosts provide. Pi's extension and the DSH Host plugin in `dsh/` import core directly. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`. Every caller of a `bin/` CLI, including that module, the Antigravity hooks, the rules, and the skills, runs it as [CODING.md — Tools](plugins/dev/rules/CODING.md#tools) requires; code takes the invocation from `NODE` in `hooks/commands.ts`. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
 - Core functions never call `process.exit` or `chdir`, take the working directory as an argument, and keep no module-level cache. CLIs write with `process.stdout.write` and set `process.exitCode`.
 - Plans are read as bytes (latin1) and matched with ASCII-only classes, never `\s` or locale-aware case folding, so hashes and parsing match the original bash under `LC_ALL=C`.
-- The gate fails closed on a phase it gates; the record guard and the serial-test check fail open. `bin/hook.ts` catches every error: on a phase-gate event it denies, on a guard or serial-check event it passes. An adapter that cannot run it at all (bun missing, timeout, unreadable output) passes the call with a visible warning, as a failed Claude Code hook does.
+- The gate fails closed on a phase it gates; the record guard and the serial-test check fail open. `bin/hook.ts` catches every error: on a phase-gate event it denies, on a guard or serial-check event it passes. An adapter that cannot run it at all (node missing, timeout, unreadable output) passes the call with a visible warning, as a failed Claude Code hook does.
 - Core writes byte strings (`core/bytes.ts`): files are read and written as latin1, and `git hash-object` gets bytes, never a UTF-8 re-encoding of them.
 
 The gate reads plan header fields and IDs, never prose. A change to the plan schema, statuses, or stack rules in [plan.md](plugins/dev/rules/plan.md) needs matching changes in `core/` and `test/`.
@@ -79,12 +79,12 @@ Tests that need a repository build scratch Git repos under `/tmp`, whose `docs/p
 ## Commands
 
 ```
-bun install           # dev dependencies, from bun.lock
-bun run build         # compile plugins/dev into dist/dev
-bun run typecheck     # tsc 7 over tsconfig.engine.json and tsconfig.node.json
-bun run lint          # biome check
-bun run format        # biome check --write
-bun run test          # bun test, serial, no per-test timeout
-bun run check         # typecheck, lint, test, then build
-bun test --timeout=0 test/<file>.test.ts   # one test file
+npm install           # dev dependencies, from package-lock.json
+npm run build         # compile plugins/dev into dist/dev
+npm run typecheck     # tsc 7 over tsconfig.engine.json and tsconfig.node.json
+npm run lint          # biome check
+npm run format        # biome check --write
+npm test              # node --test, serial
+npm run check         # typecheck, lint, test, then build
+node --test --test-isolation=none test/<file>.test.ts   # one test file
 ```

@@ -62,9 +62,9 @@ Use one plan and one PR unless review needs separable parts or the work holds bo
 
 ## 6. Finish
 
-Link the issue the user supplied, or record `Issue: none` and `0` in the directory name. Before handoff, run every PC Check in one batch, `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-check.js pcs <plan> --cwd <checkout>`, against the inspected branch (the PR target, or Base while that branch does not exist): a Check may fail only when an earlier step establishes its fact; read each FAIL against that step. Save the plan at its [plan.md — Artifact](../../rules/plan.md#artifact) path with `Status: planning`.
+Link the issue the user supplied, or record `Issue: none` and `0` in the directory name. Before handoff, run every PC Check in one batch, `node $DEV_LIB/bin/dev-check.js pcs <plan> --cwd <checkout>`, against the inspected branch (the PR target, or Base while that branch does not exist): a Check may fail only when an earlier step establishes its fact; read each FAIL against that step. Save the plan at its [plan.md — Artifact](../../rules/plan.md#artifact) path with `Status: planning`.
 
-Then, from the repository, run `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js check <root plan>`: the review-feature gate, minus its parent-approval and stop checks, on every plan in the stack not yet approved. Fix each reported block within the recorded DDs and rerun until every plan passes, under the attempt limit in [CORE.md — Work](../../rules/CORE.md#work). A pass proves shape, not correctness. Hand the stack to [review-feature.md](../review-feature/SKILL.md) only after it passes.
+Then, from the repository, run `node $DEV_LIB/bin/dev-stack.js check <root plan>`: the review-feature gate, minus its parent-approval and stop checks, on every plan in the stack not yet approved. Fix each reported block within the recorded DDs and rerun until every plan passes, under the attempt limit in [CORE.md — Work](../../rules/CORE.md#work). A pass proves shape, not correctness. Hand the stack to [review-feature.md](../review-feature/SKILL.md) only after it passes.
 
 ## 7. Revise after review
 

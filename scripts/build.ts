@@ -3,7 +3,7 @@
 // dist/dev-agy serves Antigravity with its native manifest, root hooks.json, and mapped frontmatter.
 // It builds into a sibling directory and swaps it in only when every step succeeded, so a failed
 // or running build never leaves a partial plugin at the output.
-// Usage: bun scripts/build.ts [--agy] [--out <dir>]
+// Usage: node scripts/build.ts [--agy] [--out <dir>]
 
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -208,7 +208,7 @@ const main = (args: string[]): number => {
     } else if (args[i] === "--out" && i + 1 < args.length) {
       out = args[++i];
     } else {
-      process.stderr.write("usage: bun scripts/build.ts [--agy] [--out <dir>]\n");
+      process.stderr.write("usage: node scripts/build.ts [--agy] [--out <dir>]\n");
       return 2;
     }
   }
