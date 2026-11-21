@@ -9,7 +9,7 @@ effort: medium
 
 Use for changed service boundaries, communication patterns, or cross-system integrations; ordinary features use [design-feature.md](../design-feature/SKILL.md). Assess impact under [CODING.md — Impact](../../rules/CODING.md#impact).
 
-Write `docs/architecture/<issue>_<slug>.html` with the header [plan.md — Documents](../../rules/plan.md#documents) gives, in the language [plan.md — Artifact](../../rules/plan.md#artifact) prescribes, with these sections:
+Write `docs/architecture/<issue>_<slug>.html` with the header [documents.md](../../rules/documents.md) gives, in the language [artifact.md — Naming and language](../../rules/artifact.md#naming-and-language) prescribes, with these sections:
 
 - **`Goal and Constraints`:** current pain, affected boundaries, and each measurable success criterion as `SC-n`, with its baseline or the `PH-n` that establishes it.
 - **`Options`:** each viable choice as `OP-n`, compared against the same constraints, including a simpler starting system. Cite the recommended one and justify its complexity by current needs. Diagram the current system's components as a `flowchart` before `OP-1`, and the recommended option's under it.
@@ -44,4 +44,4 @@ Issue: #N|none
 - A diagram shows only what its text states. Open each with exactly `<pre class="mermaid">`. In its source, write `<` as `#lt;` and `&` as `#amp;`, never as raw characters or HTML entities.
 - Render each diagram, numbered from 1 in document order, by piping its source unchanged to `mmdc -i - -o /tmp/<slug>-<n>.svg`; a nonzero exit is a rejection. Fix every rejected diagram. Without `mmdc`, stop and report that the diagrams are unrendered.
 
-Finish when the recommendation meets the constraints, every contract has an owner, and migration and decomposition can deliver the measured outcome. Hand off to [review-system.md](../review-system/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the draft, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-system; [plan.md — Review](../../rules/plan.md#review) owns the round limit. [plan.md — Documents](../../rules/plan.md#documents) owns approval and freezing; a needed change to an approved document goes to the user with options and a recommendation.
+Finish when the recommendation meets the constraints, every contract has an owner, and migration and decomposition can deliver the measured outcome. Hand off to [review-system.md](../review-system/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the draft, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-system; [artifact.md — Review](../../rules/artifact.md#review) owns the round limit. [documents.md](../../rules/documents.md) owns approval and freezing; a needed change to an approved document goes to the user with options and a recommendation.

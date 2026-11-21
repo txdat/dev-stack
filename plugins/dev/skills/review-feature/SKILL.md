@@ -1,17 +1,17 @@
 ---
 name: review-feature
-description: "Independently review a planning-stage plan for missing obligations, untraced decisions, weak test cases, delivery order, and simpler designs before human approval."
+description: "Independently review a planning-stage plan for missing obligations, untraced decisions, weak test cases, delivery order, and simpler designs before the user's approval."
 model: opus
 effort: medium
 ---
 
 # /review-feature — Break the Plan
 
-Review a `planning` plan independently under [plan.md — Review](../../rules/plan.md#review), against the rules in [design-feature.md](../design-feature/SKILL.md). The goal is to find what would make a correct-looking plan deliver the wrong thing.
+Review a `planning` plan independently under [artifact.md — Review](../../rules/artifact.md#review), against the rules in [design-feature.md](../design-feature/SKILL.md). The goal is to find what would make a correct-looking plan deliver the wrong thing.
 
 ## 1. Derive first
 
-On a re-review, a kept reviewer skips this section and a fresh one runs it first; both apply section 2 only to what [plan.md — Review](../../rules/plan.md#review) lists for a delta review.
+On a re-review, a kept reviewer skips this section and a fresh one runs it first; both apply section 2 only to what [artifact.md — Review](../../rules/artifact.md#review) lists for a delta review.
 
 Before reading the plan's decisions, ACs, and TCs, derive from the Goal, the request, and the source contracts: the required outcomes, prohibited outcomes, failure conditions, and ambiguous terms. Reduce any proposed fix that is not a stated constraint to the outcome it protects. Sketch the simplest design that meets them, reusing existing code for the same concepts.
 

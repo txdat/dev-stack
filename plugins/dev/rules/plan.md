@@ -1,6 +1,6 @@
 # Plan-Backed Delivery
 
-The shared contract for application plans, and the review lifecycle of runbooks and architecture documents ([Documents](#documents)). Phase skills say how to do each phase; this file owns what they share.
+The shared contract for application plans. Phase skills say how to do each phase; this file owns what they share. [artifact.md](artifact.md) owns artifact naming, prose language, and how every review runs.
 
 ## Scope
 
@@ -28,9 +28,9 @@ A gate blocks each phase until its entry status holds, and blocks every gated ph
 
 ## Artifact
 
-One plan delivers one PR. Plans live in the main working tree (`node $DEV_LIB/bin/dev-utils.js main-root`), never a linked worktree, at `docs/plans/<issue>_<slug>/pr<N>.spec.md`: `<issue>` is the issue number or `0`, and `<slug>` lowercase words joined by hyphens. One directory holds one stack; a parent's number is below its children's. Plans are never committed: the code, its tests, and the PR carry what ships ([Rationale](#rationale)). Git must ignore `docs/plans/` through the global excludes file or `.git/info/exclude`, never a committed `.gitignore`; the gates and `dev-stack.js check` block when Git does not ignore it. Never run `git clean -x`; it deletes plans. Every phase takes exactly one plan path, absolute or under `~`, or a `@` file mention of one, `@<path>`, resolved in the caller's directory, so `@docs/plans/<issue>_<slug>/pr<N>.spec.md` resolves only from the main working tree; a phase running in a worktree takes the absolute path. Never pick a plan by slug or recency.
+One plan delivers one PR. Plans live in the main working tree (`node $DEV_LIB/bin/dev-utils.js main-root`), never a linked worktree, at `docs/plans/<issue>_<slug>/pr<N>.spec.md`, the directory named under [artifact.md — Naming and language](artifact.md#naming-and-language). One directory holds one stack; a parent's number is below its children's. Plans are never committed: the code, its tests, and the PR carry what ships ([Rationale](#rationale)). Git must ignore `docs/plans/` through the global excludes file or `.git/info/exclude`, never a committed `.gitignore`; the gates and `dev-stack.js check` block when Git does not ignore it. Never run `git clean -x`; it deletes plans. Every phase takes exactly one plan path, absolute or under `~`, or a `@` file mention of one, `@<path>`, resolved in the caller's directory, so `@docs/plans/<issue>_<slug>/pr<N>.spec.md` resolves only from the main working tree; a phase running in a worktree takes the absolute path. Never pick a plan by slug or recency.
 
-Write plan, PR, and review prose in the linked issue's primary language, or English without one. Keep headings, field names, statuses, IDs, code, and paths as written below.
+Prose follows [artifact.md — Naming and language](artifact.md#naming-and-language).
 
 ## Schema
 
@@ -110,18 +110,6 @@ Each plan has its own worktree at `~/wt/<repo>-<issue>_<slug>-pr<N>`, found by t
 - Run code, tests, and branch Git operations in the worktree. Never stash, reset, or clean to get past unrelated changes in the worktree or the main root.
 - Fix a plan on its own Branch. Then the main agent merges it forward into each child whose Branch exists, then each changed child into its children, each in its own worktree once no phase runs there, reruns each merged-into plan's local checks, TC tests, and affected tests, and sets each that was `reviewed` to `implemented`, so review-code runs again. Never rebase, reset, or force-push.
 
-## Review
-
-These rules apply to every review skill. When this session wrote the artifact, run the review in a subagent that has not seen the conversation: the [reviewer](../agents/reviewer.md) agent where installed, on the model and effort in the review skill's frontmatter. Give it only [CODING.md](CODING.md), the review skill and the files that skill links directly, the artifact path, the user's request, the worktree and refs it needs, for review-code execute-feature's per-TC report and, outside a review-only request, its round's scratch path ([Review rounds](#review-rounds)), and, for a re-review, the prior findings and the diff of the repair. A stacked plan's reviewer also reads the plans below it. If no subagent is available, review directly and say so.
-
-The main agent keeps one reviewer for a stack's review-feature rounds, plans in dependency order, one per plan for its review-code rounds, and one per review-change target for its rounds, and sends each next plan or round to it through the harness's message or resume tool. It starts a fresh reviewer, given the same inputs, where the harness has no such tool, the reviewer's context is full, or another review is still running in it.
-
-Preferences and style never block, except that in review-change and review-code a rule quoted from an applicable instruction file blocks ([review-change.md — Blocking](../skills/review-change/SKILL.md#blocking)). The reviewer may read, run tests, and inspect Git. It edits files only in its review-code round's scratch and under `/tmp`, never inside a linked dependency, and never commits, touches refs, the stash, or status, or installs dependencies. The main agent repairs. A review-only request gets no scratch, returns findings, and changes nothing. The reviewer may start at most one level of child subagents (at most three levels in total from the main agent); it tells each child subagent it never starts further subagents.
-
-Round 1 covers the whole artifact. A re-review is a delta review: it checks the prior findings, the changed text, what cites or depends on it, and the PC Checks of changed PCs, and, in review-code, the repair diff with the TC and affected tests at the new tip, and nothing else.
-
-A review has 3 rounds: round 1 and two re-reviews. For a plan, dev-stack.js counts them under [Review rounds](#review-rounds). For an architecture document, a runbook, or a review-change target, the main agent counts them, and a NEEDS CHANGES verdict on the round at its limit goes to the user, who decides whether to grant three more rounds.
-
 ## Review rounds
 
 A verdict holds while the spec and the specs below it are unchanged: the spec hash ignores only the header's Status, Spec, and Tip lines, and [dev-stack.js](../bin/dev-stack.js) compares it with `Spec:`. The execute-feature, review-code, and create-pr gates require a current ready `Spec:`; create-pr requires one for every plan in the stack.
@@ -133,29 +121,6 @@ A needs-changes verdict counts as a round, never as a failed fix; `Failed fixes`
 Outside a review-only request, each review-code round runs in a scratch the main agent creates from the plan's worktree with `node $DEV_LIB/bin/dev-worktree.js scratch <issue>_<slug>-pr<N>-r<round> <tip SHA> [<repro> ...]`, passing each open finding's saved repro, and gives its path to the reviewer, who runs every command there. When `scratch` reports a repro as not applying, the main agent retries without it and gives that finding to the reviewer to rebuild. On a tip that changes a dependency manifest, it runs `isolate-dep` and installs in each scratch it opens. Each `ran` finding from the reviewer carries its repro from `scratch-diff <scratch> -- <its files>`, which the main agent saves under `/tmp` before ending the round with `scratch-remove`; a `ran` finding from the main agent's own tip check ([review-code.md — Finalize](../skills/review-code/SKILL.md#finalize)) carries no repro.
 
 Before repairing, the main agent reruns the command of every blocking `ran` finding that carries a repro in one fresh `scratch <issue>_<slug>-pr<N>-r<round>-v <tip SHA> <repro> ...`, then removes it. When `scratch` reports a repro as not applying, it retries `-r<round>-v` without that repro and reruns that finding alone in `scratch <issue>_<slug>-pr<N>-r<round>-v<k> <tip SHA> <repro>`, numbering `<k>` from 1, removing each scratch after its run. A repro that does not apply even alone counts as not reproducing. A finding that does not reproduce goes back to the reviewer once, in `scratch <issue>_<slug>-pr<N>-r<round>-f<k> <tip SHA>`, numbering `<k>` from 1, which the main agent removes after saving any rebuilt repro under `/tmp`; the reviewer's answer is not a verdict and records no round. The main agent then reruns the rebuilt repro in `scratch <issue>_<slug>-pr<N>-r<round>-v<k> <tip SHA> <repro>`, continuing the `<k>` numbering; if it still does not reproduce, the main agent relabels it `traced`, `located`, or `asserted` by the evidence left.
-
-## Documents
-
-A runbook ([design-infra](../skills/design-infra/SKILL.md)) lives at `docs/runbook/<issue>_<slug>/rb.md` and an architecture document ([design-system](../skills/design-system/SKILL.md)) at `docs/architecture/<issue>_<slug>.html`, each `<issue>_<slug>` named as a stack's directory ([Artifact](#artifact)); both are committed. A runbook's execution record is the `log` beside it, which is never committed: before its first entry, the main agent runs `git check-ignore -q <log>` and, when that fails, adds `/docs/runbook/*/log` to the file `git rev-parse --git-path info/exclude` names; no gate verifies it. Each document's design skill creates it; the main agent commits each change an agent makes to it, on the branch the project's convention names. Its header follows [Schema](#schema): `Key: value` lines before the first section heading, outside code fences, each key once:
-
-```text
-Status: draft
-Spec: -
-Issue: #N|none
-```
-
-A runbook's section heading is a `## ` line; an architecture document's is an `<h2>`, and it carries these lines in a `<pre>` under its `<h1>`.
-
-| Status | Set by |
-|---|---|
-| `draft` | the design skill when it creates the document, `doc-review` with `needs-changes`, or the user returning an approved document for a change |
-| `ready` | `node $DEV_LIB/bin/dev-stack.js doc-review <document> ready`, which the main agent runs on a passing review |
-| `approved` | the user only, from `ready` |
-| `executed` | a runbook only: the main agent, from `approved`, under [review-infra.md — After execution](../skills/review-infra/SKILL.md#after-execution) |
-
-`Spec:` starts as `-` and holds the hash of the document without its `Status:` and `Spec:` lines, line-ending carriage returns, and trailing blank lines. `doc-review` sets it, or resets it to `-` with `needs-changes`; an agent may also reset a draft's `Spec:` to `-`. A review or approval holds only while `Spec:` equals that hash, so the user approves only a `ready` document whose Spec holds. After approval the document is frozen except for its Status line. A runbook's `log` takes `EX-n` entries, appended with an edit tool, only while the runbook is `approved` or `executed`. `node $DEV_LIB/bin/dev-stack.js doc-check <document>` prints the Status and whether Spec holds, and exits 1 when a `ready` or later document's does not, or the header is malformed. The main agent runs it when it hands a `ready` document to the user for approval, and stops on exit 1. The main agent, before handing an approved runbook to the user to execute and before the after-execution audit, and the agent running design-feature, before planning from an architecture document's `DC-n`, run it and stop on exit 1 or a Status below `approved`.
-
-The [gate](../core/gate-check.js) refuses an agent's edit-tool call that changes a document's `Status:` or `Spec:` line, other than a runbook's `approved` to `executed` or a draft's `Spec:` reset to `-`, drops either line, repeats a header key, creates a document at a Status other than `draft` or a Spec other than `-`, or changes a frozen document, and one that writes a runbook's `log` below `approved` or changes an entry already in it. It never checks a shell command against documents, as they are tracked files that Git operations change: `doc-check` catches a shell change to a reviewed body or to `Spec:`, but nothing catches a shell command that sets `Status:`, such as an agent approving or executing a document itself, or that rewrites a runbook's `log`.
 
 ## Verification
 

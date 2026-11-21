@@ -1,4 +1,4 @@
-// Runbooks and architecture documents (../rules/plan.md#documents): their plan-style header, its
+// Runbooks and architecture documents (../rules/documents.md#lifecycle): their plan-style header, its
 // Status and Spec lines, and the hash Spec records. A document is recognized by its path and by
 // both header lines; anything else, such as another project's runbook, is no document here. A
 // runbook's execution record lives in the uncommitted `log` beside it, so its hash covers the whole

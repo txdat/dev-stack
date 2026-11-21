@@ -32,7 +32,8 @@ plugins/typescript-lsp/           the Claude Code vtsls language-server plugin, 
 plugins/dev/                      the plugin's sources; their build ships alone
   skills/<name>/SKILL.md          skills
   agents/<name>.md                subagents (Claude); Pi's main agent reads them directly
-  rules/                          CORE.md, CODING.md, plan.md, frontend-design.md
+  rules/                          CORE.md, CODING.md, plan.md, artifact.md, documents.md,
+                                  frontend-design.md
   core/                           the workflow logic: plans, stacks, gates (Node APIs, synchronous)
   bin/                            CLIs over core (`node $DEV_LIB/bin/<name>.js` once built); bin/hook.ts and bin/agy-hook.ts are the gates
   hooks/                          Claude Code plugin module (no Node): rules, and gates and commands
@@ -50,7 +51,7 @@ test/                             node --test suites
 
 ## Skills
 
-[plan.md](plugins/dev/rules/plan.md) is the shared contract for plan-backed delivery. Load only the current skill and what it links.
+[plan.md](plugins/dev/rules/plan.md) is the shared contract for plan-backed delivery, [documents.md](plugins/dev/rules/documents.md) the lifecycle of runbooks and architecture documents, and [artifact.md](plugins/dev/rules/artifact.md) what they share: naming, prose language, and review. Load only the current skill and what it links.
 
 | Need | Skill |
 |---|---|
@@ -82,4 +83,4 @@ In Claude Code they are `dev:<name>`. DSH has no named plugin agents, so its ski
 | Implement a plan or an assigned chunk | [executor](plugins/dev/agents/executor.md) |
 | Diagnose a bug | [inspector](plugins/dev/agents/inspector.md) |
 | Design or revise plans and design documents | [planner](plugins/dev/agents/planner.md) |
-| Review under [plan.md — Review](plugins/dev/rules/plan.md#review) | [reviewer](plugins/dev/agents/reviewer.md) |
+| Review under [artifact.md — Review](plugins/dev/rules/artifact.md#review) | [reviewer](plugins/dev/agents/reviewer.md) |

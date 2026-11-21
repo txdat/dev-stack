@@ -7,11 +7,11 @@ effort: high
 
 # /review-code — Verify the Implementation
 
-Review an `implemented` plan's code independently under [plan.md — Review](../../rules/plan.md#review). Run every command in the round's scratch ([plan.md — Review rounds](../../rules/plan.md#review-rounds)), which holds the plan's Branch tip with the open findings' repros applied. A review-only request has no scratch: read the plan's worktree and run only commands that leave its `git status` unchanged. The review base is defined in [plan.md — Verification](../../rules/plan.md#verification).
+Review an `implemented` plan's code independently under [artifact.md — Review](../../rules/artifact.md#review). Run every command in the round's scratch ([plan.md — Review rounds](../../rules/plan.md#review-rounds)), which holds the plan's Branch tip with the open findings' repros applied. A review-only request has no scratch: read the plan's worktree and run only commands that leave its `git status` unchanged. The review base is defined in [plan.md — Verification](../../rules/plan.md#verification).
 
 ## Behavior
 
-A re-review covers only what [plan.md — Review](../../rules/plan.md#review) lists for a delta review.
+A re-review covers only what [artifact.md — Review](../../rules/artifact.md#review) lists for a delta review.
 
 - Derive the required outcome from the Goal and contracts before treating the tests as the oracle. Run the TC tests and affected tests yourself at the final tip.
 - Trace each AC to assertions at the production boundary. A helper-level test cannot prove authorization, routing, or transaction behavior.

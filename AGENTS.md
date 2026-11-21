@@ -44,8 +44,9 @@ Pick words for what they commit the reader to. The existing rules use this vocab
 Write rules in English only, whatever language the request uses.
 
 1. **Tighten once.** After drafting, the main agent tightens the change once. It cuts hedges, filler, and restated policy without changing what the rule requires.
-2. **Review.** A fresh agent that has not seen the conversation reviews the tightened change against this file. It returns findings marked as blocking or as notes.
-3. **Fix and re-review.** The main agent fixes each blocking finding and does not tighten again. A fresh agent then re-reviews the fixes. Stop when no blocking finding remains or after the third review, counting the first, and report any blocking findings still open.
+2. **Check consistency.** When the change moves, splits, renames, or removes a section, file, term, or path, or changes a policy that another file links to, applies, or restates, the main agent reads every prose file whole: `README.md`, this file, the Markdown under `plugins/dev/rules/`, `plugins/dev/skills/`, and `plugins/dev/agents/`, and the skill text `scripts/build.ts` injects. Otherwise, when the change alters meaning or a heading, path, or term, it greps those files for each changed file's path, each changed section's anchor, and each term the change touches, and reads each matching file whole. It fixes, in any file, each inconsistency involving what the change touches, whether the change creates it or leaves it, such as a stale owner, path, or anchor, a term used for another concept, or two files stating different policy.
+3. **Review.** A fresh agent that has not seen the conversation reviews the change, including step 2's fixes, against this file. It returns findings marked as blocking or as notes.
+4. **Fix and re-review.** The main agent fixes each blocking finding, checks consistency again under step 2, and does not tighten again. A fresh agent then re-reviews the fixes. Stop when no blocking finding remains or after the third review, counting the first, and report any blocking findings still open.
 
 ## Adding or renaming a skill or agent
 

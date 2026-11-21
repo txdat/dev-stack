@@ -11,7 +11,7 @@ Write a plan another agent can implement test-first without inventing behavior. 
 
 ## 1. Understand
 
-Inspect the relevant code, contracts, and conventions; for work from an architecture document's `DC-n`, check the document first under [plan.md — Documents](../../rules/plan.md#documents). Pick the Base branch: the default branch unless the user names one, or the parent's for a stacked plan. Name the plan's own Branch after the project's convention.
+Inspect the relevant code, contracts, and conventions; for work from an architecture document's `DC-n`, check the document first under [documents.md](../../rules/documents.md). Pick the Base branch: the default branch unless the user names one, or the parent's for a stacked plan. Name the plan's own Branch after the project's convention.
 
 Resolve what the requirement means before writing:
 
@@ -68,4 +68,4 @@ Then, from the repository, run `node $DEV_LIB/bin/dev-stack.js check <root plan>
 
 ## 7. Revise after review
 
-Revise only an unapproved plan; an approved plan follows [plan.md — Changes](../../rules/plan.md#changes). On NEEDS CHANGES or a stop's findings, correct each blocking finding within the recorded DDs and the user's answers, rerun the PC Checks the change touches with `dev-check.js pcs <plan> --cwd <checkout> PC-<n> ...` and the stack check from step 6, and re-review under [plan.md — Review](../../rules/plan.md#review). A finding that needs a new or changed decision goes to the user with options as in [Brief the user](#2-brief-the-user); when the task says you decide for the user, decide it under [autopilot.md — Decisions](../autopilot/SKILL.md#decisions) and return it with its options. After a reopen, the revision takes the user's answers, or after `auto-reopen` the choices labeled autopilot's; on a plan executed before, execute-feature updates its tests ([execute-feature.md](../execute-feature/SKILL.md)).
+Revise only an unapproved plan; an approved plan follows [plan.md — Changes](../../rules/plan.md#changes). On NEEDS CHANGES or a stop's findings, correct each blocking finding within the recorded DDs and the user's answers, rerun the PC Checks the change touches with `dev-check.js pcs <plan> --cwd <checkout> PC-<n> ...` and the stack check from step 6, and re-review under [artifact.md — Review](../../rules/artifact.md#review). A finding that needs a new or changed decision goes to the user with options as in [Brief the user](#2-brief-the-user); when the task says you decide for the user, decide it under [autopilot.md — Decisions](../autopilot/SKILL.md#decisions) and return it with its options. After a reopen, the revision takes the user's answers, or after `auto-reopen` the choices labeled autopilot's; on a plan executed before, execute-feature updates its tests ([execute-feature.md](../execute-feature/SKILL.md)).

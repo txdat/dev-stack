@@ -33,6 +33,8 @@ Failed fix-and-verify attempts at the same failure count against a limit of thre
 ## Load on demand
 
 - [CODING.md](CODING.md): every agent reads it before reading or writing code.
-- [plan.md](plan.md): for plan-backed development or a workflow gate failure.
+- [plan.md](plan.md): for plan-backed development, or a gate failure that cites it or no rules file.
+- [artifact.md](artifact.md): for any review, or a plan, runbook, or architecture document.
+- [documents.md](documents.md): for a runbook or architecture document, or a gate failure that cites it.
 
 Reuse loaded guidance while it remains current.

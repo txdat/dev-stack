@@ -835,10 +835,10 @@ const loadDoc = (ctx: Ctx, arg: string) => {
   if (text === undefined) fail(`Cannot read ${path}.`);
   const doc = parseDoc(text, kind);
   if (!doc.isDoc)
-    fail(`${path} has no 'Status:' and 'Spec:' header lines (rules/plan.md#documents).`);
+    fail(`${path} has no 'Status:' and 'Spec:' header lines (rules/documents.md#lifecycle).`);
   if (doc.dupes.length > 0)
     fail(
-      `${path} repeats header keys: ${doc.dupes.join("; ")}. Keep each key once (rules/plan.md#documents).`,
+      `${path} repeats header keys: ${doc.dupes.join("; ")}. Keep each key once (rules/documents.md#lifecycle).`,
     );
   if (!DOC_STATUSES[kind].includes(doc.status))
     fail(
@@ -852,7 +852,7 @@ const docReview = (ctx: Ctx, o: Output, arg: string, verdict: string): void => {
   const { path, doc } = loadDoc(ctx, arg);
   if (FROZEN.has(doc.status))
     fail(
-      `${path} is '${doc.status}' and frozen; only the user returns it to draft for a change (rules/plan.md#documents).`,
+      `${path} is '${doc.status}' and frozen; only the user returns it to draft for a change (rules/documents.md#lifecycle).`,
     );
   const [status, spec] =
     verdict === "ready" ? ["ready", docHash(doc, dirname(path), ctx.env)] : ["draft", "-"];
