@@ -9,13 +9,13 @@ effort: medium
 
 Diagnose a bug from runtime evidence, propose a fix, and route it. Diagnosis makes no lasting change: it writes only in its scratch and under `/tmp`.
 
-Establish expected behavior, actual behavior, and any tracking issue. A fix the report proposes is a hypothesis under [design-feature.md — Understand](../design-feature/SKILL.md#1-understand). For a comparison base without a plan, use `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-utils.js diagnostic-base`.
+Establish expected behavior, actual behavior, and any tracking issue. A fix the report proposes is a hypothesis under [design-feature.md — Understand](../design-feature/SKILL.md#1-understand). For a comparison base without a plan, use `node $DEV_LIB/bin/dev-utils.js diagnostic-base`.
 
 ## Reproduce
 
 Reproduce the bug where it was reported — test, CLI, API, or UI — before ranking causes. If it does not reproduce, build the trigger, narrow the conditions, or add logging until it does; ask the user only for a surface you cannot reach. If it never reproduces, say so: later claims are unconfirmed.
 
-Write the reproduction test and any logging in `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-worktree.js scratch bug-<slug> <ref>` at the reported commit or the diagnostic base, or, for a bug in uncommitted tracked changes, at `HEAD`, run from the worktree holding the changes (the main root or a plan's worktree), with `git diff --binary HEAD` saved under `/tmp` as the patch; run `isolate-dep` before changing a dependency. Throwaway scripts go under `/tmp`. Run a command that would write to a shared environment or data only when the user allows, naming the access it needs. When diagnosis ends, keep the test as `scratch-diff <scratch> -- <test path>`, then run `scratch-remove <scratch>`.
+Write the reproduction test and any logging in `node $DEV_LIB/bin/dev-worktree.js scratch bug-<slug> <ref>` at the reported commit or the diagnostic base, or, for a bug in uncommitted tracked changes, at `HEAD`, run from the worktree holding the changes (the main root or a plan's worktree), with `git diff --binary HEAD` saved under `/tmp` as the patch; run `isolate-dep` before changing a dependency. Throwaway scripts go under `/tmp`. Run a command that would write to a shared environment or data only when the user allows, naming the access it needs. When diagnosis ends, keep the test as `scratch-diff <scratch> -- <test path>`, then run `scratch-remove <scratch>`.
 
 ## Diagnose
 

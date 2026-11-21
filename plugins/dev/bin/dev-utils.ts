@@ -1,4 +1,4 @@
-#!/usr/bin/env -S bun --no-env-file --config=/dev/null
+#!/usr/bin/env node
 import { main } from "../core/cli.ts";
 import { devUtils } from "../core/utils.ts";
 

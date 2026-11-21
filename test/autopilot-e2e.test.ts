@@ -22,7 +22,7 @@ import type {
 } from "../plugins/dev/dsh/api.ts";
 import { apply } from "../plugins/dev/dsh/index.ts";
 import devExtension from "../plugins/dev/pi/dev.ts";
-import { BUN, exec, git, PLUGIN, planText, RUN, read, repo, tmp, write } from "./helpers.ts";
+import { exec, git, NODE, PLUGIN, planText, RUN, read, repo, tmp, write } from "./helpers.ts";
 
 const BIN = path.join(PLUGIN, "bin");
 const HOOK = path.join(BIN, "hook.ts");
@@ -359,7 +359,7 @@ const deliver = async (dir: string, plan: string, branch: string, h: Harness): P
  */
 const claude = (dir: string): Harness => {
   const hook = (input: unknown, cwd = dir): Verdict => {
-    const r = exec([...BUN, HOOK], { cwd, input: JSON.stringify(input) });
+    const r = exec([...NODE, HOOK], { cwd, input: JSON.stringify(input) });
     assert.equal(r.code, 0, `bin/hook.ts: ${r.all}`);
     if (r.out.trim() === "") return PASS;
     const out = JSON.parse(r.out) as {
@@ -584,7 +584,7 @@ const dsh = (dir: string): Harness => {
  */
 const antigravity = (dir: string): Harness => {
   const hook = (payload: unknown, cwd = dir): Verdict => {
-    const r = exec([...BUN, AGY_HOOK], { cwd, input: JSON.stringify(payload) });
+    const r = exec([...NODE, AGY_HOOK], { cwd, input: JSON.stringify(payload) });
     assert.equal(r.code, 0, `bin/agy-hook.ts: ${r.all}`);
     const out = JSON.parse(r.out) as { decision?: string; reason?: string };
     return out.decision === "deny" ? refusal(out.reason ?? "denied") : PASS;

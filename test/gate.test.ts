@@ -711,7 +711,7 @@ test("worktree and root", () => {
   const realGit = exec(["sh", "-c", "command -v git"]).out.trim();
   write(
     `${shim}/git`,
-    `#!/usr/bin/env bun
+    `#!/usr/bin/env node
 const a = process.argv.slice(2);
 if (a.some((x, i) => x === "worktree" && a[i + 1] === "list")) process.exit(1);
 const r = require("node:child_process").spawnSync(${JSON.stringify(realGit)}, a, { stdio: "inherit" });
@@ -1897,29 +1897,27 @@ test("record guard: Bash, Edit, and Write calls", () => {
     logOnly,
     "an agent cannot append to the stack log",
   );
-  // The runtimes, bun also with the flags the plugin runs it with.
-  const RUNTIMES = ["node", "bun", RUN];
-  for (const rt of RUNTIMES) {
-    passes(
-      bashGuard(`${rt} ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
-      `a dev CLI under ${rt} is no log write`,
-    );
+  passes(
+    bashGuard(`node ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
+    "a dev CLI under node is no log write",
+  );
+  // The plugin runs its CLIs under node only; bun is a writing tool like any other runtime.
+  const RUNTIMES = ["node", "bun"];
+  for (const rt of RUNTIMES)
     blocks(
       bashGuard(`${rt} -e "require('fs').appendFileSync('${LOG}','x')"`),
       logOnly,
       `${rt} -e writing the log`,
     );
-  }
   passes(
     bashGuard(`cd /tmp && ${RUN} '${PLUGIN}/bin/dev-stack.ts' next ${P} && cat ${LOG}`),
     "a quoted dev CLI path after cd is no log write",
   );
-  for (const opt of ["--preload ./x.js", "--config=./bunfig.toml", "run"])
-    blocks(
-      bashGuard(`bun ${opt} ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
-      logOnly,
-      `bun ${opt} makes a dev CLI any script`,
-    );
+  blocks(
+    bashGuard(`bun ${PLUGIN}/bin/dev-stack.ts next ${P}; cat ${LOG}`),
+    logOnly,
+    "a dev CLI under bun is any script",
+  );
   // Only this plugin's own bin/ is trusted: a lookalike name or a copy elsewhere is any script.
   const fake = fs.mkdtempSync(`${TMP}/fakebin.`);
   for (const script of [

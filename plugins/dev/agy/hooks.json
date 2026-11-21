@@ -3,7 +3,7 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "bun --no-env-file --config=/dev/null ./bin/agy-hook.js"
+        "command": "node ./bin/agy-hook.js"
       }
     ]
   },
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun --no-env-file --config=/dev/null ./bin/agy-hook.js"
+            "command": "node ./bin/agy-hook.js"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun --no-env-file --config=/dev/null ./bin/agy-hook.js"
+            "command": "node ./bin/agy-hook.js"
           }
         ]
       }
@@ -33,7 +33,7 @@
     "PostInvocation": [
       {
         "type": "command",
-        "command": "bun --no-env-file --config=/dev/null ./bin/agy-hook.js"
+        "command": "node ./bin/agy-hook.js"
       }
     ]
   }

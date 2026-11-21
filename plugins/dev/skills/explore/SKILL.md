@@ -9,6 +9,6 @@ effort: medium
 
 Keep the investigation read-only and scoped to the supplied question or area.
 
-Locate entry points, follow the relevant data/control flow, and identify established patterns, contracts, tests, and meaningful gotchas. Use [CODING.md — Impact](../../rules/CODING.md#impact) when the question concerns impact; `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-utils.js search-production <symbol> [dir]` lists literal matches outside test files.
+Locate entry points, follow the relevant data/control flow, and identify established patterns, contracts, tests, and meaningful gotchas. Use [CODING.md — Impact](../../rules/CODING.md#impact) when the question concerns impact; `node $DEV_LIB/bin/dev-utils.js search-production <symbol> [dir]` lists literal matches outside test files.
 
 Return the direct answer with decisive file references and unresolved planning questions. Stop when the requested question is answered.

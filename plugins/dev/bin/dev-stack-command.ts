@@ -1,4 +1,4 @@
-#!/usr/bin/env -S bun --no-env-file --config=/dev/null
+#!/usr/bin/env node
 // Runs one /dev-stack-* command for the Claude Code module: `dev-stack-command.ts <name> <args>`
 // prints `{"text": ..., "note": ...}` (note only after a write). An unknown name exits 2.
 

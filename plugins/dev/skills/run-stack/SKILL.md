@@ -7,7 +7,7 @@ effort: medium
 
 # /run-stack — Drive a Stack to Publication
 
-Take a stack ([plan.md — Stacks](../../rules/plan.md#stacks)), or one plan, through review-feature, execute-feature, review-code, and create-pr, and stop where the user decides. Pass the root, then optionally `--auto-approve`. `bun --no-env-file --config=/dev/null $DEV_LIB/bin/dev-stack.js next <root>` prints each plan's next action; a phase it names runnable has passed its gate. If `next` fails, report its error and stop.
+Take a stack ([plan.md — Stacks](../../rules/plan.md#stacks)), or one plan, through review-feature, execute-feature, review-code, and create-pr, and stop where the user decides. Pass the root, then optionally `--auto-approve`. `node $DEV_LIB/bin/dev-stack.js next <root>` prints each plan's next action; a phase it names runnable has passed its gate. If `next` fails, report its error and stop.
 
 The user invoking or asking for run-stack authorizes create-pr's pushes and pull requests, draft unless the user asks for ready. `--auto-approve`, passed only by [autopilot](../autopilot/SKILL.md), approves for the user: once the options pass, before step 1, run `dev-stack.js autopilot <root>`, and report its error and stop if it fails; at each `wait-user`, run `dev-stack.js approve <plan>` and rerun `next`; if `approve` fails, record its error as the plan's stop. An unknown or repeated option is reported before step 1, and nothing starts.
 
