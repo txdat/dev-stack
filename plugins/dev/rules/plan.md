@@ -108,7 +108,7 @@ Each plan has its own worktree at `~/wt/<repo>-<issue>_<slug>-pr<N>`, found by t
 - One phase runs in a worktree at a time, on the plan's own Branch. The worktree stays until create-pr's cleanup removes it.
 - `link-deps <worktree>` links installed dependencies from the main root. Before any command that changes a linked dependency directory, run `isolate-dep <worktree> <name>`; installing through the symlink corrupts the main root.
 - Run code, tests, and branch Git operations in the worktree. Never stash, reset, or clean to get past unrelated changes in the worktree or the main root.
-- Fix a plan on its own Branch. Then the main agent merges it forward into each child whose Branch exists, then each changed child into its children, each in its own worktree once no phase runs there, reruns each merged-into plan's local checks, TC tests, and affected tests, and sets each that was `reviewed` to `implemented`, so review-code runs again. Never rebase, reset, or force-push.
+- Fix a plan on its own Branch. Then the main agent merges it forward into each child whose Branch exists, then each changed child into its children, each in its own worktree once no phase runs there, reruns each merged-into plan's local checks, TC tests, and affected tests, and sets each that was `reviewed` to `implemented`, so review-code runs again. Never rebase, reset, or force-push. `dev-stack.js next` names this merge `merge-forward`.
 
 ## Review rounds
 

@@ -46,10 +46,11 @@ const USAGE = [
   '"<plan> <status> <parent> <action> <reason>" tab-separated, with "-" for none',
   "(--tab, the default);",
   "action is a runnable phase (review-feature, execute-feature, review-code,",
-  "create-pr), revise after a needs-changes review or a reopen, or stopped, wait-parent,",
-  "wait-user, blocked, or done. --tree prints the stack as a tree instead, and",
-  "--md as a Markdown table, both with a colored dot per status and a mark per",
-  "action.",
+  "create-pr), revise after a needs-changes review or a reopen, merge-forward when a",
+  "reviewed plan's parent is not reviewed or its reviewed SHA lacks the parent's, or",
+  "stopped, wait-parent, wait-user, blocked, or done. --tree prints the stack as a tree",
+  "instead, and --md as a Markdown table, both with a colored dot per status and",
+  "a mark per action.",
   "review sets Status to the review-feature verdict, ready or needs-changes,",
   "and Spec to its hash of the current spec, and logs the round <k>/<limit>;",
   "code-review logs a review-code verdict the same way. A needs-changes verdict",
@@ -704,11 +705,14 @@ class Stack {
           } else skill = status !== "implemented" ? "execute-feature" : "review-code";
           break;
         case "reviewed":
-          if (pr < 3) {
+          if (prank === undefined) {
             action = "blocked";
-            reason = `${parent} is '${pstatus}'; once it is reviewed, merge it forward into this plan (rules/plan.md#worktree), set Status: implemented, and review-code`;
+            reason = `${parent} has unknown status '${pstatus}'`;
+          } else if (pr < 3) {
+            action = "merge-forward";
+            reason = `${parent} is '${pstatus}'; merge it forward into this plan (rules/plan.md#worktree), set Status: implemented, and review-code once ${parent} is reviewed`;
           } else if (parent !== "" && !this.lib.containsParentGreen(plan, parent)) {
-            action = "blocked";
+            action = "merge-forward";
             reason = `its reviewed SHA does not contain ${parent}'s; merge it forward (rules/plan.md#worktree), set Status: implemented, and review-code`;
           } else if (plan === root && all) skill = "create-pr";
           else {
@@ -753,11 +757,12 @@ const DOT: Readonly<Record<string, string>> = Object.fromEntries(
 );
 const MARK: Readonly<Record<string, string>> = Object.fromEntries(
   Object.entries({
-    "review-feature": "▶",
-    "execute-feature": "▶",
-    "review-code": "▶",
-    "create-pr": "▶",
-    revise: "✏️",
+    "review-feature": "⏩",
+    "execute-feature": "⏩",
+    "review-code": "⏩",
+    "create-pr": "⏩",
+    "merge-forward": "🔀",
+    revise: "📝",
     "wait-user": "👤",
     "wait-parent": "⏳",
     blocked: "⛔",
