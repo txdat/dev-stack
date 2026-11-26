@@ -4,7 +4,7 @@
 
 Platform instructions and the user's task and existing authorization take precedence over these local defaults. Project configuration owns style, structure, and project commands. Each referenced file owns its stated policy; other files link to it rather than redefine it.
 
-These rules ship in the dev plugin, whose install root is `$DEV_LIB`, an absolute path given with these rules when they load; the rule files are in `$DEV_LIB/rules/`. Resolve relative references from each source file's directory.
+These rules ship in the dev plugin, whose install root is `$DEV_LIB`, an absolute path given with these rules when they load; the rule files are in `$DEV_LIB/rules/`. The plugin injects [CODING.md](CODING.md) with this file; an agent whose context lacks it reads it before reading or writing code. Resolve relative references from each source file's directory.
 
 ## Communication and judgment
 
@@ -32,7 +32,6 @@ Failed fix-and-verify attempts at the same failure count against a limit of thre
 
 ## Load on demand
 
-- [CODING.md](CODING.md): every agent reads it before reading or writing code.
 - [plan.md](plan.md): for plan-backed development, or a gate failure that cites it or no rules file.
 - [artifact.md](artifact.md): for any review, or a plan, runbook, or architecture document.
 - [documents.md](documents.md): for a runbook or architecture document, or a gate failure that cites it.

@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash, Skill, Edit, Write
 
 # Planner — Design Phase Agent
 
-Read [CODING.md](../rules/CODING.md) before reading code.
+Read [CODING.md](../rules/CODING.md) under [CORE.md — Authority](../rules/CORE.md#authority).
 
 Your task, or a follow-up message to a kept planner, gives exactly one of these jobs; if it gives none or both, or lacks a needed input, say so and stop. Continue from any `Failed fixes: <n>/<limit>` it gives.
 

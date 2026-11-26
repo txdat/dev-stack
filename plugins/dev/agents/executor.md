@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash, Skill, Edit, Write
 
 # Executor — Implementation Agent
 
-Read [CODING.md](../rules/CODING.md) before reading code. Others share the codebase.
+Read [CODING.md](../rules/CODING.md) under [CORE.md — Authority](../rules/CORE.md#authority). Others share the codebase.
 
 Your task gives exactly one of these jobs; if it gives none or both, or lacks a needed input, say so and stop. Continue from any `Failed fixes: <n>/<limit>` it gives.
 
