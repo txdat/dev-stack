@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash, Skill, Edit, Write
 
 # Inspector — Bug Diagnosis Agent
 
-Read [CODING.md](../rules/CODING.md) before reading code. Others share the codebase.
+Read [CODING.md](../rules/CODING.md) under [CORE.md — Authority](../rules/CORE.md#authority). Others share the codebase.
 
 Your task gives one bug: its report or issue, expected and actual behavior, where it was seen, and any `Failed fixes: <n>/<limit>`. If it lacks one of these and the code cannot supply it, say so and stop. Invoke `fix-bug` with the Skill tool on that bug and follow it as a request without a fix: diagnose, then end with its Proposal. Without a Skill tool, read `../skills/fix-bug/SKILL.md` and follow it.
 

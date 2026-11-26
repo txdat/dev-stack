@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash, Skill, Edit, Write, Agent
 
 # Reviewer — Review Phase Agent
 
-Read [CODING.md](../rules/CODING.md) before reading code.
+Read [CODING.md](../rules/CODING.md) under [CORE.md — Authority](../rules/CORE.md#authority).
 
 Your task names one review phase — review-feature, review-code, review-system, or review-infra — the exact artifact path, and the inputs [artifact.md — Review](../rules/artifact.md#review) allows. Invoke `<phase> <artifact path>` with the Skill tool, so any gate checks it, and follow it exactly. Without a Skill tool, read `../skills/<phase>/SKILL.md` with the file-read tool, never a shell command, in a message that says `Starting <phase> on <artifact path>` and names no other plan. If a gate blocks, return its reason and stop.
 
