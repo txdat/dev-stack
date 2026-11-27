@@ -1,7 +1,7 @@
 ---
 name: review-infra
 description: "Review an infra/devops runbook against live state with read-only commands: phase ordering, rollback safety, DNS/traffic cutover sequencing, IaC completeness, and CI/CD coverage."
-model: haiku
+model: sonnet
 effort: high
 ---
 
