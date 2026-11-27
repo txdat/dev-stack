@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Antigravity's hook entry: reads camelCase hook JSON on stdin and prints Antigravity's response
-// JSON. SessionStart injects $DEV_LIB and the shared rules; PreToolUse runs the serial-test check
-// and gateCheck; PostToolUse runs bashPostCheck so unauthorized plan edits are restored.
+// JSON. SessionStart injects $DEV_LIB and the shared rules; PreInvocation runs /dev-stack-*
+// commands; PreToolUse runs the serial-test check and gateCheck; PostToolUse runs bashPostCheck so
+// unauthorized plan edits are restored.
 
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -13,8 +14,9 @@ import { gateCheck, gateIndexed, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
 import { PlanLib, planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
+import { stackCommand } from "../core/stack-command.ts";
 import { tryMainRoot } from "../core/utils.ts";
-import { RULE_FILES, rulesText } from "../hooks/commands.ts";
+import { COMMANDS, RULE_FILES, rulesText } from "../hooks/commands.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -87,6 +89,14 @@ const sessionRules = (root: string): unknown => {
 const skillFromPath = (filePath: string): string => {
   const m = /(?:^|\/)skills\/([a-z0-9-]+)\/SKILL\.md$/i.exec(filePath.replace(/\\/g, "/"));
   return m?.[1] ?? "";
+};
+
+/** Parses a typed `/dev-stack-*` command from user input, or undefined for any other input. */
+const parseStackCommand = (text: string): { name: string; args: string } | undefined => {
+  const m = /^[ \t\r\n]*\/(dev-stack-[a-z-]+)(?:[ \t\r\n]+([\s\S]*))?$/.exec(text);
+  const name = m?.[1];
+  if (!name || !COMMANDS.some((c) => c.name === name)) return undefined;
+  return { name, args: (m[2] ?? "").trim() };
 };
 
 /** Whether `text` invokes an orchestrator (`autopilot` or `run-stack`). */
@@ -233,6 +243,26 @@ const run = (raw: HookInput): void => {
 
   if (event === "SessionStart") {
     writeJson(sessionRules(pluginRoot(process.env)));
+    return;
+  }
+
+  if (event === "PreInvocation") {
+    const cmd = parseStackCommand(jsonText(raw["lastUserInput"]) ?? "");
+    if (cmd === undefined) {
+      writeJson({});
+      return;
+    }
+    const cwd = jsonText(raw["cwd"]) || process.cwd();
+    const result = stackCommand(cmd.name, cmd.args, cwd, process.env);
+    if (result === undefined) {
+      writeJson({});
+      return;
+    }
+    const text = result.note ? `${result.text}\n\n${result.note}` : result.text;
+    writeJson({
+      injectSteps: [{ systemMessage: { systemMessage: text } }],
+      terminationBehavior: "terminate",
+    });
     return;
   }
 

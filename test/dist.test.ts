@@ -64,6 +64,9 @@ test("the build emits JavaScript and copies the plugin's files", () => {
     "hooks/hooks.json",
     "hooks/register.js",
     "pi/dev.js",
+    "dsh/index.js",
+    "opencode/index.js",
+    "opencode/package.json",
     "bin/hook.js",
     "rules/CORE.md",
     "skills/run-stack/SKILL.md",
@@ -98,11 +101,17 @@ test("the manifests point at the built plugin", () => {
     fs.readFileSync(path.join(ROOT, "plugins/typescript-lsp/.claude-plugin/plugin.json"), "utf8"),
   );
   assert.equal(lsp.name, "typescript-lsp");
-  const pi = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).pi;
-  for (const entry of [...pi.extensions, ...pi.skills] as string[]) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  for (const entry of [...pkg.pi.extensions, ...pkg.pi.skills] as string[]) {
     assert.ok(entry.startsWith("./dist/dev/"), entry);
     assert.ok(fs.existsSync(path.join(OUT, entry.slice("./dist/dev/".length))), entry);
   }
+  // The DSH bundle manifest points at its patch and at the Host plugin the build emits.
+  assert.equal(pkg.dsh.bundle.patch, "./cordis.patch.yml");
+  assert.ok(fs.existsSync(path.join(ROOT, pkg.dsh.bundle.patch)), pkg.dsh.bundle.patch);
+  const dshEntry = pkg.exports["."] as string;
+  assert.ok(dshEntry.startsWith("./dist/dev/"), dshEntry);
+  assert.ok(fs.existsSync(path.join(OUT, dshEntry.slice("./dist/dev/".length))), dshEntry);
 });
 
 test("the rules' and skills' links and CLI paths resolve in the built plugin", () => {
@@ -148,4 +157,18 @@ test("the built Pi extension loads", async () => {
   fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(path.dirname(OUT), "node_modules"));
   const mod = await import(pathToFileURL(path.join(OUT, "pi/dev.js")).href);
   assert.equal(typeof mod.default, "function");
+});
+
+test("the built DSH Host plugin loads", async () => {
+  const mod = await import(pathToFileURL(path.join(OUT, "dsh/index.js")).href);
+  assert.equal(typeof mod.apply, "function");
+  assert.ok(Array.isArray(mod.inject), "the plugin declares no inject list");
+  for (const service of ["commands", "skills", "systemPrompt", "tools", "workingDirectory"])
+    assert.ok(mod.inject.includes(service), `inject lacks ${service}`);
+});
+
+test("the built OpenCode plugin loads", async () => {
+  const mod = await import(pathToFileURL(path.join(OUT, "opencode/index.js")).href);
+  assert.equal(mod.default.id, "dev-stack");
+  assert.equal(typeof mod.default.setup, "function");
 });

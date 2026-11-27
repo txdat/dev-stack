@@ -2,7 +2,7 @@
   "name": "dev-stack",
   "private": true,
   "type": "module",
-  "description": "Plan-backed dev workflow for Claude Code, Pi, DeepSeek Harness, and Antigravity: rules, skills, phase gates, and /dev-stack-* commands",
+  "description": "Plan-backed dev workflow for Claude Code, Pi, DeepSeek Harness, OpenCode, and Antigravity: rules, skills, phase gates, and /dev-stack-* commands",
   "engines": {
     "node": ">=24"
   },
@@ -12,7 +12,8 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "node --test --test-isolation=none 'test/**/*.test.ts'",
-    "check": "npm run typecheck && npm run lint && npm test && npm run build"
+    "test:engine": "node scripts/test-engine.ts",
+    "check": "npm run typecheck && npm run lint && npm test && npm run test:engine && npm run build"
   },
   "pi": {
     "extensions": [
@@ -41,9 +42,9 @@
     "README.md"
   ],
   "devDependencies": {
-    "@biomejs/biome": "2.6.7",
-    "@earendil-works/pi-coding-agent": "1.5.2",
-    "@types/node": "24.19.2",
+    "@biomejs/biome": "2.6.9",
+    "@earendil-works/pi-coding-agent": "1.6.1",
+    "@types/node": "24.19.4",
     "typescript": "7.0.2"
   }
 }

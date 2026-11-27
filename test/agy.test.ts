@@ -583,6 +583,67 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   assert.ok(rule.startsWith("---\ntrigger: manual\n---\n"));
 });
 
+test("PreInvocation runs /dev-stack-* commands and terminates without calling the model", () => {
+  const dir = repo(tmp("dev-agy-cmd"));
+  const spec = path.join(dir, "docs/plans/12_cmd/pr1.spec.md");
+  write(spec, planText({ Status: "planning", Base: "main", Branch: "p1", PR: "none" }));
+
+  const next = runHook({
+    hookEventName: "PreInvocation",
+    cwd: dir,
+    lastUserInput: "/dev-stack-next 12_cmd/pr1.spec.md",
+  });
+  assert.equal(next["terminationBehavior"], "terminate");
+  const nextSteps = next["injectSteps"] as Array<{ systemMessage?: { systemMessage?: string } }>;
+  assert.equal(nextSteps.length, 1);
+  assert.match(nextSteps[0]?.systemMessage?.systemMessage ?? "", /12_cmd\/pr1\.spec\.md/);
+
+  const usageOut = runHook({
+    hookEventName: "PreInvocation",
+    cwd: dir,
+    lastUserInput: "/dev-stack-next",
+  });
+  assert.equal(usageOut["terminationBehavior"], "terminate");
+  const usageSteps = usageOut["injectSteps"] as Array<{
+    systemMessage?: { systemMessage?: string };
+  }>;
+  assert.match(usageSteps[0]?.systemMessage?.systemMessage ?? "", /^Usage: \/dev-stack-next /);
+
+  const stop = runHook({
+    hookEventName: "PreInvocation",
+    cwd: dir,
+    lastUserInput: `/dev-stack-stop ${spec} waiting on API`,
+  });
+  assert.equal(stop["terminationBehavior"], "terminate");
+  const stopSteps = stop["injectSteps"] as Array<{ systemMessage?: { systemMessage?: string } }>;
+  const stopMsg = stopSteps[0]?.systemMessage?.systemMessage ?? "";
+  assert.match(stopMsg, /The user stopped .* with dev-stack\.js stop: waiting on API/);
+
+  const resume = runHook({
+    hookEventName: "PreInvocation",
+    cwd: dir,
+    lastUserInput: `/dev-stack-resume ${spec}`,
+  });
+  assert.equal(resume["terminationBehavior"], "terminate");
+  const resumeSteps = resume["injectSteps"] as Array<{
+    systemMessage?: { systemMessage?: string };
+  }>;
+  assert.match(
+    resumeSteps[0]?.systemMessage?.systemMessage ?? "",
+    /The user cleared the stop on .* with dev-stack\.js resume/,
+  );
+
+  // Non-command prompts and unknown /dev-stack-* names pass through untouched.
+  assert.deepEqual(
+    runHook({ hookEventName: "PreInvocation", cwd: dir, lastUserInput: "explain /dev-stack-next" }),
+    {},
+  );
+  assert.deepEqual(
+    runHook({ hookEventName: "PreInvocation", cwd: dir, lastUserInput: "/dev-stack-unknown foo" }),
+    {},
+  );
+});
+
 test("hooks.json runs agy-hook.js under the shipped invocation", () => {
   const agy = JSON.parse(fs.readFileSync(path.join(PLUGIN, "agy/hooks.json"), "utf8"));
   const commands = [...JSON.stringify(agy).matchAll(/"command":"([^"]*)"/g)].map((m) => m[1]);

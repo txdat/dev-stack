@@ -12,7 +12,14 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fs.realpathSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."));
 const SRC = path.join(ROOT, "plugins/dev");
-const COMMON_COPY = [".gitignore", "agents", "package.json", "rules", "skills"];
+const COMMON_COPY = [
+  ".gitignore",
+  "agents",
+  "package.json",
+  "opencode/package.json",
+  "rules",
+  "skills",
+];
 const CLAUDE_COPY = [".claude-plugin/plugin.json", "hooks/hooks.json"];
 // The build writes this into its output; only a directory holding it is replaced.
 const MARK = ".dev-stack-build";

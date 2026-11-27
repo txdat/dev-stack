@@ -1,11 +1,17 @@
 {
-  // Emits the Node and Pi code (bin, core, pi, and the hooks/commands.ts they import) into the
-  // built plugin; scripts/build.ts passes --outDir.
+  // Emits the Node-hosted code (bin, core, dsh, opencode, pi, and the hooks/commands.ts they
+  // import) into the built plugin; scripts/build.ts passes --outDir.
   "extends": "./tsconfig.node.json",
   "compilerOptions": {
     "noEmit": false,
     "rootDir": "plugins/dev",
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["plugins/dev/bin", "plugins/dev/core", "plugins/dev/dsh", "plugins/dev/pi"]
+  "include": [
+    "plugins/dev/bin",
+    "plugins/dev/core",
+    "plugins/dev/dsh",
+    "plugins/dev/opencode",
+    "plugins/dev/pi"
+  ]
 }
