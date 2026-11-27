@@ -59,6 +59,7 @@ test("the build emits JavaScript and copies the plugin's files", () => {
     all.filter((f) => f.endsWith(".ts")),
     [],
   );
+  assert.ok(!all.includes("rules/agy-swarm.md"), "dist/dev excludes Antigravity-only agy-swarm.md");
   for (const want of [
     ".claude-plugin/plugin.json",
     "hooks/hooks.json",
@@ -71,6 +72,8 @@ test("the build emits JavaScript and copies the plugin's files", () => {
     "rules/CORE.md",
     "skills/run-stack/SKILL.md",
     "agents/planner.md",
+    "agents/plan-reviewer.md",
+    "agents/code-reviewer.md",
   ])
     assert.ok(all.includes(want), want);
   for (const f of all.filter((f) => f.endsWith(".js"))) {

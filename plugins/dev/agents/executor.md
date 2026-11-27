@@ -2,6 +2,8 @@
 name: executor
 description: "Implement while the main agent works: run execute-feature on one approved or auto-approved plan, or one assigned chunk in its exclusive files, and return the changes and check results."
 tools: Read, Grep, Glob, Bash, Skill, Edit, Write
+model: sonnet
+effort: medium
 ---
 
 # Executor — Implementation Agent

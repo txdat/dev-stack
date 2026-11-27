@@ -2,6 +2,8 @@
 name: planner
 description: "Design: run design-feature, design-system, or design-infra on one request with the user's answers, or revise a stack's plans or a design document from review findings, kept across the stack, deciding for the user under autopilot, returning the decisions it took, what needs the user, the artifacts, and check results."
 tools: Read, Grep, Glob, Bash, Skill, Edit, Write
+model: opus
+effort: medium
 ---
 
 # Planner — Design Phase Agent

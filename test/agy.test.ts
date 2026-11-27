@@ -548,22 +548,16 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   assert.ok(fs.existsSync(path.join(out, "bin/agy-hook.js")));
 
   const skill = read(path.join(out, "skills/design-feature/SKILL.md"));
-  assert.match(skill, /^model: gemini-4-neon-medium$/m);
+  assert.doesNotMatch(skill, /^(?:model|effort):/m);
   assert.doesNotMatch(skill, /Antigravity Delegation/);
 
   const reviewCode = read(path.join(out, "skills/review-code/SKILL.md"));
-  assert.match(reviewCode, /^model: gemini-4-hydrogen-high$/m);
+  assert.doesNotMatch(reviewCode, /^(?:model|effort):/m);
 
   for (const orch of ["autopilot", "run-stack"]) {
     const text = read(path.join(out, `skills/${orch}/SKILL.md`));
-    assert.match(text, /^## Antigravity Delegation \(`swarm` default\)$/m, orch);
-    assert.doesNotMatch(text, /\(not `swarm`\)/, orch);
-    assert.match(
-      text,
-      /The main agent never messages or kills a worker a `reviewer` started/,
-      orch,
-    );
-    assert.match(text, /for a `reviewer`, the child-subagent permission above\./, orch);
+    assert.doesNotMatch(text, /^(?:model|effort):/m, orch);
+    assert.doesNotMatch(text, /Antigravity Delegation/, orch);
   }
 
   const agent = read(path.join(out, "agents/planner.md"));
@@ -573,14 +567,30 @@ test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
   );
   assert.doesNotMatch(agent, /^ {2}- (Read|Grep|Glob|Bash|Skill|Edit|Write)$/m);
 
-  const reviewer = read(path.join(out, "agents/reviewer.md"));
-  assert.match(
-    reviewer,
-    /^tools:\n {2}- read_file\n {2}- run_command\n {2}- manage_task\n {2}- edit_file\n {2}- write_file\n {2}- invoke_subagent\n {2}- send_message\n {2}- manage_subagents\n {2}- swarm\nsubagent: true\nmainAgent: false$/m,
-  );
+  for (const name of ["plan-reviewer", "code-reviewer"])
+    assert.match(
+      read(path.join(out, `agents/${name}.md`)),
+      /^tools:\n {2}- read_file\n {2}- run_command\n {2}- manage_task\n {2}- edit_file\n {2}- write_file\n {2}- invoke_subagent\n {2}- send_message\n {2}- manage_subagents\nsubagent: true\nmainAgent: false$/m,
+      name,
+    );
+  // Agent frontmatter strips Claude-only model/effort (agy accepts only tiers there; swarm carries the Gemini 4 IDs).
+  for (const name of ["executor", "inspector", "planner", "plan-reviewer", "code-reviewer"]) {
+    const built = read(path.join(out, `agents/${name}.md`));
+    assert.doesNotMatch(built, /^(?:model|effort):/m, name);
+  }
 
   const rule = read(path.join(out, "rules/CORE.md"));
   assert.ok(rule.startsWith("---\ntrigger: manual\n---\n"));
+
+  const swarmRule = read(path.join(out, "rules/agy-swarm.md"));
+  assert.ok(swarmRule.startsWith("---\ntrigger: always_on\n---\n"));
+  assert.doesNotMatch(swarmRule, /\{\{ROLE_MODELS\}\}/);
+  assert.match(
+    swarmRule,
+    /`code-reviewer`: `gemini-4-hydrogen-high`; `executor`: `gemini-4-hydrogen-medium`; `inspector`, `plan-reviewer`, `planner`: `gemini-4-neon-medium`/,
+  );
+  assert.match(swarmRule, /\[artifact\.md — Review\]\(artifact\.md#review\)/);
+  assert.match(swarmRule, /\[CODING\.md\]\(CODING\.md\)/);
 });
 
 test("PreInvocation runs /dev-stack-* commands and terminates without calling the model", () => {

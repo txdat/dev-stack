@@ -2,6 +2,8 @@
 name: inspector
 description: "Diagnose one bug in a fresh context through fix-bug, changing nothing outside its scratch and /tmp, and return the reproduction, ranked fix options, regression-test patch, and route."
 tools: Read, Grep, Glob, Bash, Skill, Edit, Write
+model: opus
+effort: medium
 ---
 
 # Inspector — Bug Diagnosis Agent

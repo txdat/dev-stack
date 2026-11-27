@@ -24,24 +24,26 @@ const CLAUDE_COPY = [".claude-plugin/plugin.json", "hooks/hooks.json"];
 // The build writes this into its output; only a directory holding it is replaced.
 const MARK = ".dev-stack-build";
 
-const AGY_MODELS: Record<string, string> = {
-  haiku: "gemini-4-hydrogen",
-  sonnet: "gemini-4-hydrogen",
-  opus: "gemini-4-neon",
+const AGY_SWARM_RULE = "rules/agy-swarm.md";
+
+/** Formats `role -> model` pairs grouped by model for `agy-swarm.md`. */
+const formatRoleModels = (models: ReadonlyMap<string, string>): string => {
+  const byModel = new Map<string, string[]>();
+  for (const [role, model] of models) {
+    const list = byModel.get(model);
+    if (list) list.push(role);
+    else byModel.set(model, [role]);
+  }
+  return [...byModel.entries()]
+    .map(([model, roles]) => `${roles.map((r) => `\`${r}\``).join(", ")}: \`${model}\``)
+    .join("; ");
 };
 
-const ORCHESTRATOR_SKILLS = new Set(["autopilot", "run-stack"]);
-
-const AGY_SWARM_DELEGATION = `## Antigravity Delegation (\`swarm\` default)
-
-Use \`swarm\` by default whenever this skill delegates to a subagent (\`planner\`, \`executor\`, \`reviewer\`, \`inspector\`); fall back to \`invoke_subagent\` only when \`swarm\` is unavailable or the user asks not to use it.
-
-- Spawn each delegated role with \`swarm(action="add", name=<role-or-step>, model=<phase skill model>, workspace="inherit", brief=<...>)\`:
-  - Pass the exact \`model:\` from the delegated phase skill's \`SKILL.md\` frontmatter (such as \`gemini-4-neon-medium\` for \`design-feature\`/\`review-feature\`, \`gemini-4-hydrogen-medium\` for \`execute-feature\`, \`gemini-4-hydrogen-high\` for \`review-code\`/\`review-change\`).
-  - Use \`workspace: "inherit"\` for all workers, since \`dev-worktree.js\` already isolates each plan or direct-edit branch in its own worktree under \`~/wt/\`; \`executor\` works directly in the worktree path the main agent passes.
-  - A \`reviewer\` worker may start the child subagents [artifact.md — Review](../../rules/artifact.md#review) allows with \`swarm\` (with the review skill's \`model:\`) or \`invoke_subagent\`. The main agent never messages or kills a worker a \`reviewer\` started; that \`reviewer\` manages it.
-- Because \`swarm\` workers start fresh without conversation history, put the full handoff in \`brief\`: the agent file (\`$DEV_LIB/agents/<role>.md\`), the phase skill path (\`$DEV_LIB/skills/<phase>/SKILL.md\`), [CODING.md](../../rules/CODING.md) (\`$DEV_LIB/rules/CODING.md\`), inputs, exclusive files, delegated commits, off-limits actions, expected return, and, for a \`reviewer\`, the child-subagent permission above.
-- Keep \`planner\` and \`reviewer\` workers alive across rounds (message them on the board instead of killing and re-adding them); \`kill\` workers only after their work lands or the run ends.`;
+/** Renders `agy-swarm.md` with resolved role models and `always_on` trigger for Antigravity. */
+const renderAgySwarmRule = (rulePath: string, models: ReadonlyMap<string, string>): string =>
+  `---\ntrigger: always_on\n---\n\n${fs
+    .readFileSync(rulePath, "utf8")
+    .replace("{{ROLE_MODELS}}", formatRoleModels(models))}`;
 
 // Antigravity's native tool for each Claude Code grant, as its plugin import maps them. A grant with
 // no native tool, such as Skill, is dropped: agy surfaces a skill as a read of its SKILL.md.
@@ -53,7 +55,7 @@ const AGY_TOOLS: Record<string, readonly string[]> = {
   MultiEdit: ["edit_file"],
   Write: ["write_file"],
   Bash: ["run_command", "manage_task"],
-  Agent: ["invoke_subagent", "send_message", "manage_subagents", "swarm"],
+  Agent: ["invoke_subagent", "send_message", "manage_subagents"],
   WebSearch: ["search_web"],
   WebFetch: ["search_web"],
 };
@@ -70,12 +72,38 @@ const agyTools = (list: string): string[] => {
   return tools;
 };
 
+/** `text` without the Claude-only `model` and `effort` lines of its frontmatter. */
+const stripClaudeOnly = (text: string): string => {
+  const end = text.startsWith("---\n") ? text.indexOf("\n---", 4) : -1;
+  return end === -1
+    ? text
+    : text.slice(0, end + 1).replace(/^(?:model|effort):[^\n]*\n/gm, "") + text.slice(end + 1);
+};
+
+/** Antigravity's model for each Claude model alias; an agent's `effort` becomes its suffix. */
+const AGY_MODELS: Record<string, string> = {
+  haiku: "gemini-4-hydrogen",
+  sonnet: "gemini-4-hydrogen",
+  opus: "gemini-4-neon",
+};
+
+/** The Antigravity `model` for a frontmatter's Claude `model` and `effort`; undefined when unmapped. */
+const agyModel = (text: string): string | undefined => {
+  const end = text.startsWith("---\n") ? text.indexOf("\n---", 4) : -1;
+  const head = end === -1 ? "" : text.slice(0, end);
+  const alias = head.match(/^model:\s*(\S+)\s*$/m)?.[1] ?? "";
+  const base = Object.hasOwn(AGY_MODELS, alias) ? AGY_MODELS[alias] : undefined;
+  const effort = head.match(/^effort:\s*(\S+)\s*$/m)?.[1];
+  return base && (effort ? `${base}-${effort}` : base);
+};
+
 /**
- * An agent file's frontmatter as Antigravity reads it: the `tools` grant list as native names, and
- * the flags that keep it a subagent.
+ * An agent file's frontmatter as Antigravity reads it: the `tools` grant list as native names,
+ * Claude-only `model`/`effort` stripped (agy agent frontmatter accepts only tiers, not model IDs),
+ * and the flags that keep it a subagent.
  */
 const adaptAgent = (text: string): string => {
-  const mapped = text.replace(/^tools:\s*(.+)$/m, (_line, list: string) => {
+  const mapped = stripClaudeOnly(text).replace(/^tools:\s*(.+)$/m, (_line, list: string) => {
     const tools = agyTools(list);
     return `tools:\n${tools.map((t) => `  - ${t}`).join("\n")}`;
   });
@@ -117,37 +145,31 @@ const target = (arg: string): { out: string } | { refuse: string } => {
   return { out: real };
 };
 
-/** Rewrites frontmatter in `work` for Antigravity: skill models, agent tool lists, rule triggers. */
-const adaptSkill = (name: string, text: string): string => {
-  const effort = text.match(/^effort:\s*(\S+)\s*$/m)?.[1];
-  let next = text.replace(/^model:\s*(\S+)\s*$/m, (line, m: string) => {
-    const base = AGY_MODELS[m];
-    if (!base) return line;
-    return `model: ${effort ? `${base}-${effort}` : base}`;
-  });
-  if (ORCHESTRATOR_SKILLS.has(name)) {
-    next = next.replace(/^(# \/[^\n]+\n)/m, `$1\n${AGY_SWARM_DELEGATION}\n`);
-  }
-  return next;
-};
-
 const adaptForAgy = (work: string): void => {
+  const agentModels = new Map<string, string>();
+  const agentsDir = path.join(work, "agents");
+  for (const entry of fs
+    .readdirSync(agentsDir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+    const file = path.join(agentsDir, entry.name);
+    const text = fs.readFileSync(file, "utf8");
+    const model = agyModel(text);
+    if (model !== undefined) agentModels.set(entry.name.slice(0, -".md".length), model);
+    const next = adaptAgent(text);
+    if (next !== text) fs.writeFileSync(file, next);
+  }
+
+  const swarmRulePath = path.join(work, AGY_SWARM_RULE);
+  fs.writeFileSync(swarmRulePath, renderAgySwarmRule(swarmRulePath, agentModels));
+
   const skillsDir = path.join(work, "skills");
   for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const file = path.join(skillsDir, entry.name, "SKILL.md");
     if (!fs.existsSync(file)) continue;
     const text = fs.readFileSync(file, "utf8");
-    const next = adaptSkill(entry.name, text);
-    if (next !== text) fs.writeFileSync(file, next);
-  }
-
-  const agentsDir = path.join(work, "agents");
-  for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-    const file = path.join(agentsDir, entry.name);
-    const text = fs.readFileSync(file, "utf8");
-    const next = adaptAgent(text);
+    const next = stripClaudeOnly(text);
     if (next !== text) fs.writeFileSync(file, next);
   }
 
@@ -191,6 +213,7 @@ const buildOne = (outArg: string, agy: boolean): number => {
       fs.cpSync(path.join(SRC, "agy/hooks.json"), path.join(work, "hooks.json"));
       adaptForAgy(work);
     } else {
+      fs.rmSync(path.join(work, AGY_SWARM_RULE), { force: true });
       for (const rel of CLAUDE_COPY)
         fs.cpSync(path.join(SRC, rel), path.join(work, rel), { recursive: true });
     }
