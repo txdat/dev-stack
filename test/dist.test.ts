@@ -71,6 +71,8 @@ test("the build emits JavaScript and copies the plugin's files", () => {
     "rules/CORE.md",
     "skills/run-stack/SKILL.md",
     "agents/planner.md",
+    "agents/plan-reviewer.md",
+    "agents/code-reviewer.md",
   ])
     assert.ok(all.includes(want), want);
   for (const f of all.filter((f) => f.endsWith(".js"))) {
