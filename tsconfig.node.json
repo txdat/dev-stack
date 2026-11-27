@@ -5,6 +5,7 @@
   "include": [
     "plugins/dev/bin",
     "plugins/dev/dsh",
+    "plugins/dev/opencode",
     "plugins/dev/pi",
     "plugins/dev/core",
     "scripts",

@@ -64,6 +64,8 @@ test("the build emits JavaScript and copies the plugin's files", () => {
     "hooks/hooks.json",
     "hooks/register.js",
     "pi/dev.js",
+    "opencode/index.js",
+    "opencode/package.json",
     "bin/hook.js",
     "rules/CORE.md",
     "skills/run-stack/SKILL.md",
@@ -148,4 +150,10 @@ test("the built Pi extension loads", async () => {
   fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(path.dirname(OUT), "node_modules"));
   const mod = await import(pathToFileURL(path.join(OUT, "pi/dev.js")).href);
   assert.equal(typeof mod.default, "function");
+});
+
+test("the built OpenCode plugin loads", async () => {
+  const mod = await import(pathToFileURL(path.join(OUT, "opencode/index.js")).href);
+  assert.equal(mod.default.id, "dev-stack");
+  assert.equal(typeof mod.default.setup, "function");
 });

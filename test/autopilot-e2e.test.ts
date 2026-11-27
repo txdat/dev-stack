@@ -1,7 +1,7 @@
 // Autopilot's and run-stack's delivery, end to end, through every supporting harness's own gate
 // entry point: Claude Code's bin/hook.ts (the program hooks/register.ts runs), Pi's extension,
-// DSH's Host plugin, and Antigravity's bin/agy-hook.ts. Autopilot's direct-edit lane, autopilot's
-// plan-backed lane, and run-stack's plan-backed lane run the real dev-stack.ts and
+// DSH's Host plugin, OpenCode's V2 plugin, and Antigravity's bin/agy-hook.ts. Autopilot's direct-edit
+// lane, autopilot's plan-backed lane, and run-stack's plan-backed lane run the real dev-stack.ts and
 // dev-worktree.ts against a scratch repository, so each verdict is the gate's for plans and
 // commits that real phases wrote.
 //
@@ -21,6 +21,13 @@ import type {
   UserMessage,
 } from "../plugins/dev/dsh/api.ts";
 import { apply } from "../plugins/dev/dsh/index.ts";
+import type {
+  CommandDefinition,
+  OpenCodeContext,
+  SkillInfo,
+  ToolHookBefore,
+} from "../plugins/dev/opencode/api.ts";
+import { setup as opencodeSetup } from "../plugins/dev/opencode/index.ts";
 import devExtension from "../plugins/dev/pi/dev.ts";
 import { exec, git, NODE, PLUGIN, planText, RUN, read, repo, tmp, write } from "./helpers.ts";
 
@@ -575,6 +582,136 @@ const dsh = (dir: string): Harness => {
   };
 };
 
+// ── OpenCode ──────────────────────────────────────────────────────────
+
+let openCodeSessions = 0;
+
+/**
+ * OpenCode's gate: its V2 plugin's `execute.before` for the `skill` tool and for `shell`, `write`,
+ * and `edit`, with `session.context` supplying the messages a skill call resolves its plan from.
+ * A typed `/dev-<skill>` is a command whose executor runs the same phase gate.
+ */
+const opencode = (dir: string): Harness => {
+  type Handler = (...args: never[]) => unknown;
+  const sessionID = `oc${++openCodeSessions}`;
+  const hooks = new Map<string, Handler>();
+  const commands: CommandDefinition[] = [];
+  const skills: SkillInfo[] = [];
+  const synthetics: { text: string }[] = [];
+  let cwd = dir;
+  let messages: { id?: string; type?: string; text?: string; content?: unknown }[] = [];
+  const registration = { dispose: async () => {} };
+  const ctx = {
+    location: { directory: dir },
+    options: {},
+    skill: {
+      transform: async (cb: (editor: unknown) => void) => {
+        cb({
+          list: () => skills,
+          get: () => undefined,
+          add: (s: SkillInfo) => skills.push(s),
+          update: () => {},
+          remove: () => {},
+        });
+        return registration;
+      },
+      reload: async () => {},
+    },
+    command: {
+      transform: async (cb: (editor: unknown) => void) => {
+        cb({ add: (c: CommandDefinition) => commands.push(c) });
+        return registration;
+      },
+      reload: async () => {},
+    },
+    session: {
+      get: async () => ({ location: { directory: cwd } }),
+      context: async () => messages,
+      prompt: async () => {},
+      synthetic: async (input: { text: string }) => {
+        synthetics.push(input);
+      },
+      wait: async () => {},
+      hook: async (name: string, cb: Handler) => {
+        hooks.set(name, cb);
+        return registration;
+      },
+    },
+    tool: {
+      hook: async (name: string, cb: Handler) => {
+        hooks.set(name, cb);
+        return registration;
+      },
+    },
+  } as unknown as OpenCodeContext;
+  const ready = opencodeSetup(ctx);
+  const hook = async (name: string): Promise<Handler> => {
+    await ready;
+    const found = hooks.get(name);
+    assert.ok(found !== undefined, `OpenCode registered no ${name} hook`);
+    return found;
+  };
+  const call = async (event: Partial<ToolHookBefore>): Promise<Verdict> => {
+    try {
+      await (await hook("execute.before"))({
+        tool: "shell",
+        input: {},
+        sessionID,
+        agent: "build",
+        messageID: "a",
+        id: "call",
+        codemode: false,
+        ...event,
+      } as never);
+      return PASS;
+    } catch (e) {
+      return refusal(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return {
+    invoke: async (orchestrator, args) => {
+      await ready;
+      const found = commands.find((c) => c.name === `dev-${orchestrator}`);
+      assert.ok(found !== undefined, `OpenCode registered no /dev-${orchestrator}`);
+      synthetics.length = 0;
+      await found.execute({ sessionID, prompt: { text: args }, delivery: "steer" });
+      const refused = synthetics.find((s) => s.text.startsWith("[dev]"));
+      return refused === undefined ? PASS : refusal(refused.text);
+    },
+    skill: async (name, text, at = dir) => {
+      cwd = at;
+      if (name !== "autopilot") {
+        messages = [
+          { id: "u", type: "user", text: "/dev-autopilot the issue" },
+          {
+            id: "a",
+            type: "assistant",
+            content: [
+              { type: "text", text: `Loading ${name} on ${text}` },
+              { type: "tool", id: "call", name: "skill" },
+            ],
+          },
+        ];
+      } else {
+        messages = [{ id: "u", type: "user", text: `/dev-autopilot ${text}` }];
+      }
+      return call({ tool: "skill", input: { id: `dev-${name}` }, messageID: "a" });
+    },
+    bash: async (command, at = dir) => {
+      cwd = at;
+      return call({ tool: "shell", input: { command } });
+    },
+    write: async (file, content, at = dir) => {
+      cwd = at;
+      return call({ tool: "write", input: { path: file, content } });
+    },
+    edit: async (file, oldText, newText, at = dir) => {
+      cwd = at;
+      return call({ tool: "edit", input: { path: file, oldString: oldText, newString: newText } });
+    },
+  };
+};
+
 // ── Antigravity ───────────────────────────────────────────────────────
 
 /**
@@ -631,6 +768,7 @@ const HARNESSES: [string, (dir: string) => Harness][] = [
   ["Claude Code", claude],
   ["Pi", pi],
   ["DSH", dsh],
+  ["OpenCode", opencode],
   ["Antigravity", antigravity],
 ];
 

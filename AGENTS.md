@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## What this repository is
 
-The `dev` plugin for Claude Code, Pi, DeepSeek Harness (DSH), and Antigravity: rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
+The `dev` plugin for Claude Code, Pi, DeepSeek Harness (DSH), OpenCode, and Antigravity: rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
 
 Edits to this repository are direct edits, not plan-backed work. See [plan.md — Scope](plugins/dev/rules/plan.md#scope).
 
@@ -13,7 +13,7 @@ Edits to this repository are direct edits, not plan-backed work. See [plan.md �
 - **Each policy has one owner.** Each file owns the policy it states. Other files link to it as `[file — Section](path#anchor)` instead of paraphrasing it. A copied rule drifts from its source. Before adding a rule, find the file that already owns that topic and edit it there.
 - **Links resolve from the source file's directory.** Files under `plugins/dev/` ship as their build, `dist/dev/`, which loads without the rest of the checkout, so their links must resolve inside `dist/dev/`. There, CLIs and modules are `.js`: rules, skills, agents, manifests, and user-facing messages name `bin/<name>.js`, never the `.ts` source.
 - **Headings and paths are load-bearing.** Before renaming a heading, a file, or a `bin/` CLI, grep for links in `plugins/dev/` (agents cite anchors such as `CORE.md#work`) and for anchors and paths in `core/` block messages (they cite anchors such as `rules/plan.md#schema`).
-- **Rules must be harness-neutral.** Claude Code, Pi, DSH, and Antigravity read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool", "where the harness has one".
+- **Rules must be harness-neutral.** Claude Code, Pi, DSH, OpenCode, and Antigravity read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool", "where the harness has one".
 - **Style:** terse, declarative, and imperative, without filler or rigid templates. Word choice follows [Wording](#wording).
 - **Skill files** start with frontmatter (`name`, `description`, and optional `model` and `effort`), then `# /<name> — <summary>`, and stay short. Agent files carry `name`, `description`, and `tools`.
 
@@ -58,7 +58,7 @@ Write rules in English only, whatever language the request uses.
 
 A harness is supported when its adapter runs the gates, injects `rules/`, and loads the skills and `/dev-stack-*` commands, and its driver passes all three lanes in [test/autopilot-e2e.test.ts](test/autopilot-e2e.test.ts).
 
-1. The adapter, in `hooks/` for an engine that runs the plugin module itself, `bin/<harness>-hook.ts` for one that pipes hook JSON to a gate CLI, or a directory such as `pi/` or `dsh/` for one that imports `core/` directly. An adapter that reaches `core/` directly maps the harness's tool calls and typed prompts onto [hook-input.ts](plugins/dev/core/hook-input.ts); it never restates the gate's policy.
+1. The adapter, in `hooks/` for an engine that runs the plugin module itself, `bin/<harness>-hook.ts` for one that pipes hook JSON to a gate CLI, or a directory such as `pi/`, `dsh/`, or `opencode/` for one that imports `core/` directly. An adapter that reaches `core/` directly maps the harness's tool calls and typed prompts onto [hook-input.ts](plugins/dev/core/hook-input.ts); it never restates the gate's policy.
 2. Its row in the [README.md](README.md) install table.
 3. Its driver in [test/autopilot-e2e.test.ts](test/autopilot-e2e.test.ts): autopilot's direct-edit lane, autopilot's plan-backed lane, and run-stack's plan-backed lane.
 
@@ -86,6 +86,7 @@ npm run typecheck     # tsc 7 over tsconfig.engine.json and tsconfig.node.json
 npm run lint          # biome check
 npm run format        # biome check --write
 npm test              # node --test, serial
-npm run check         # typecheck, lint, test, then build
+npm run test:engine   # plugins/dev/hooks/*.test.ts under `claude plugin test`, on a scratch build
+npm run check         # typecheck, lint, test, test:engine, then build
 node --test --test-isolation=none test/<file>.test.ts   # one test file
 ```

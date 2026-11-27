@@ -1,6 +1,6 @@
 # dev-stack
 
-A plan-backed development workflow for Claude Code, Pi, DeepSeek Harness (DSH), and Antigravity (`agy`): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. It ships as one package holding one plugin, `dev`, that each harness installs natively. The sources are TypeScript, type-checked with TypeScript 7 and linted with Biome; `npm run build` compiles them to JavaScript in `dist/dev/` (Claude Code, Pi, DSH) and `dist/dev-agy/` (Antigravity).
+A plan-backed development workflow for Claude Code, Pi, DeepSeek Harness (DSH), OpenCode, and Antigravity (`agy`): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. It ships as one package holding one plugin, `dev`, that each harness installs natively. The sources are TypeScript, type-checked with TypeScript 7 and linted with Biome; `npm run build` compiles them to JavaScript in `dist/dev/` (Claude Code, Pi, DSH, OpenCode) and `dist/dev-agy/` (Antigravity).
 
 ## Install
 
@@ -11,15 +11,16 @@ Requires Node 24 or later on `PATH`: the gates and CLIs run under `node`. Pre-in
 | Claude Code | `claude plugin marketplace add ~/dev-stack` and `/plugin install dev@dev-stack` | `/dev:<skill>` |
 | Pi | `pi install ~/dev-stack` | `/dev:<skill>` (registered, so Pi lists it) or `/skill:<skill>` |
 | DSH | install this checkout as a linked bundle: `plugin_manager` action `install_bundle` with the checkout's absolute path | `dev-<skill>`, as the session skill catalog shows |
+| OpenCode | add this checkout's built plugin directory to `plugins` in `opencode.json(c)`: `/absolute/path/dev-stack/dist/dev/opencode` | `/dev-<skill>` (a command), or `dev-<skill>` as the skill ID |
 | Antigravity (`agy`) | `agy plugin install ~/dev-stack/dist/dev-agy` | `<skill>` (from the `dev` plugin) |
 
 The marketplace also lists `typescript-lsp`, a Claude Code-only plugin that runs [vtsls](https://github.com/yioneko/vtsls) as the language server for `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs` files. Install `vtsls` on `PATH` (`npm install -g @vtsls/language-server`), then `/plugin install typescript-lsp@dev-stack`. It is plain JSON, so it needs no build.
 
-`dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code copies the plugin into its cache, so reinstall it through `/plugin` after a rebuild; Pi loads `dist/dev` in place, so `/reload` picks up a rebuild. For development, `CLAUDE_CODE_PLUGIN_DIRS=~/dev-stack/dist/dev claude` loads the built plugin from the checkout; restart the session after `npm run build`. DSH links the checkout, so it runs `dist/dev/dsh/index.js` in place; rebuild and restart the session after changing the plugin.
+`dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code copies the plugin into its cache, so reinstall it through `/plugin` after a rebuild; Pi loads `dist/dev` in place, so `/reload` picks up a rebuild; OpenCode loads `dist/dev/opencode` in place, so `/reload` picks up a rebuild too. For development, `CLAUDE_CODE_PLUGIN_DIRS=~/dev-stack/dist/dev claude` loads the built plugin from the checkout; restart the session after `npm run build`. DSH links the checkout, so it runs `dist/dev/dsh/index.js` in place; rebuild and restart the session after changing the plugin.
 
-The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/dev/rules/CODING.md) into the context (Claude: a `prompt.context` block, which subagents also receive; Pi: `before_agent_start`; DSH: a `dev-stack:rules` system-prompt section; Antigravity: `SessionStart` `injectSteps` via `bin/agy-hook.js`) and defines `$DEV_LIB` there as the plugin's absolute install root. No `CLAUDE.md`, `AGENTS.md`, `~/.dsh/AGENTS.md`, or `GEMINI.md` pointer is needed.
+The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/dev/rules/CODING.md) into the context (Claude: a `prompt.context` block, which subagents also receive; Pi: `before_agent_start`; DSH: a `dev-stack:rules` system-prompt section; OpenCode: a `context` session hook; Antigravity: `SessionStart` `injectSteps` via `bin/agy-hook.js`) and defines `$DEV_LIB` there as the plugin's absolute install root. No `CLAUDE.md`, `AGENTS.md`, `~/.dsh/AGENTS.md`, or `GEMINI.md` pointer is needed.
 
-DSH has no Skill tool arguments and no prompt-submit hook. A phase's plan is the one named by the assistant message that loaded the skill, else by the latest user message, and a gated phase typed as `/dev-<name>` ends the turn instead of loading ungated: enter a gated phase through the model, asking it to run the skill on the plan, so a refusal carries its reason.
+DSH has no Skill tool arguments and no prompt-submit hook. A phase's plan is the one named by the assistant message that loaded the skill, else by the latest user message, and a gated phase typed as `/dev-<name>` ends the turn instead of loading ungated: enter a gated phase through the model, asking it to run the skill on the plan, so a refusal carries its reason. OpenCode's `skill` tool likewise takes only the skill ID, so its gate resolves the plan the same way; enter a gated phase with the `/dev-<skill>` command or by asking the model to run the skill on the plan.
 
 ## Layout
 
@@ -42,10 +43,12 @@ plugins/dev/                      the plugin's sources; their build ships alone
   agy/                            Antigravity hook manifest (hooks.json) wired to bin/agy-hook.js
   pi/                             Pi extension: rules, gates, and commands, calling core in-process
   dsh/                            DSH Host plugin: rules, skills, commands, and gates, calling core in-process
+  opencode/                       OpenCode V2 plugin: rules, skills, commands, and gates, calling core
+                                  in-process
 scripts/build.ts                  compiles plugins/dev into dist/dev and dist/dev-agy and copies its
                                   rules, skills, agents, and manifests beside each output
-dist/dev/, dist/dev-agy/          the built plugins: dist/dev (Claude Code, Pi, DSH) and dist/dev-agy
-                                  (Antigravity), gitignored
+dist/dev/, dist/dev-agy/          the built plugins: dist/dev (Claude Code, Pi, DSH, OpenCode) and
+                                  dist/dev-agy (Antigravity), gitignored
 test/                             node --test suites
 ```
 
@@ -76,7 +79,7 @@ test/                             node --test suites
 
 ## Agents
 
-In Claude Code they are `dev:<name>`. DSH has no named plugin agents, so its skills hand these files' instructions to the `subagent` tool.
+In Claude Code they are `dev:<name>`. DSH and OpenCode have no named plugin agents here, so their skills hand these files' instructions to the `subagent` tool.
 
 | Need | Agent |
 |---|---|

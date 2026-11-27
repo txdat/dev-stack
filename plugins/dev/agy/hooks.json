@@ -8,6 +8,12 @@
     ]
   },
   "dev-gate": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node ./bin/agy-hook.js"
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "run_command|edit_file|write_file|read_file",
