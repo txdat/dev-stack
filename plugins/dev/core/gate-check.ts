@@ -348,7 +348,7 @@ class Gate {
     if (this.lib.worktreeOf(plan) !== "") return;
     const name = this.lib.worktreeName(plan);
     block(
-      `Plan ${plan} has no worktree at ${this.lib.worktreePath(name)}. Create it with dev-worktree.js create ${name} ${this.field(plan, "Branch")} <PR target>, which reattaches an existing Branch. If publication cleanup removed it, rerun dev-publish.js cleanup on the plans not yet published (rules/plan.md#worktree).`,
+      `Plan ${plan} has no worktree at ${this.lib.worktreePath(name)}. Create it with dev-worktree.js create ${name} ${this.field(plan, "Branch")} <PR target>, which reattaches an existing Branch (rules/plan.md#worktree).`,
     );
   }
 
@@ -494,7 +494,7 @@ class Gate {
    * Where the plan's branch leaves its PR target. For Base, the fork point from origin/<Base> (or
    * the local branch without one), as dev-publish resolves it: Base may advance without the plan
    * merging it. For a parent plan's branch, its tip, which the branch must contain; that branch
-   * may exist only as origin/<branch> after cleanup.
+   * may exist only as origin/<branch> after dev-worktree.js remove.
    */
   reviewBase(target: string): string | undefined {
     if (this.parentPlan === "") {

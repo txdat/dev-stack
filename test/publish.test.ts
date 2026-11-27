@@ -112,7 +112,9 @@ const newRepo = (name: string) => {
     write(store, JSON.stringify(all));
   };
   const sha = (ref: string) => git(repo, "rev-parse", ref);
-  return { dir, repo, D, publish, ok, fails, planWorktree, openPr, prs, editPr, sha };
+  /** create-pr's removal after publish: dev-worktree.js remove. */
+  const remove = (...argv: string[]) => run(devWorktree, ["remove", ...argv], { cwd: repo, env });
+  return { dir, repo, env, D, publish, ok, fails, planWorktree, openPr, prs, editPr, sha, remove };
 };
 
 /** A commit of a file named `name` on the worktree's current branch. */
@@ -141,9 +143,9 @@ const reviewed = (plan: string, tip: string) =>
 
 const statusOf = (plan: string) => /^Status: ([a-z]*)/m.exec(read(plan))?.[1];
 
-test("a parent and its only child, each in its own worktree, from check through cleanup", () => {
+test("a parent and its only child, each in its own worktree, from check through removal", () => {
   const f: Fixture = newRepo("chain");
-  const { repo, D, ok, fails, planWorktree, openPr, editPr, sha } = f;
+  const { repo, D, ok, fails, planWorktree, openPr, editPr, sha, remove } = f;
   const P1 = `${D}/pr1.spec.md`;
   const P2 = `${D}/pr2.spec.md`;
   const wt = planWorktree("7_demo-pr1", "feat/demo-1", "main");
@@ -208,11 +210,11 @@ test("a parent and its only child, each in its own worktree, from check through 
 
   editPr(1, { body: "no links" });
   fails("body does not link the PR of 7_demo/pr1.spec.md", "verify", P2);
-  fails(`Unpublished plans stack on ${P1}`, "cleanup", P1);
-  fails("not verified", "cleanup", P2);
+  fails(`Unpublished plans stack on ${P1}`, "publish", P1);
+  fails("not verified", "publish", P2);
   assert.ok(
     fs.existsSync(wt) && statusOf(P2) === "reviewed",
-    "cleanup touched state before verification",
+    "publish touched state before verification",
   );
   editPr(1, { body: "After #12." });
   fails("does not link the PR of", "verify", P2);
@@ -224,47 +226,61 @@ test("a parent and its only child, each in its own worktree, from check through 
   fails("origin/feat/demo-1 differs from the reviewed", "verify", P1);
   reviewed(P1, g1);
 
-  // Cleanup of a child removes its own worktree, deletes its branch, and keeps the plan as published.
-  out = ok("cleanup", P2);
+  fails("Usage", "publish", P2, "--ignored-checked");
+  assert.equal(statusOf(P2), "reviewed");
+
+  // A link-deps link is no change to remove, even when Git does not ignore it.
+  fs.mkdirSync(`${repo}/node_modules`, { recursive: true });
+  assert.equal(run(devWorktree, ["link-deps", wt2], { cwd: repo, env: f.env }).code, 0);
+  assert.ok(fs.lstatSync(`${wt2}/node_modules`).isSymbolicLink());
+
+  // create-pr step 4: publish every plan, children before parents; no worktree goes.
+  out = ok("publish", P2);
+  assert.ok(out.includes(`PASS publish ${P2}; Status: published`), out);
+  assert.ok(ok("publish", P1).includes("Status: published"));
+  assert.ok(fs.existsSync(wt2) && fs.existsSync(wt), "publish removed a worktree");
+  assert.ok(ok("publish", P2).includes("already complete"), "a publish rerun is a no-op");
+  fails("is published", "check", P2);
+
+  // Step 5, once the stack is published: remove each worktree.
+  // remove, not publish, refuses a dirty worktree, and keeps it.
+  write(`${wt2}/stray.txt`, "x\n");
+  let r = remove(wt2);
   assert.ok(
-    out.includes(`WORKTREE removed ${wt2}; deleted feat/demo-2`) &&
-      out.includes("Status: published"),
-    out,
+    r.code !== 0 &&
+      r.all.includes("uncommitted or untracked") &&
+      fs.lstatSync(`${wt2}/node_modules`).isSymbolicLink(),
+    r.all,
   );
-  assert.ok(
-    !fs.existsSync(wt2) && fs.existsSync(wt),
-    "the child's cleanup removed the wrong worktree",
-  );
+  fs.rmSync(`${wt2}/stray.txt`);
+  r = remove(wt2);
+  assert.ok(r.code === 0 && r.out.trim() === "deleted feat/demo-2", r.all);
+  assert.ok(!fs.existsSync(wt2) && fs.existsSync(wt), "remove took the wrong worktree");
   assert.equal(
     read(P2).split("\n").slice(1, 8).join("\n"),
     `Status: published\nSpec: -\nTip: ${g2}\nType: feature\nBase: main\nBranch: feat/demo-2\nIssue: #7`,
   );
-  assert.ok(ok("cleanup", P2).includes("already complete"), "a cleanup rerun is a no-op");
-  fails("is published", "check", P2);
 
-  // Cleanup shows ignored content before removing the worktree.
+  // remove shows ignored content before removing the worktree.
   write(`${wt}/build/out`, "x\n");
-  const shown = f.publish(["cleanup", P1]);
+  r = remove(wt);
   assert.ok(
-    shown.code === 4 && shown.all.includes("IGNORED in") && fs.existsSync(wt),
-    `${shown.code} ${shown.all}`,
+    r.code === 4 && r.all.includes("IGNORED in") && r.all.includes("build/") && fs.existsSync(wt),
+    `${r.code} ${r.all}`,
   );
-  out = ok("cleanup", P1, "--ignored-checked");
-  assert.ok(
-    out.includes(`WORKTREE removed ${wt}; deleted feat/demo-1`) &&
-      out.includes("Status: published"),
-    out,
-  );
-  assert.ok(!fs.existsSync(wt) && statusOf(P1) === "published", "cleanup left state behind");
+  r = remove(wt, "--ignored-checked");
+  assert.ok(r.code === 0 && r.out.trim() === "deleted feat/demo-1", r.all);
+  assert.ok(!fs.existsSync(wt) && statusOf(P1) === "published", "removal left state behind");
   assert.ok(
     !gitOk(repo, "rev-parse", "--verify", "-q", "refs/heads/feat/demo-1"),
-    "cleanup kept a pushed branch",
+    "remove kept a pushed branch",
   );
-  fails("Plan not found", "cleanup", `${D}/pr9.spec.md`);
+  fails("Plan not found", "publish", `${D}/pr9.spec.md`);
+  fails("Usage", "cleanup", P1);
 });
 
-test("an unpushed local commit; a cleanup resumed after the worktree is gone", () => {
-  const { D, ok, fails, planWorktree, openPr, sha } = newRepo("unpushed");
+test("an unpushed local commit; publish after the worktree is gone by hand", () => {
+  const { repo, D, ok, fails, planWorktree, openPr, sha, remove } = newRepo("unpushed");
   const P1 = `${D}/pr1.spec.md`;
   const wt = planWorktree("7_demo-pr1", "feat/u-1", "main");
   commitFile(wt, "u1.txt");
@@ -275,13 +291,11 @@ test("an unpushed local commit; a cleanup resumed after the worktree is gone", (
   fails("local tip of feat/u-1 differ", "verify", P1);
   git(wt, "reset", "-q", "--hard", "origin/feat/u-1");
   fs.rmSync(wt, { recursive: true, force: true }); // by hand: Git still registers it
-  const out = ok("cleanup", P1);
-  assert.ok(
-    out.includes("WORKTREE none") &&
-      out.includes("deleted feat/u-1") &&
-      statusOf(P1) === "published",
-    out,
-  );
+  assert.ok(ok("publish", P1).includes("Status: published"));
+  // remove refuses a missing directory; the branch stays for the user.
+  const r = remove(wt);
+  assert.ok(r.code !== 0 && r.all.includes("does not exist"), r.all);
+  assert.ok(gitOk(repo, "rev-parse", "--verify", "-q", "refs/heads/feat/u-1"));
 });
 
 test("plan paths outside the layout are refused", () => {
@@ -294,7 +308,7 @@ test("plan paths outside the layout are refused", () => {
 test("a stack tree publishing at once: root -> child -> grandchild, root -> sibling", () => {
   // Each plan has its own worktree. create-pr runs each step on every plan, parents first, before
   // the next step.
-  const { repo, D, publish, ok, fails, planWorktree, openPr, prs, sha } = newRepo("tree");
+  const { repo, D, publish, ok, fails, planWorktree, openPr, prs, sha, remove } = newRepo("tree");
   const wtr = planWorktree("7_demo-pr1", "feat/root", "main");
   commitFile(wtr, "root.txt");
   const wtc = planWorktree("7_demo-pr2", "feat/child", "feat/root");
@@ -322,17 +336,25 @@ test("a stack tree publishing at once: root -> child -> grandchild, root -> sibl
   }
   for (const [n] of stack) ok("verify", plan(n));
 
-  fails(`Stacks On line: ${plan(2)} ${plan(3)}.`, "cleanup", plan(1));
+  fails(`Stacks On line: ${plan(2)} ${plan(3)}.`, "publish", plan(1));
   write(plan(9), "# Stray\nStatus: planning\n## Goal\nStacks On: pr4\n");
-  fails(`Stacks On line: !${plan(9)}`, "cleanup", plan(4));
+  fails(`Stacks On line: !${plan(9)}`, "publish", plan(4));
   fs.rmSync(plan(9));
   assert.ok(fs.existsSync(wtr), "the parent guard touched the worktree");
 
   // From inside a worktree: the main repository's plans still resolve.
   for (const [n] of [...stack].reverse()) {
-    const r = publish(["cleanup", plan(n)], wtr);
-    assert.equal(r.code, 0, `cleanup pr${n}: ${r.all}`);
-    assert.ok(r.out.includes("WORKTREE removed"), r.out);
+    const r = publish(["publish", plan(n)], wtr);
+    assert.equal(r.code, 0, `publish pr${n}: ${r.all}`);
+  }
+  for (const [w, branch] of [
+    [wtg, "feat/grand"],
+    [wts, "feat/sib"],
+    [wtc, "feat/child"],
+    [wtr, "feat/root"],
+  ]) {
+    const r = remove(w as string);
+    assert.ok(r.code === 0 && r.out.trim() === `deleted ${branch}`, `remove ${w}: ${r.all}`);
   }
   assert.deepEqual(
     prs().map((p) => p["baseRefName"]),

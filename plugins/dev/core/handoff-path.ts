@@ -38,7 +38,7 @@ export const handoffPath: Command = (ctx) => {
       id = ctx.env[from] ?? "";
       if (!validId(id)) fail(`Invalid ${from}: ${id}`, 2);
     }
-    // The main root, never a linked worktree: create-pr's cleanup removes those.
+    // The main root, never a linked worktree: create-pr removes those with dev-worktree.js remove.
     const root = tryMainRoot(ctx.cwd, ctx.env);
     if (root === undefined) fail("Not in a Git repository: a handoff lives in its docs/handoff.");
     if (

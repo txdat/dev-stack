@@ -12,8 +12,9 @@ Publish a stack whose plans are all `reviewed`, one PR per plan, draft unless th
 1. `dev-publish.js check <plan>` — the Branch is at its reviewed SHA, contains its parent's Branch, and has no open PR on another base; it prints the PR target as `base=`.
 2. `git push -u origin <Branch>` (never force), then `gh pr create --base <target> --head <Branch> --title <plan title> --body-file <file> [--draft]`. On a rerun, push again but skip `gh pr create` when the plan's PR is already open on its target.
 3. `dev-publish.js verify <plan>` — one open PR on the target; its head, `origin`, and the local Branch at the reviewed SHA; a body linking the PR of each plan below.
-4. Once every plan verifies, `dev-publish.js cleanup <plan>`, children before parents — it removes the plan's worktree, deletes the local Branch when it matches `origin`, and sets `Status: published`. If it lists ignored files, check them for unrelated work, then rerun with `--ignored-checked`. If it stops partway, rerun it on the unpublished plans.
+4. Once every plan verifies, `dev-publish.js publish <plan>`, children before parents, which sets `Status: published`. If it stops partway, rerun it on the unpublished plans.
+5. Once every plan is `published`, remove each plan's worktree under [plan.md — Worktree](../../rules/plan.md#worktree), after `git -C <worktree> branch --show-current` shows the plan's Branch; report a worktree on another branch, which stays. When the run stops before every worktree is removed, rerun this step on each plan worktree `git worktree list` still shows; it runs outside any phase, since no phase resumes a published plan.
 
 PR bodies follow the project template and [artifact.md — Naming and language](../../rules/artifact.md#naming-and-language): the change, why, how it was verified, and limitations. Add `Refs #N` when an issue is linked, never a closing keyword. List the PRs below this one in the stack, in order. The plan stays out of the PR; the body carries what a reader needs.
 
-Return the PR URLs.
+Return the PR URLs, and each kept branch and each worktree kept, with its reason.

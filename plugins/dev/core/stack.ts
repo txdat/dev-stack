@@ -163,7 +163,7 @@ class Stack {
     return [root, ...plans];
   }
 
-  /** stackPlans for stack and next: cleanup publishes the root last, so a published root means a published stack, listed whole. */
+  /** stackPlans for stack and next: create-pr publishes the root last, so a published root means a published stack, listed whole. */
   listedPlans(root: string): string[] {
     if (!this.lib.isPublished(root)) return this.stackPlans(root);
     this.lib.includePublished = true;

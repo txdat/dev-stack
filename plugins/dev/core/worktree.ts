@@ -3,7 +3,7 @@
 
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { b, byteCompare, stripNewlines } from "./bytes.ts";
+import { b, byteCompare, lines, stripNewlines } from "./bytes.ts";
 import { type Command, fail, guard, Output, sh } from "./cli.ts";
 import { PlanLib } from "./plan-lib.ts";
 import {
@@ -25,7 +25,7 @@ const USAGE = [
   "Usage: dev-worktree.js create <slug> <branch> <parent>",
   "       dev-worktree.js link-deps <worktree> [dependency-name ...]",
   "       dev-worktree.js isolate-dep <worktree> <dependency-name>",
-  "       dev-worktree.js remove <worktree>",
+  "       dev-worktree.js remove <worktree> [--ignored-checked]",
   "       dev-worktree.js scratch <name> <ref> [patch ...]",
   "       dev-worktree.js scratch-diff <scratch> [-- <path> ...]",
   "       dev-worktree.js scratch-remove <scratch>",
@@ -33,8 +33,9 @@ const USAGE = [
   "or on <branch> as it is when it exists, and prints the new path.",
   "link-deps defaults to node_modules vendor .venv venv Pods.",
   "Dependencies must be direct-child directory names. Existing local content is preserved.",
-  "remove unlinks link-deps links, deletes a clean worktree, then its local branch only when origin/<branch> has the same tip;",
-  'it prints "deleted <branch>" or "kept <branch>", with the reason for keeping on stderr.',
+  "remove first lists any ignored content and exits 4 until rerun with --ignored-checked, since removal deletes it;",
+  "then it unlinks link-deps links, deletes a clean worktree, then its local branch only when origin/<branch> has the",
+  'same tip, and prints "deleted <branch>" or "kept <branch>", with the reason for keeping on stderr.',
   "scratch makes a detached <repo>-<name> under <worktrees root>/scratch at <ref>, applies the patches three-way",
   "(removing it if one fails), links dependencies, and prints its path. scratch-diff prints the changes since <ref>,",
   "new unignored files included, as a patch limited to the paths given; it omits dependency links, isolated",
@@ -42,6 +43,7 @@ const USAGE = [
   "A ref resolves where the command runs. scratch-remove deletes the scratch, never a link target.",
   "Scratch commands refuse other worktrees; run them from inside the repository or a worktree, not a dependency link.",
   "Requires the owning phase authorization; does not approve a plan or install dependencies.",
+  "Exit: 0 ok, 1 failure, 2 usage, 4 confirmation needed (remove).",
 ].join("\n");
 
 const DEFAULT_DEPS = ["node_modules", "vendor", ".venv", "venv", "Pods"];
@@ -178,18 +180,40 @@ export const devWorktree: Command = (ctx) => {
         return o.done();
       }
       case "remove": {
-        if (n !== 2) fail("remove requires a registered worktree.");
+        if (!(n === 2 || (n === 3 && argv[2] === "--ignored-checked")))
+          fail("remove requires a registered worktree and optional --ignored-checked.");
         const wt = registered(argv[1] as string);
         const head = git(["symbolic-ref", "--quiet", "--short", "HEAD"], { cwd: wt, env });
         o.err(head.stderr);
         if (head.code !== 0) fail("Worktree HEAD is detached; its branch cannot be identified.");
         const branch = stripNewlines(head.stdout);
-        // An unignored dependency link would otherwise block removal; its main-root target stays.
-        for (const e of depLinks(wt)) fs.unlinkSync(P(e));
-        const status = git(["status", "--porcelain", "--untracked-files=all"], { cwd: wt, env });
-        o.err(status.stderr);
-        if (stripNewlines(status.stdout) !== "")
+        // Dependency links are neither changes nor ignored content: removal unlinks them, and their
+        // main-root targets stay. This command's own checks run before the unlink, so their refusal keeps them.
+        const links = depLinks(wt);
+        const linked = new Set(links.map((e) => e.slice(wt.length + 1)));
+        const statusOf = (args: string[]): string[] => {
+          const r = git(["status", "--porcelain", ...args], { cwd: wt, env });
+          o.err(r.stderr);
+          if (r.code !== 0) fail(`Cannot read the status of ${wt}.`);
+          return lines(r.stdout).filter((l) => !linked.has(l.slice(3)));
+        };
+        if (statusOf(["--untracked-files=all"]).length !== 0)
           fail(`Worktree has uncommitted or untracked changes: ${wt}`);
+        // Removal deletes ignored content unseen, so it is shown first for the caller to check for
+        // unrelated files.
+        if (n === 2) {
+          const ignored = statusOf(["--ignored", "--untracked-files=normal"])
+            .filter((l) => l.startsWith("!! "))
+            .map((l) => l.slice(3));
+          if (ignored.length !== 0) {
+            o.out(`IGNORED in ${wt}:\n${ignored.join("\n")}\n`);
+            fail(
+              `Check the ignored content above for unrelated files, then rerun: dev-worktree.js remove ${wt} --ignored-checked`,
+              4,
+            );
+          }
+        }
+        for (const e of links) fs.unlinkSync(P(e));
         sh(o, ["git", "-C", MAIN, "worktree", "remove", wt], { env, stdout: "err" });
         // Delete the branch only when a fresh fetch shows origin at the same tip, so no unpushed
         // commit is lost. A failed fetch keeps it rather than trusting a stale tracking ref.

@@ -213,6 +213,36 @@ test("remove deletes clean worktrees and only branches origin already holds", ()
   assert.equal(out(wt(["remove", linked])), "deleted feature/linked");
   assert.equal(read(`${REPO}/node_modules/keep.txt`), "shared sentinel\n");
 
+  // Ignored content is listed first; a refusal keeps the dependency links.
+  fs.appendFileSync(
+    `${git(REPO, "rev-parse", "--git-common-dir").replace(/^(?!\/)/, `${REPO}/`)}/info/exclude`,
+    "*.log\n",
+  );
+  const ign = make("ign");
+  out(wt(["link-deps", ign, "node_modules"]));
+  push(ign, "ign");
+  write(`${ign}/run.log`, "log\n");
+  let r = wt(["remove", ign]);
+  assert.ok(
+    r.code === 4 && r.out.includes("run.log") && !r.out.includes("node_modules"),
+    `${r.code} ${r.all}`,
+  );
+  assert.ok(exists(`${ign}/run.log`) && isLink(`${ign}/node_modules`), "a refusal removed content");
+  rejects(wt(["remove", ign, "--keep-branch"]), "an unknown flag");
+  assert.equal(out(wt(["remove", ign, "--ignored-checked"])), "deleted feature/ign");
+  assert.ok(!exists(ign) && read(`${REPO}/node_modules/keep.txt`) === "shared sentinel\n");
+
+  // A directory deleted by hand is no worktree to remove; its branch stays for the user.
+  const handGone = make("hand-gone");
+  push(handGone, "hand-gone");
+  fs.rmSync(handGone, { recursive: true, force: true });
+  r = wt(["remove", handGone]);
+  assert.ok(
+    r.code !== 0 && r.all.includes("does not exist") && hasBranch("feature/hand-gone"),
+    r.all,
+  );
+  git(REPO, "worktree", "prune");
+
   rejects(wt(["remove", REPO]), "remove the main root");
   rejects(wt(["remove", ROOT]), "remove outside");
 });

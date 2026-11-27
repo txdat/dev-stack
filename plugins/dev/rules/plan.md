@@ -22,7 +22,7 @@ A change is contained when it stays in one module (a package, service, or top-le
 | `auto-approved` | `dev-stack.js approve`, from `ready`, on a stack `dev-stack.js autopilot` claimed under run-stack `--auto-approve`, which only autopilot passes; gates treat it as `approved` |
 | `implemented` | execute-feature, or the main agent after any change to a `reviewed` plan's Branch, such as a merge forward ([Worktree](#worktree)) |
 | `reviewed` | the main agent, after a review-code pass that `dev-stack.js code-review` logged at the Branch tip, with `Tip:` set to that tip |
-| `published` | create-pr's cleanup |
+| `published` | create-pr's `dev-publish.js publish` |
 
 A gate blocks each phase until its entry status holds, and blocks every gated phase on a stopped plan ([run-stack.md — Stops](../skills/run-stack/SKILL.md#stops)) or a frozen one ([Changes](#changes)). The create-pr gate also blocks a `reviewed` plan whose last logged review-code verdict is not a pass at its `Tip:`. No phase resumes or edits a published plan.
 
@@ -104,8 +104,9 @@ The user, or autopilot, may split, merge, insert, or drop unapproved plans ([Cha
 
 Each plan has its own worktree at `~/wt/<repo>-<issue>_<slug>-pr<N>`, found by that path, never recorded.
 
-- Create it only with `node $DEV_LIB/bin/dev-worktree.js create <issue>_<slug>-pr<N> <Branch> <target>`, where target is the PR target: `origin/<Base>` (local Base without one), or the parent plan's Branch for a stacked plan. On an existing Branch it reattaches that Branch as it is, so a worktree that went missing is recreated the same way.
-- One phase runs in a worktree at a time, on the plan's own Branch. The worktree stays until create-pr's cleanup removes it.
+- Create any worktree only with `node $DEV_LIB/bin/dev-worktree.js create <name> <branch> <target>`. A plan's is `create <issue>_<slug>-pr<N> <Branch> <target>`, where target is the PR target: `origin/<Base>` (local Base without one), or the parent plan's Branch for a stacked plan. On an existing Branch it reattaches that Branch as it is, so a worktree that went missing is recreated the same way.
+- One phase runs in a worktree at a time, on the plan's own Branch. The worktree stays until create-pr removes it after publishing the whole stack.
+- Remove any worktree `dev-worktree.js create` made, including a plan's, only with `node $DEV_LIB/bin/dev-worktree.js remove <worktree>`. It deletes a clean worktree, then its local branch only when `origin` has the same tip, and prints `deleted <branch>` or `kept <branch>`. When it lists ignored files, check them for unrelated work, then rerun it with `--ignored-checked`. Report each `kept <branch>` with its reason and each worktree it refuses, which stays; never discard its changes.
 - `link-deps <worktree>` links installed dependencies from the main root. Before any command that changes a linked dependency directory, run `isolate-dep <worktree> <name>`; installing through the symlink corrupts the main root.
 - Run code, tests, and branch Git operations in the worktree. Never stash, reset, or clean to get past unrelated changes in the worktree or the main root.
 - Fix a plan on its own Branch. Then the main agent merges it forward into each child whose Branch exists, then each changed child into its children, each in its own worktree once no phase runs there, reruns each merged-into plan's local checks, TC tests, and affected tests, and sets each that was `reviewed` to `implemented`, so review-code runs again. Never rebase, reset, or force-push. `dev-stack.js next` names this merge `merge-forward`.
