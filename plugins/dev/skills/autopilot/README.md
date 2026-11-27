@@ -33,15 +33,16 @@ flowchart TD
   end
 
   subgraph DIRECT["Step 2: Deliver, direct edit"]
-    WT["worktree and branch on Base"] --> EX["direct-edit chunk: code, failing test then change; docs or config, change alone; checks"]
-    EX --> VER["main agent: required review, rerun checks; for code, confirm the test fails without the change"]
-    VER --> RCH["review-change on the branch"]
-    RCH -- "NEEDS CHANGES" --> FIX["review-fixes chunk: failing test, fix, checks"]
-    FIX --> FV["main agent: rerun checks, confirm each new test fails without its fix"]
-    FV --> RRE["review-change re-review: prior findings and the diff of the repair"]
+    WT["worktree and branch on Base"] --> EX["direct-edit chunk: code, failing test then change; docs or config, change alone; checks at its tip; for code, the test fails without the change"]
+    EX --> PRV["main agent: any review the project's instructions require, in a fresh subagent"]
+    PRV --> RCH["review-change on the branch"]
+    RCH -- "NEEDS CHANGES" --> FIX["review-fixes chunk: for code-behavior findings, failing test, then fix; checks at its tip; each new test fails without its fix"]
+    FIX --> RRE["review-change re-review: prior findings and the diff of the repair"]
     RRE -- "NEEDS CHANGES below the round limit" --> FIX
-    VER -- "check fails: fix attempt" --> EX
-    FV -- "check fails: fix attempt" --> FIX
+    EX -- "reported check failure or missing proof: fix attempt" --> EX
+    PRV -- "blocking findings below the round limit: repair, then re-review" --> EX
+    PRV -- "blocking findings at the round limit" --> STOP2
+    FIX -- "reported check failure or missing proof: fix attempt" --> FIX
     FIX -- "returns options: decided under Decisions" --> FIX
     EX -- "needs a file outside its exclusive files: narrower change" --> EX
     RCH -- PASS --> PUB
@@ -69,8 +70,8 @@ flowchart TD
   class IN io
   class T1,T2,FB,LOC,RT,ISS triage
   class DF,RV,AA,EF,RP plan
-  class WT,EX,VER,FIX,FV,PUB direct
-  class RF,RC,RCH,RRE review
+  class WT,EX,FIX,PUB direct
+  class RF,RC,PRV,RCH,RRE review
   class STOP1,STOP2,HO stop
   class CP,FIN done
   style TRIAGE fill:#eff6ff,stroke:#2563eb
