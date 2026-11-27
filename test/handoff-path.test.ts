@@ -34,7 +34,7 @@ test("handoff path location, ignore check, and invalid inputs", () => {
   assert.equal(atBoth(r).out, `${r}/docs/handoff/claude-session.md\n`);
   assert.notEqual(atPi(r, "bad id").code, 0);
 
-  // A linked worktree resolves to the main root, which create-pr's cleanup keeps.
+  // A linked worktree resolves to the main root, which create-pr's worktree removal keeps.
   git(r, "worktree", "add", "-q", `${root}/wt`, "-b", "side");
   assert.equal(at(`${root}/wt/`, ["0a1b-2c3d"], "").out, `${r}/docs/handoff/0a1b-2c3d.md\n`);
 

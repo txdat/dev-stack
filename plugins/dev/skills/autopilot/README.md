@@ -28,7 +28,7 @@ flowchart TD
       RF -- ready --> AA[auto-approved] --> EF[execute-feature]
       EF --> RC[review-code]
       RC -- "needs-changes" --> RP[code repairs] --> RC
-      RC -- pass --> CP["create-pr: draft PRs, cleanup"]
+      RC -- pass --> CP["create-pr: draft PRs, publish, remove worktrees"]
     end
   end
 

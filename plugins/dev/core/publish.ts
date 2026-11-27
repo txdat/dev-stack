@@ -1,27 +1,27 @@
 // Publication checks for create-pr (../skills/create-pr/SKILL.md): reviewed-tip checks, PR
-// verification, and cleanup. A plan is one PR; the PR carries code only, and the plan stays in
-// docs/plans, untracked, as a published record.
+// verification, and marking a plan published; dev-worktree.js remove then removes its worktree.
+// A plan is one PR; the PR carries code only, and the plan stays in docs/plans, untracked, as a
+// published record.
 //
 // The main agent alone runs it. The create-pr gate (gate-check.ts) owns entry: reviewed status and
-// an active worktree. The agent pushes and opens the PRs and owns their titles and bodies and the
-// ignored-file check. This never merges, retargets, force-pushes, or rewrites branches; every
-// command rechecks state, so a failed run can be repeated.
+// an active worktree. The agent pushes and opens the PRs and owns their titles and bodies. This
+// never merges, retargets, force-pushes, or rewrites branches; every command rechecks state, so a
+// failed run can be repeated.
 
-import { b, lines, stripNewlines, utf8 } from "./bytes.ts";
+import { b, stripNewlines, utf8 } from "./bytes.ts";
 import { devCheck } from "./check.ts";
 import { type Command, type Ctx, Exit, fail, guard, Output, sh } from "./cli.ts";
 import { PlanLib } from "./plan-lib.ts";
 import { git, isFile, isLink, type Ran } from "./sys.ts";
 import { mainRoot } from "./utils.ts";
-import { devWorktree } from "./worktree.ts";
 
 const USAGE = [
   "Usage: dev-publish.js check <plan>",
   "       dev-publish.js verify <plan>",
-  "       dev-publish.js cleanup <plan> [--ignored-checked]",
+  "       dev-publish.js publish <plan>",
   "<plan> is <main root>/docs/plans/<issue>_<slug>/pr<N>.spec.md, run from the repository.",
-  "cleanup sets Status: published and keeps the plan as a record.",
-  "Exit: 0 ok, 1 failure, 2 usage, 4 confirmation needed (cleanup).",
+  "publish sets Status: published and keeps the plan as a record; dev-worktree.js remove then removes its worktree.",
+  "Exit: 0 ok, 1 failure, 2 usage.",
 ].join("\n");
 
 const usage = (): never => {
@@ -55,7 +55,6 @@ class Publish {
   branch = "";
   parentPlan = "";
   target = "";
-  wt = "";
   problems: string[] = [];
 
   constructor(root: string, ctx: Ctx, o: Output) {
@@ -80,7 +79,7 @@ class Publish {
       fail(`${this.plan} is published; publication of it is complete.`);
   }
 
-  /** The plan's branch, the branch its PR targets, and its worktree. */
+  /** The plan's branch and the branch its PR targets. */
   loadFields(): void {
     this.branch = this.lib.fieldOr(this.plan, "Branch");
     if (this.branch === "") fail("Plan header has no Branch.");
@@ -92,7 +91,6 @@ class Publish {
       fail(
         `No PR target: ${parent !== "" ? `parent plan ${parent} has no Branch` : "the plan header has no Base"}.`,
       );
-    this.wt = this.lib.worktreeOf(this.plan);
   }
 
   /** The Tip SHA of a `Status: reviewed` plan, recorded by review-code. */
@@ -306,80 +304,19 @@ class Publish {
     this.o.out(`PASS verify ${this.plan}\n`);
   }
 
-  /** Removes the plan's own worktree and local Branch, then marks it published. */
-  cleanup(checked: boolean): void {
+  /** Marks the plan published once its publication verifies; the worktree is dev-worktree's. */
+  publish(): void {
     // "!<plan>" is a plan whose Stacks On line cannot be read, so it may name this one.
     const children = this.lib.childPlans(this.plan);
     if (children.length !== 0)
       fail(
-        `Unpublished plans stack on ${this.plan} or have an unreadable Stacks On line: ${children.join(" ")}. Clean up its children first, children before parents; fix an unreadable line first.`,
+        `Unpublished plans stack on ${this.plan} or have an unreadable Stacks On line: ${children.join(" ")}. Publish its children first, children before parents; fix an unreadable line first.`,
       );
     this.verifyPublication();
-    if (!this.reportProblems()) fail("Publication is not verified; cleanup keeps everything.");
-    const wt = this.wt;
-    if (wt !== "") {
-      const status = git(["status", "--porcelain", "--untracked-files=all"], {
-        cwd: wt,
-        env: this.ctx.env,
-      });
-      this.o.err(status.stderr);
-      if (stripNewlines(status.stdout) !== "")
-        fail(`Worktree ${wt} has uncommitted or untracked changes.`);
-      const headRan = git(["symbolic-ref", "--quiet", "--short", "HEAD"], {
-        cwd: wt,
-        env: this.ctx.env,
-      });
-      this.o.err(headRan.stderr);
-      const head = headRan.code === 0 ? stripNewlines(headRan.stdout) : "";
-      if (head !== this.branch)
-        fail(
-          `Worktree ${wt} is on '${head || "a detached HEAD"}', not ${this.branch}; switch it back to ${this.branch}.`,
-        );
-      // Removal deletes ignored content unseen, so it is shown first for the agent to check for
-      // unrelated files.
-      if (!checked) {
-        const listed = git(["status", "--porcelain", "--ignored", "--untracked-files=normal"], {
-          cwd: wt,
-          env: this.ctx.env,
-        });
-        this.o.err(listed.stderr);
-        if (listed.code !== 0) fail(`Cannot list ignored files in ${wt}.`);
-        const ignored = lines(listed.stdout)
-          .filter((l) => l.startsWith("!! "))
-          .map((l) => l.slice(3));
-        if (ignored.length !== 0) {
-          this.o.out(`IGNORED in ${wt}:\n${ignored.join("\n")}\n`);
-          fail(
-            `Check the ignored content above for unrelated files, then rerun: dev-publish.js cleanup ${this.plan} --ignored-checked`,
-            4,
-          );
-        }
-      }
-      const removed = devWorktree({ argv: ["remove", wt], env: this.ctx.env, cwd: this.root });
-      const merged = (removed.chunks ?? []).map(([, text]) => text).join("");
-      const last = lines(merged).at(-1) ?? "";
-      if (removed.code !== 0) fail(`Worktree removal failed: ${last}`);
-      this.o.out(`WORKTREE removed ${wt}; ${last}\n`);
-    } else {
-      this.o.out("WORKTREE none\n");
-    }
-    // verify fetched origin, so a branch at origin's tip has nothing unpushed.
-    const tip = this.localSha(this.branch);
-    if (tip !== undefined) {
-      if (tip !== (this.originSha(this.branch) ?? ""))
-        fail(
-          `Local ${this.branch} differs from origin; kept. Cleanup stopped; the plan stays unpublished.`,
-        );
-      // A worktree directory deleted by hand still holds the branch until pruned.
-      sh(this.o, ["git", "-C", this.root, "worktree", "prune"], { env: this.ctx.env });
-      sh(this.o, ["git", "-C", this.root, "branch", "-q", "-D", this.branch], {
-        env: this.ctx.env,
-      });
-      this.o.out(`deleted ${this.branch}\n`);
-    }
+    if (!this.reportProblems()) fail("Publication is not verified; the plan stays unpublished.");
     if (!this.lib.setHeader(this.plan, [["Status", "published"]]))
       fail(`Cannot set Status: published in ${this.plan}.`);
-    this.o.out(`PASS cleanup ${this.plan}; Status: published\n`);
+    this.o.out(`PASS publish ${this.plan}; Status: published\n`);
   }
 }
 
@@ -387,7 +324,7 @@ export const devPublish: Command = (ctx) => {
   const o = new Output();
   return guard(o, () => {
     const argv = ctx.argv;
-    const [cmd, arg = "", third] = argv;
+    const [cmd, arg = ""] = argv;
     if (cmd === "--help" || cmd === "-h") {
       o.out(`${USAGE}\n`);
       return o.done();
@@ -405,15 +342,15 @@ export const devPublish: Command = (ctx) => {
         if (cmd === "check") p.check();
         else p.verify();
         break;
-      case "cleanup":
-        if (!(argv.length === 2 || (argv.length === 3 && third === "--ignored-checked"))) usage();
+      case "publish":
+        if (argv.length !== 2) usage();
         p.loadPlan(arg);
         if (p.lib.isPublished(p.plan)) {
-          o.out(`PASS cleanup already complete; ${p.plan} is published\n`);
+          o.out(`PASS publish already complete; ${p.plan} is published\n`);
           return o.done();
         }
         p.loadFields();
-        p.cleanup(argv.length === 3);
+        p.publish();
         break;
       default:
         usage();

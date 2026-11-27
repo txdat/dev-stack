@@ -696,11 +696,13 @@ test("worktree and root", () => {
     "an unregistered directory at the worktree path is no worktree",
   );
   writePlan(P, `reviewed ${sha("HEAD")}`);
+  const missing = runGate(repo, "dev-create-pr", P);
   blocks(
-    runGate(repo, "dev-create-pr", P),
-    "rerun dev-publish.js cleanup",
-    "a missing worktree points to cleanup",
+    missing,
+    "which reattaches an existing Branch",
+    "a missing worktree points to its re-creation",
   );
+  assert.ok(!missing.includes("dev-publish.js cleanup"), missing);
 
   useRepo();
   planWithWorktree("reviewed");
@@ -1337,7 +1339,7 @@ test("review-code", () => {
 });
 
 test("review-code: a stacked plan's proof starts at its parent plan's branch", () => {
-  // The parent's history is not this plan's. The branch may be only on origin after cleanup.
+  // The parent's history is not this plan's. The branch may be only on origin after its worktree's removal.
   useRepo();
   git(repo, "worktree", "add", "-q", "-b", "feat/gate", wtOf(BE), "main");
   wtCommit(wtOf(BE), "test(red): be", "tests/be_test.py");
@@ -1642,7 +1644,7 @@ test("create-pr on a stack tree", () => {
   git(repo, "worktree", "remove", wtOf(C4));
   blocks(createPr(), `Plan ${C4} has no worktree`, "publication needs every worktree in the stack");
   sub(C4, /^Status: reviewed$/m, "Status: published");
-  passes(createPr(), "a plan published by an earlier cleanup leaves the stack");
+  passes(createPr(), "a plan published by an earlier publish leaves the stack");
 });
 
 test("a current ready Spec", () => {
