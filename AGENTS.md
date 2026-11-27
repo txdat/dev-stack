@@ -44,7 +44,7 @@ Pick words for what they commit the reader to. The existing rules use this vocab
 Write rules in English only, whatever language the request uses.
 
 1. **Tighten once.** After drafting, the main agent tightens the change once. It cuts hedges, filler, and restated policy without changing what the rule requires.
-2. **Check consistency.** When the change moves, splits, renames, or removes a section, file, term, or path, or changes a policy that another file links to, applies, or restates, the main agent reads every prose file whole: `README.md`, this file, the Markdown under `plugins/dev/rules/`, `plugins/dev/skills/`, and `plugins/dev/agents/`, and the skill text `scripts/build.ts` injects. Otherwise, when the change alters meaning or a heading, path, or term, it greps those files for each changed file's path, each changed section's anchor, and each term the change touches, and reads each matching file whole. It fixes, in any file, each inconsistency involving what the change touches, whether the change creates it or leaves it, such as a stale owner, path, or anchor, a term used for another concept, or two files stating different policy.
+2. **Check consistency.** When the change moves, splits, renames, or removes a section, file, term, or path, or changes a policy that another file links to, applies, or restates, the main agent reads every prose file whole: `README.md`, this file, the Markdown under `plugins/dev/rules/`, `plugins/dev/skills/`, and `plugins/dev/agents/`, and the rule text `scripts/build-agy.ts` injects. Otherwise, when the change alters meaning or a heading, path, or term, it greps those files for each changed file's path, each changed section's anchor, and each term the change touches, and reads each matching file whole. It fixes, in any file, each inconsistency involving what the change touches, whether the change creates it or leaves it, such as a stale owner, path, or anchor, a term used for another concept, or two files stating different policy.
 3. **Review.** A fresh agent that has not seen the conversation reviews the change, including step 2's fixes, against this file. It returns findings marked as blocking or as notes.
 4. **Fix and re-review.** The main agent fixes each blocking finding, checks consistency again under step 2, and does not tighten again. A fresh agent then re-reviews the fixes. Stop when no blocking finding remains or after the third review, counting the first, and report any blocking findings still open.
 
@@ -64,7 +64,7 @@ A harness is supported when its adapter runs the gates, injects `rules/`, and lo
 
 ## Code
 
-All code is TypeScript; Node 24 runs the CLIs, the gate, the build, and the tests. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Node, and `test/dist.test.ts` checks a fresh build.
+All code is TypeScript; Node 24 runs the CLIs, the gate, the build, and the tests. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; `npm run build:agy` (`scripts/build-agy.ts`) builds `dist/dev-agy/` for Antigravity; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Node, and `test/dist.test.ts` checks a fresh build.
 
 - Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers; the build rewrites them to `.js`.
 - `core/` holds the workflow logic as synchronous code on Node's APIs (`node:*` modules), which Node and the Pi and DSH hosts provide. Pi's extension and the DSH Host plugin in `dsh/` import core directly. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`. Every caller of a `bin/` CLI, including that module, the Antigravity hooks, the rules, and the skills, runs it as [CODING.md — Tools](plugins/dev/rules/CODING.md#tools) requires; code takes the invocation from `NODE` in `hooks/commands.ts`. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
@@ -82,6 +82,7 @@ Tests that need a repository build scratch Git repos under `/tmp`, whose `docs/p
 ```
 npm install           # dev dependencies, from package-lock.json
 npm run build         # compile plugins/dev into dist/dev
+npm run build:agy     # compile plugins/dev into dist/dev-agy
 npm run typecheck     # tsc 7 over tsconfig.engine.json and tsconfig.node.json
 npm run lint          # biome check
 npm run format        # biome check --write

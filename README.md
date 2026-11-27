@@ -4,7 +4,7 @@
 
 ## Install
 
-Requires Node 24 or later on `PATH`. Build first: `npm install && npm run build`, which writes `dist/dev/` (Claude Code, Pi, DSH, OpenCode) and `dist/dev-agy/` (Antigravity).
+Requires Node 24 or later on `PATH`. Build first: `npm install && npm run build`, which writes `dist/dev/` (Claude Code, Pi, DSH, OpenCode); for Antigravity, `npm run build:agy` writes `dist/dev-agy/`.
 
 | Harness | Install | Skills |
 | ------- | ------- | ------ |
@@ -79,7 +79,10 @@ plugins/dev/          the plugin's sources; their build ships alone
   bin/                CLIs over core; hook.ts and agy-hook.ts are the gates
   hooks/              Claude Code plugin module (no Node)
   pi/, dsh/, opencode/, agy/   the other harness adapters
-scripts/build.ts      builds dist/dev and dist/dev-agy
+scripts/
+  build.ts            builds dist/dev
+  build-agy.ts        builds dist/dev-agy
+  build-lib.ts        the build steps both share
 test/                 node --test suites
 ```
 

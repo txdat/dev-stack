@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/build.ts",
+    "build:agy": "node scripts/build-agy.ts",
     "typecheck": "tsc -p tsconfig.engine.json && tsc -p tsconfig.node.json",
     "lint": "biome check .",
     "format": "biome check --write .",

@@ -1,5 +1,5 @@
 {
-  // TypeScript 7. Tests run the .ts sources under Node 24; scripts/build.ts emits the shipped .js,
+  // TypeScript 7. Tests run the .ts sources under Node 24; scripts/build.ts and scripts/build-agy.ts emit the shipped .js,
   // so the code must stay erasable (no enums, namespaces, or parameter properties).
   "compilerOptions": {
     "target": "esnext",

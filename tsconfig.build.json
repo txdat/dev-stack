@@ -1,6 +1,6 @@
 {
   // Emits the Node-hosted code (bin, core, dsh, opencode, pi, and the hooks/commands.ts they
-  // import) into the built plugin; scripts/build.ts passes --outDir.
+  // import) into the built plugin; the build scripts pass --outDir.
   "extends": "./tsconfig.node.json",
   "compilerOptions": {
     "noEmit": false,

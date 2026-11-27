@@ -538,9 +538,9 @@ test("malformed stdin fails open with decision allow", () => {
   assert.equal(out["decision"], "allow");
 });
 
-test("scripts/build.ts --agy builds a valid Antigravity bundle", () => {
+test("scripts/build-agy.ts builds a valid Antigravity bundle", () => {
   const out = path.join(tmp("dev-agy-dist"), "dev-agy");
-  const r = exec([...NODE, path.join(ROOT, "scripts/build.ts"), "--agy", "--out", out]);
+  const r = exec([...NODE, path.join(ROOT, "scripts/build-agy.ts"), "--out", out]);
   assert.equal(r.code, 0, r.all);
 
   assert.ok(fs.existsSync(path.join(out, "plugin.json")));
