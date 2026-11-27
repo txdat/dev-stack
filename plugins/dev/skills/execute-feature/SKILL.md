@@ -1,8 +1,8 @@
 ---
 name: execute-feature
 description: "Implement an approved or auto-approved plan with test-first commits and verification at its branch tip."
-model: haiku
-effort: high
+model: sonnet
+effort: medium
 ---
 
 # /execute-feature — Implement an Approved or Auto-Approved Plan

@@ -1,7 +1,7 @@
 ---
 name: design-infra
 description: "Design a runnable infrastructure runbook from live-state evidence, verification gates, and rollback requirements."
-model: haiku
+model: sonnet
 effort: high
 ---
 
