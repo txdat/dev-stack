@@ -41,7 +41,7 @@ export type GateResult = { block: string } | { postBlock: string } | undefined;
 const EM = b("—");
 const ARROW = b("→");
 const SLUG_RE =
-  "autopilot|create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explore|fix-bug|handoff|recap|review-change|review-code|review-feature|review-infra|review-system|run-stack|split-pr-atomic";
+  "autopilot|create-issue|create-pr|design-feature|design-infra|design-system|execute-feature|explain|explore|fix-bug|handoff|recap|review-change|review-code|review-feature|review-infra|review-system|run-stack|split-pr-atomic";
 
 /**
  * The dev phase a skill name or slash command names; "" for none. Only this plugin's forms name

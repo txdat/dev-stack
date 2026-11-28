@@ -41,7 +41,8 @@ Where the plan comes from the message, enter a gated phase by asking the model t
 
 | Need | Skill |
 |---|---|
-| Understand existing code | [explore](plugins/dev/skills/explore/SKILL.md) |
+| Gather facts about existing code | [explore](plugins/dev/skills/explore/SKILL.md) |
+| Explain how existing code works | [explain](plugins/dev/skills/explain/SKILL.md) |
 | Plan application work | [design-feature](plugins/dev/skills/design-feature/SKILL.md) |
 | Review a plan before approval | [review-feature](plugins/dev/skills/review-feature/SKILL.md) |
 | Implement an approved or auto-approved plan | [execute-feature](plugins/dev/skills/execute-feature/SKILL.md) |
@@ -75,7 +76,7 @@ Where the plan comes from the message, enter a gated phase by asking the model t
 ```
 plugins/dev/          the plugin's sources; their build ships alone
   skills/, agents/    skills and subagents
-  rules/              CORE.md, CODING.md, plan.md, artifact.md, documents.md, frontend-design.md, agy-swarm.md, codex-agents.md
+  rules/              CORE.md, CODING.md, plan.md, artifact.md, documents.md, diagrams.md, frontend-design.md, agy-swarm.md, codex-agents.md
   core/               workflow logic: plans, stacks, gates
   bin/                CLIs over core; hook.ts, agy-hook.ts, and codex-hook.ts are the gates
   hooks/              Claude Code plugin module (no Node)

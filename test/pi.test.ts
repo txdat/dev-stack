@@ -122,6 +122,10 @@ test("input: the /dev: alias and the gate on typed skills", async () => {
     action: "transform",
     text: "  /skill:explore",
   });
+  assert.deepEqual(await fire("input", { text: "/dev:explain how the gate works" }), {
+    action: "transform",
+    text: "/skill:explain how the gate works",
+  });
   assert.deepEqual(await fire("input", { text: "/DEV:Explore x" }), {
     action: "transform",
     text: "/skill:explore x",
