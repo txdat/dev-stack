@@ -129,7 +129,7 @@ test("registers the rules as one prompt section naming $DEV_LIB", () => {
   assert.ok(text.startsWith(`$DEV_LIB is ${PLUGIN}:`), text.slice(0, 80));
   assert.ok(text.includes(`Contents of ${PLUGIN}/rules/CORE.md:`));
   assert.ok(text.includes(`Contents of ${PLUGIN}/rules/CODING.md:`));
-  assert.ok(text.includes("# AI Rules"));
+  assert.ok(text.includes("# Dev Rules"));
 });
 
 test("registers the /dev-stack-* commands with their argument hints", () => {

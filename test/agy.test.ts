@@ -582,9 +582,15 @@ test("scripts/build-agy.ts builds a valid Antigravity bundle", () => {
   const rule = read(path.join(out, "rules/CORE.md"));
   assert.ok(rule.startsWith("---\ntrigger: manual\n---\n"));
 
+  assert.ok(!fs.existsSync(path.join(out, "rules/codex-agents.md")));
   const swarmRule = read(path.join(out, "rules/agy-swarm.md"));
   assert.ok(swarmRule.startsWith("---\ntrigger: always_on\n---\n"));
-  assert.doesNotMatch(swarmRule, /\{\{ROLE_MODELS\}\}/);
+  assert.doesNotMatch(swarmRule, /\{\{[A-Z_]+\}\}/);
+  // A reviewer runs on its review skill's model and effort (rules/artifact.md#review).
+  assert.match(
+    swarmRule,
+    /`review-change`, `review-code`, `review-infra`: `gemini-4-hydrogen-high`; `review-feature`, `review-system`: `gemini-4-neon-medium`/,
+  );
   assert.match(
     swarmRule,
     /`code-reviewer`: `gemini-4-hydrogen-high`; `executor`: `gemini-4-hydrogen-medium`; `inspector`, `plan-reviewer`, `planner`: `gemini-4-neon-medium`/,

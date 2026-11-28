@@ -1,10 +1,10 @@
 # dev-stack
 
-`dev` is a plan-backed development workflow plugin for Claude Code, Pi, DeepSeek Harness (DSH), OpenCode, and Antigravity (`agy`): skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. [plan.md](plugins/dev/rules/plan.md) owns the workflow; a gate blocks each phase until its entry status holds.
+`dev` is a plan-backed development workflow plugin for Claude Code, Pi, DeepSeek Harness (DSH), OpenCode, Antigravity (`agy`), and Codex: skills, subagents, phase gates, shared rules, and the `/dev-stack-*` commands. [plan.md](plugins/dev/rules/plan.md) owns the workflow; a gate blocks each phase until its entry status holds.
 
 ## Install
 
-Requires Node 24 or later on `PATH`. Build first: `npm install && npm run build`, which writes `dist/dev/` (Claude Code, Pi, DSH, OpenCode); for Antigravity, `npm run build:agy` writes `dist/dev-agy/`.
+Requires Node 24 or later on `PATH`. Build first: `npm install && npm run build`, which writes `dist/dev/` (Claude Code, Pi, DSH, OpenCode); for Antigravity, `npm run build:agy` writes `dist/dev-agy/`; for Codex, `npm run build:codex` writes `dist/dev-codex/`.
 
 | Harness | Install | Skills |
 | ------- | ------- | ------ |
@@ -13,8 +13,9 @@ Requires Node 24 or later on `PATH`. Build first: `npm install && npm run build`
 | DSH | `plugin_manager` action `install_bundle` with the checkout's absolute path (a linked bundle) | `dev-<skill>` |
 | OpenCode | add `/absolute/path/dev-stack/dist/dev/opencode` to `plugins` in `opencode.json(c)` | `/dev-<skill>` command, or skill ID `dev-<skill>` |
 | Antigravity (`agy`) | `agy plugin install ~/dev-stack/dist/dev-agy` | `<skill>` |
+| Codex | `codex plugin marketplace add ~/dev-stack`, then `codex plugin add dev@dev-stack`; in Codex, `/hooks` and `t` trust the plugin's hooks, which run only once trusted. For the agents, `mkdir -p ~/.codex/agents && ln -sf ~/dev-stack/dist/dev-codex/codex/agents/*.toml ~/.codex/agents/` | `$dev:<skill>` |
 
-`dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code and Antigravity copy the plugin on install, so reinstall after a rebuild (Claude Code: `/plugin`, or `CLAUDE_CODE_PLUGIN_DIRS=~/dev-stack/dist/dev claude` and restart; Antigravity: `agy plugin install ~/dev-stack/dist/dev-agy` and restart). Pi and OpenCode load the build in place (`/reload`); DSH does too (restart the session).
+`dist/` is not committed: rebuild after each change to `plugins/dev/`. Claude Code, Antigravity, and Codex copy the plugin on install, so reinstall after a rebuild (Claude Code: `/plugin`, or `CLAUDE_CODE_PLUGIN_DIRS=~/dev-stack/dist/dev claude` and restart; Antigravity: `agy plugin install ~/dev-stack/dist/dev-agy` and restart; Codex: `codex plugin add dev@dev-stack` and restart, then trust any hook `/hooks` lists for review). Pi and OpenCode load the build in place (`/reload`); DSH does too (restart the session).
 
 The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/dev/rules/CODING.md) and defines `$DEV_LIB` as its install root, so no `CLAUDE.md`, `AGENTS.md`, or `GEMINI.md` pointer is needed.
 
@@ -22,17 +23,17 @@ The plugin injects [CORE.md](plugins/dev/rules/CORE.md) and [CODING.md](plugins/
 
 Compared with Claude Code. ✅ same as Claude Code, ⚠️ supported with a difference, ❌ not supported.
 
-| Feature | Claude Code | Pi | DSH | OpenCode | Antigravity |
-| ------- | ----------- | -- | --- | -------- | ----------- |
-| Rules and `$DEV_LIB` injected | `prompt.context` block, subagents included | ✅ `before_agent_start` | ✅ system-prompt section | ✅ `context` session hook | ✅ `SessionStart` |
-| Phase gate on a model's skill load | Skill tool; plan from its argument | ⚠️ read of `SKILL.md`; plan from the message | ⚠️ `skill` tool; plan from the message | ⚠️ `skill` tool; plan from the message | ⚠️ `read_file` of `SKILL.md`; plan from the message |
-| Phase gate on a typed skill | `/dev:<skill>` | ✅ `/dev:<skill>`, `/skill:<skill>` | ❌ a typed gated `/dev-<skill>` ends the turn | ✅ `/dev-<skill>`, `@dev-<skill>` | ❌ no prompt gate; gated only at the `SKILL.md` read |
-| Record guard and serial-test check | Bash, Edit, Write, MultiEdit | ✅ bash, edit, write | ✅ bash, edit, write | ⚠️ shell, edit, write; `patch` refused under `docs/plans`, `docs/runbook`, `docs/architecture` | ✅ `run_command`, `edit_file`, `write_file` |
-| Restored-plan report after a shell call | on the call | ✅ | ✅ | ✅ | ⚠️ at the end of the turn |
-| `/dev-stack-*` commands | ✅; writes only from the terminal or Remote Control | ✅ | ✅ | ✅ | ✅ |
-| Named agents | `dev:<name>` | ❌ none; without subagents, skills run each step in the main session | ⚠️ `subagent` tool given the agent file | ⚠️ `subagent` tool given the agent file | ⚠️ native subagents, started with `swarm` |
-| Skill `model` and `effort` frontmatter | `model` for a typed `/dev:<skill>` only; `effort` for the rest of the turn | ❌ ignored | ❌ ignored | ❌ ignored | ❌ stripped |
-| Agent `model` and `effort` frontmatter | the agent's default when a call passes none | ❌ no agents | ❌ not passed to `subagent` | ❌ not passed to `subagent` | ⚠️ stripped from agent frontmatter (`agy` accepts only tiers there); mapped to Gemini 4 models (`opus` to `gemini-4-neon`, `sonnet` and `haiku` to `gemini-4-hydrogen`, suffixed with `-<effort>`) in `swarm` delegation |
+| Feature | Claude Code | Pi | DSH | OpenCode | Antigravity | Codex |
+| ------- | ----------- | -- | --- | -------- | ----------- | ----- |
+| Rules and `$DEV_LIB` injected | `prompt.context` block, subagents included | ✅ `before_agent_start` | ✅ system-prompt section | ✅ `context` session hook | ✅ `SessionStart` | ✅ `SessionStart` and `SubagentStart` |
+| Phase gate on a model's skill load | Skill tool; plan from its argument | ⚠️ read of `SKILL.md`; plan from the message | ⚠️ `skill` tool; plan from the message | ⚠️ `skill` tool; plan from the message | ⚠️ `read_file` of `SKILL.md`; plan from the message | ⚠️ shell read of `SKILL.md`; plan from the message |
+| Phase gate on a typed skill | `/dev:<skill>` | ✅ `/dev:<skill>`, `/skill:<skill>` | ❌ a typed gated `/dev-<skill>` ends the turn | ✅ `/dev-<skill>`, `@dev-<skill>` | ❌ no prompt gate; gated only at the `SKILL.md` read | ✅ `$dev:<skill>`, anywhere in the prompt |
+| Record guard and serial-test check | Bash, Edit, Write, MultiEdit | ✅ bash, edit, write | ✅ bash, edit, write | ⚠️ shell, edit, write; `patch` refused under `docs/plans`, `docs/runbook`, `docs/architecture` | ✅ `run_command`, `edit_file`, `write_file` | ⚠️ Bash; `apply_patch` checked as the writes it makes, and refused when it deletes or moves a file under `docs/plans`, `docs/runbook`, `docs/architecture` or cannot be checked there |
+| Restored-plan report after a shell call | on the call | ✅ | ✅ | ✅ | ⚠️ at the end of the turn | ✅ |
+| `/dev-stack-*` commands | ✅; writes only from the terminal or Remote Control | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Named agents | `dev:<name>` | ❌ none; without subagents, skills run each step in the main session | ⚠️ `subagent` tool given the agent file | ⚠️ `subagent` tool given the agent file | ⚠️ native subagents, started with `swarm` | ⚠️ `spawn_agent` with `agent_type` `dev-<name>`, a role linked from `dist/dev-codex/codex/agents/`, or given the agent file |
+| Skill `model` and `effort` frontmatter | `model` for a typed `/dev:<skill>` only; `effort` for the rest of the turn | ❌ ignored | ❌ ignored | ❌ ignored | ⚠️ stripped; a review skill's model, mapped and suffixed with `-<effort>`, passes to the reviewer `swarm` starts | ⚠️ stripped; a review skill's mapped model and its effort pass to the reviewer `spawn_agent` starts |
+| Agent `model` and `effort` frontmatter | the agent's default when a call passes none | ❌ no agents | ❌ not passed to `subagent` | ❌ not passed to `subagent` | ⚠️ stripped from agent frontmatter (`agy` accepts only tiers there); mapped to Gemini 4 models (`opus` to `gemini-4-neon`, `sonnet` and `haiku` to `gemini-4-hydrogen`, suffixed with `-<effort>`) in `swarm` delegation | ⚠️ stripped from agent frontmatter; mapped to Codex models (`haiku` to `gpt-6-luna`, `sonnet` to `gpt-6.1-terra`, `opus` to `gpt-6.2-sol`, `fable` to `gpt-6.2-astra`) and passed with `effort` to `spawn_agent`, and set in each role file |
 
 Where the plan comes from the message, enter a gated phase by asking the model to run the skill on the plan, so a refusal carries its reason.
 
@@ -59,7 +60,7 @@ Where the plan comes from the message, enter a gated phase by asking the model t
 
 ## Agents
 
-`dev:<name>` in Claude Code. DSH and OpenCode skills hand these files to the `subagent` tool.
+`dev:<name>` in Claude Code. DSH and OpenCode skills hand these files to the `subagent` tool; on Antigravity and Codex, the delegation rules (`rules/agy-swarm.md`, `rules/codex-agents.md`) hand them to `swarm` and `spawn_agent`.
 
 | Need | Agent |
 |---|---|
@@ -74,15 +75,16 @@ Where the plan comes from the message, enter a gated phase by asking the model t
 ```
 plugins/dev/          the plugin's sources; their build ships alone
   skills/, agents/    skills and subagents
-  rules/              CORE.md, CODING.md, plan.md, artifact.md, documents.md, frontend-design.md, agy-swarm.md
+  rules/              CORE.md, CODING.md, plan.md, artifact.md, documents.md, frontend-design.md, agy-swarm.md, codex-agents.md
   core/               workflow logic: plans, stacks, gates
-  bin/                CLIs over core; hook.ts and agy-hook.ts are the gates
+  bin/                CLIs over core; hook.ts, agy-hook.ts, and codex-hook.ts are the gates
   hooks/              Claude Code plugin module (no Node)
-  pi/, dsh/, opencode/, agy/   the other harness adapters
+  pi/, dsh/, opencode/, agy/, codex/   the other harness adapters
 scripts/
   build.ts            builds dist/dev
   build-agy.ts        builds dist/dev-agy
-  build-lib.ts        the build steps both share
+  build-codex.ts      builds dist/dev-codex
+  build-lib.ts        the build steps they share
 test/                 node --test suites
 ```
 

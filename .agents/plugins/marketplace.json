@@ -1,0 +1,12 @@
+{
+  "name": "dev-stack",
+  "interface": { "displayName": "dev-stack" },
+  "plugins": [
+    {
+      "name": "dev",
+      "source": { "source": "local", "path": "./dist/dev-codex" },
+      "policy": { "installation": "AVAILABLE" },
+      "category": "Developer Tools"
+    }
+  ]
+}

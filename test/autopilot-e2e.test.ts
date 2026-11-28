@@ -1,6 +1,7 @@
 // Autopilot's and run-stack's delivery, end to end, through every supporting harness's own gate
 // entry point: Claude Code's bin/hook.ts (the program hooks/register.ts runs), Pi's extension,
-// DSH's Host plugin, OpenCode's V2 plugin, and Antigravity's bin/agy-hook.ts. Autopilot's direct-edit
+// DSH's Host plugin, OpenCode's V2 plugin, Antigravity's bin/agy-hook.ts, and Codex's
+// bin/codex-hook.ts. Autopilot's direct-edit
 // lane, autopilot's plan-backed lane, and run-stack's plan-backed lane run the real dev-stack.ts and
 // dev-worktree.ts against a scratch repository, so each verdict is the gate's for plans and
 // commits that real phases wrote.
@@ -34,6 +35,7 @@ import { exec, git, NODE, PLUGIN, planText, RUN, read, repo, tmp, write } from "
 const BIN = path.join(PLUGIN, "bin");
 const HOOK = path.join(BIN, "hook.ts");
 const AGY_HOOK = path.join(BIN, "agy-hook.ts");
+const CODEX_HOOK = path.join(BIN, "codex-hook.ts");
 const STACK = path.join(BIN, "dev-stack.ts");
 const WORKTREE = path.join(BIN, "dev-worktree.ts");
 
@@ -762,6 +764,96 @@ const antigravity = (dir: string): Harness => {
   };
 };
 
+// ── Codex ─────────────────────────────────────────────────────────────
+
+let codexCalls = 0;
+
+/**
+ * Codex's gate: bin/codex-hook.js on Codex's own payloads. A typed `$dev:<skill>` is a
+ * UserPromptSubmit; a skill load is a shell read of its SKILL.md, whose plan comes from the
+ * assistant message the rollout transcript holds; a Write or Edit is an apply_patch.
+ */
+const codex = (dir: string): Harness => {
+  const rollout = path.join(tmp("dev-e2e-codex-rollout"), "rollout.jsonl");
+  const hook = (payload: Record<string, unknown>, cwd = dir): Verdict => {
+    const r = exec([...NODE, CODEX_HOOK], {
+      cwd,
+      env: { ...process.env, PLUGIN_ROOT: PLUGIN },
+      input: JSON.stringify({
+        session_id: "s",
+        turn_id: "t",
+        transcript_path: rollout,
+        cwd,
+        model: "gpt",
+        permission_mode: "bypassPermissions",
+        ...payload,
+      }),
+    });
+    assert.equal(r.code, 0, `bin/codex-hook.ts: ${r.all}`);
+    if (r.out.trim() === "") return PASS;
+    const out = JSON.parse(r.out) as {
+      decision?: string;
+      reason?: string;
+      hookSpecificOutput?: { permissionDecision?: string; permissionDecisionReason?: string };
+    };
+    if (out.decision === "block") return refusal(out.reason ?? "blocked");
+    if (out.hookSpecificOutput?.permissionDecision === "deny")
+      return refusal(out.hookSpecificOutput.permissionDecisionReason ?? "denied");
+    return PASS;
+  };
+  const tool = (name: string, input: unknown, cwd = dir): Verdict =>
+    hook(
+      {
+        hook_event_name: "PreToolUse",
+        tool_name: name,
+        tool_input: input,
+        tool_use_id: `exec-${++codexCalls}`,
+      },
+      cwd,
+    );
+  const say = (user: string, assistant: string): void => {
+    const records = [
+      {
+        type: "event_msg",
+        payload: {
+          type: "item_completed",
+          item: { type: "UserMessage", content: [{ type: "text", text: user }] },
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "assistant",
+          content: [{ type: "output_text", text: assistant }],
+        },
+      },
+    ];
+    fs.writeFileSync(rollout, `${records.map((r) => JSON.stringify(r)).join("\n")}\n`);
+  };
+  const patch = (body: string, cwd = dir): Verdict =>
+    tool("apply_patch", { command: `*** Begin Patch\n${body}\n*** End Patch` }, cwd);
+  const lines = (text: string, sign: string): string =>
+    text
+      .replace(/\n$/, "")
+      .split("\n")
+      .map((l) => `${sign}${l}`)
+      .join("\n");
+  return {
+    invoke: async (orchestrator, args) =>
+      hook({ hook_event_name: "UserPromptSubmit", prompt: `$dev:${orchestrator} ${args}` }),
+    skill: async (name, text, cwd) => {
+      say("$dev:autopilot the issue", `Starting ${name} on ${text}`);
+      return tool("Bash", { command: `cat ${path.join(PLUGIN, "skills", name, "SKILL.md")}` }, cwd);
+    },
+    bash: async (command, cwd) => tool("Bash", { command }, cwd),
+    write: async (file, content, cwd) =>
+      patch(`*** Add File: ${file}\n${lines(content, "+")}`, cwd),
+    edit: async (file, oldText, newText, cwd) =>
+      patch(`*** Update File: ${file}\n@@\n${lines(oldText, "-")}\n${lines(newText, "+")}`, cwd),
+  };
+};
+
 // ── the suites ────────────────────────────────────────────────────────
 
 const HARNESSES: [string, (dir: string) => Harness][] = [
@@ -770,6 +862,7 @@ const HARNESSES: [string, (dir: string) => Harness][] = [
   ["DSH", dsh],
   ["OpenCode", opencode],
   ["Antigravity", antigravity],
+  ["Codex", codex],
 ];
 
 for (const [name, make] of HARNESSES) {

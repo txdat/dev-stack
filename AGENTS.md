@@ -4,7 +4,7 @@ Guidance for AI agents working in this repository.
 
 ## What this repository is
 
-The `dev` plugin for Claude Code, Pi, DeepSeek Harness (DSH), OpenCode, and Antigravity: rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
+The `dev` plugin for Claude Code, Pi, DeepSeek Harness (DSH), OpenCode, Antigravity, and Codex: rules, skills, agents, gates, and helper CLIs for plan-backed development. [README.md](README.md) gives the layout and install. [CORE.md](plugins/dev/rules/CORE.md) is the global rules file the plugin injects, so it is already in your context. Don't restate it here or in other files.
 
 Edits to this repository are direct edits, not plan-backed work. See [plan.md — Scope](plugins/dev/rules/plan.md#scope).
 
@@ -13,7 +13,7 @@ Edits to this repository are direct edits, not plan-backed work. See [plan.md �
 - **Each policy has one owner.** Each file owns the policy it states. Other files link to it as `[file — Section](path#anchor)` instead of paraphrasing it. A copied rule drifts from its source. Before adding a rule, find the file that already owns that topic and edit it there.
 - **Links resolve from the source file's directory.** Files under `plugins/dev/` ship as their build, `dist/dev/`, which loads without the rest of the checkout, so their links must resolve inside `dist/dev/`. There, CLIs and modules are `.js`: rules, skills, agents, manifests, and user-facing messages name `bin/<name>.js`, never the `.ts` source.
 - **Headings and paths are load-bearing.** Before renaming a heading, a file, or a `bin/` CLI, grep for links in `plugins/dev/` (agents cite anchors such as `CORE.md#work`) and for anchors and paths in `core/` block messages (they cite anchors such as `rules/plan.md#schema`).
-- **Rules must be harness-neutral.** Claude Code, Pi, DSH, OpenCode, and Antigravity read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool", "where the harness has one".
+- **Rules must be harness-neutral.** Claude Code, Pi, DSH, OpenCode, Antigravity, and Codex read these files. Phrase tool-specific steps the way existing files do: "where installed", "Without a Skill tool, read … with the file-read tool, or with `cat` where the harness has no file-read tool", "where the harness has one".
 - **Style:** terse, declarative, and imperative, without filler or rigid templates. Word choice follows [Wording](#wording).
 - **Skill files** start with frontmatter (`name`, `description`, and optional `model` and `effort`), then `# /<name> — <summary>`, and stay short. Agent files carry `name`, `description`, `tools`, and optional `model` and `effort`.
 
@@ -44,7 +44,7 @@ Pick words for what they commit the reader to. The existing rules use this vocab
 Write rules in English only, whatever language the request uses.
 
 1. **Tighten once.** After drafting, the main agent tightens the change once. It cuts hedges, filler, and restated policy without changing what the rule requires.
-2. **Check consistency.** When the change moves, splits, renames, or removes a section, file, term, or path, or changes a policy that another file links to, applies, or restates, the main agent reads every prose file whole: `README.md`, this file, the Markdown under `plugins/dev/rules/`, `plugins/dev/skills/`, and `plugins/dev/agents/`, and the rule text `scripts/build-agy.ts` injects. Otherwise, when the change alters meaning or a heading, path, or term, it greps those files for each changed file's path, each changed section's anchor, and each term the change touches, and reads each matching file whole. It fixes, in any file, each inconsistency involving what the change touches, whether the change creates it or leaves it, such as a stale owner, path, or anchor, a term used for another concept, or two files stating different policy.
+2. **Check consistency.** When the change moves, splits, renames, or removes a section, file, term, or path, or changes a policy that another file links to, applies, or restates, the main agent reads every prose file whole: `README.md`, this file, the Markdown under `plugins/dev/rules/`, `plugins/dev/skills/`, and `plugins/dev/agents/`, and the rule text `scripts/build-agy.ts`, `scripts/build-codex.ts`, and `plugins/dev/bin/codex-hook.ts` inject. Otherwise, when the change alters meaning or a heading, path, or term, it greps those files for each changed file's path, each changed section's anchor, and each term the change touches, and reads each matching file whole. It fixes, in any file, each inconsistency involving what the change touches, whether the change creates it or leaves it, such as a stale owner, path, or anchor, a term used for another concept, or two files stating different policy.
 3. **Review.** A fresh agent that has not seen the conversation reviews the change, including step 2's fixes, against this file. It returns findings marked as blocking or as notes.
 4. **Fix and re-review.** The main agent fixes each blocking finding, checks consistency again under step 2, and does not tighten again. A fresh agent then re-reviews the fixes. Stop when no blocking finding remains or after the third review, counting the first, and report any blocking findings still open.
 
@@ -64,10 +64,10 @@ A harness is supported when its adapter runs the gates, injects `rules/`, and lo
 
 ## Code
 
-All code is TypeScript; Node 24 runs the CLIs, the gate, the build, and the tests. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; `npm run build:agy` (`scripts/build-agy.ts`) builds `dist/dev-agy/` for Antigravity; the marketplace, the Pi package, and the DSH bundle load `dist/dev/`. Tests run the `.ts` sources under Node, and `test/dist.test.ts` checks a fresh build.
+All code is TypeScript; Node 24 runs the CLIs, the gate, the build, and the tests. `npm run build` (`scripts/build.ts`) compiles `plugins/dev/` to JavaScript in `dist/dev/` and copies its rules, skills, agents, and manifests beside it; `npm run build:agy` (`scripts/build-agy.ts`) builds `dist/dev-agy/` for Antigravity, and `npm run build:codex` (`scripts/build-codex.ts`) `dist/dev-codex/` for Codex; the Claude Code marketplace, the Pi package, and the DSH bundle load `dist/dev/`, and the Codex marketplace (`.agents/plugins/marketplace.json`) loads `dist/dev-codex/`. Tests run the `.ts` sources under Node, and `test/dist.test.ts` checks a fresh build.
 
 - Erasable syntax only (no enums, namespaces, or parameter properties), with explicit `.ts` import specifiers; the build rewrites them to `.js`.
-- `core/` holds the workflow logic as synchronous code on Node's APIs (`node:*` modules), which Node and the Pi and DSH hosts provide. Pi's extension and the DSH Host plugin in `dsh/` import core directly. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`. Every caller of a `bin/` CLI, including that module, the Antigravity hooks, the rules, and the skills, runs it as [CODING.md — Tools](plugins/dev/rules/CODING.md#tools) requires; code takes the invocation from `NODE` in `hooks/commands.ts`. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
+- `core/` holds the workflow logic as synchronous code on Node's APIs (`node:*` modules), which Node and the Pi and DSH hosts provide. Pi's extension and the DSH Host plugin in `dsh/` import core directly. The Claude plugin module in `hooks/` runs in the engine without Node, so it reaches core by running `bin/` CLIs through `$.process.run`. Every caller of a `bin/` CLI, including that module, the Antigravity and Codex hooks, the rules, and the skills, runs it as [CODING.md — Tools](plugins/dev/rules/CODING.md#tools) requires; code takes the invocation from `NODE` in `hooks/commands.ts`. Biome's `noNodejsModules` and `tsconfig.engine.json` keep Node out of `hooks/`.
 - Core functions never call `process.exit` or `chdir`, take the working directory as an argument, and keep no module-level cache. CLIs write with `process.stdout.write` and set `process.exitCode`.
 - Plans are read as bytes (latin1) and matched with ASCII-only classes, never `\s` or locale-aware case folding, so hashes and parsing match the original bash under `LC_ALL=C`.
 - The gate fails closed on a phase it gates; the record guard and the serial-test check fail open. `bin/hook.ts` catches every error: on a phase-gate event it denies, on a guard or serial-check event it passes. An adapter that cannot run it at all (node missing, timeout, unreadable output) passes the call with a visible warning, as a failed Claude Code hook does.
@@ -83,6 +83,7 @@ Tests that need a repository build scratch Git repos under `/tmp`, whose `docs/p
 npm install           # dev dependencies, from package-lock.json
 npm run build         # compile plugins/dev into dist/dev
 npm run build:agy     # compile plugins/dev into dist/dev-agy
+npm run build:codex   # compile plugins/dev into dist/dev-codex
 npm run typecheck     # tsc 7 over tsconfig.engine.json and tsconfig.node.json
 npm run lint          # biome check
 npm run format        # biome check --write

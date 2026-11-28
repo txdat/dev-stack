@@ -1,4 +1,4 @@
-// Shared by build.ts and build-agy.ts: compiles plugins/dev to JavaScript, copies its rules,
+// Shared by build.ts, build-agy.ts, and build-codex.ts: compiles plugins/dev to JavaScript, copies its rules,
 // skills, agents, and package files beside the output, and lets the caller add its harness's files.
 // It builds into a sibling directory and swaps it in only when every step succeeded, so a failed
 // or running build never leaves a partial plugin at the output.
@@ -60,6 +60,36 @@ export interface Harness {
   /** Adds and adapts the harness's files in the work directory after the common copy. */
   finish: (work: string) => void;
 }
+
+/** The rules each harness build renders for itself; every other build drops them. */
+const HARNESS_RULES = ["agy-swarm.md", "codex-agents.md"];
+
+/** Removes from `work` every harness's rule but `own`. */
+export const dropHarnessRules = (work: string, own?: string): void => {
+  for (const name of HARNESS_RULES)
+    if (name !== own) fs.rmSync(path.join(work, "rules", name), { force: true });
+};
+
+/** `text` without the Claude-only `model` and `effort` lines of its frontmatter. */
+export const stripClaudeOnly = (text: string): string => {
+  const end = text.startsWith("---\n") ? text.indexOf("\n---", 4) : -1;
+  return end === -1
+    ? text
+    : text.slice(0, end + 1).replace(/^(?:model|effort):[^\n]*\n/gm, "") + text.slice(end + 1);
+};
+
+/** Formats `role -> value` pairs grouped by value, such as `` `a`, `b`: `x`; `c`: `y` ``. */
+export const formatRoles = (values: ReadonlyMap<string, string>): string => {
+  const byValue = new Map<string, string[]>();
+  for (const [role, value] of values) {
+    const list = byValue.get(value);
+    if (list) list.push(role);
+    else byValue.set(value, [role]);
+  }
+  return [...byValue.entries()]
+    .map(([value, roles]) => `${roles.map((r) => `\`${r}\``).join(", ")}: \`${value}\``)
+    .join("; ");
+};
 
 /** Builds `harness` into `outArg`; returns the exit code. */
 export const build = (outArg: string, harness: Harness): number => {
