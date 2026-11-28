@@ -78,6 +78,7 @@ const SKILLS = [
   "design-infra",
   "design-system",
   "execute-feature",
+  "explain",
   "explore",
   "fix-bug",
   "handoff",

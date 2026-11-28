@@ -19,11 +19,9 @@ Write `docs/architecture/<issue>_<slug>.html` with the header [documents.md](../
 
 ## Format
 
-Write one HTML file, optionally with inline `<style>`, loading nothing but the Mermaid import shown; diagrams need network access to render:
+Write the document as a diagram page under [diagrams.md](../../rules/diagrams.md):
 
 ```html
-<!doctype html>
-<html lang="{language code}"><head><meta charset="utf-8"><title>{title}</title></head><body>
 <h1>{title}</h1>
 <pre>
 Status: draft
@@ -32,16 +30,10 @@ Issue: #N|none
 </pre>
 <h2>Contracts</h2>
 <h3 id="CT-1">CT-1 — {contract}</h3>
-<pre class="mermaid">sequenceDiagram
-  Client->>Orders: POST /orders</pre>
-<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@{mmdc major}/dist/mermaid.esm.min.mjs";</script>
-</body></html>
 ```
 
 - Each section is an `<h2>` named as above.
-- Pin the import to the major version of the local `mmdc --version`, such as `mermaid@12`, so the browser renders what the render check accepted.
 - `OP-n`, `CT-n`, and `PH-n` start their own `<h3>`; `SC-n` and `DC-n` start their own `<li>`. Each element carries its ID as `id`; cite another artifact's as `<a href="<path>#ID">`.
-- A diagram shows only what its text states. Open each with exactly `<pre class="mermaid">`. In its source, write `<` as `#lt;` and `&` as `#amp;`, never as raw characters or HTML entities.
-- Render each diagram, numbered from 1 in document order, by piping its source unchanged to `mmdc -i - -o /tmp/<slug>-<n>.svg`; a nonzero exit is a rejection. Fix every rejected diagram. Without `mmdc`, stop and report that the diagrams are unrendered.
+- The [render check](../../rules/diagrams.md#render-check) uses the document's `<slug>`.
 
 Finish when the recommendation meets the constraints, every contract has an owner, and migration and decomposition can deliver the measured outcome. Hand off to [review-system.md](../review-system/SKILL.md). On `NEEDS CHANGES`, fix each blocking finding in the draft, take a finding that needs a new decision to the user with options and a recommendation, and hand back to review-system; [artifact.md — Review](../../rules/artifact.md#review) owns the round limit. [documents.md](../../rules/documents.md) owns approval and freezing; a needed change to an approved document goes to the user with options and a recommendation.

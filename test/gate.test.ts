@@ -8,7 +8,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { b } from "../plugins/dev/core/bytes.ts";
 import { byteEnv } from "../plugins/dev/core/cli.ts";
-import { gateCheck } from "../plugins/dev/core/gate-check.ts";
+import { gateCheck, skillSlug } from "../plugins/dev/core/gate-check.ts";
 import type { HookInput } from "../plugins/dev/core/hook-input.ts";
 import { PlanLib } from "../plugins/dev/core/plan-lib.ts";
 import { devStack } from "../plugins/dev/core/stack.ts";
@@ -554,6 +554,11 @@ test("hook input shapes", () => {
   passes(
     promptGate(nogit, "/dev-explore where is auth handled"),
     "an ungated skill runs outside a Git repository",
+  );
+  assert.equal(skillSlug("/dev-explain how does the gate work"), "explain");
+  passes(
+    promptGate(nogit, "/dev-explain how does the gate work"),
+    "a typed /dev-explain passes outside a Git repository",
   );
   passes(
     runGate(repo, "dev-fix-bug", `crash mentioned in ${P}`),
