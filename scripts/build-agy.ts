@@ -1,31 +1,24 @@
 // Builds dist/dev-agy, the plugin for Antigravity: the common build plus its native manifest, root
-// hooks.json, mapped agent and skill frontmatter, and the rendered agy-swarm rule.
+// hooks.json, mapped agent and skill frontmatter, and the agy-swarm rule rendered with each role's
+// and each review skill's model.
 // Usage: node scripts/build-agy.ts [--out <dir>]
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { main, SRC } from "./build-lib.ts";
+import { dropHarnessRules, formatRoles, main, SRC, stripClaudeOnly } from "./build-lib.ts";
 
 const AGY_SWARM_RULE = "rules/agy-swarm.md";
 
-/** Formats `role -> model` pairs grouped by model for `agy-swarm.md`. */
-const formatRoleModels = (models: ReadonlyMap<string, string>): string => {
-  const byModel = new Map<string, string[]>();
-  for (const [role, model] of models) {
-    const list = byModel.get(model);
-    if (list) list.push(role);
-    else byModel.set(model, [role]);
-  }
-  return [...byModel.entries()]
-    .map(([model, roles]) => `${roles.map((r) => `\`${r}\``).join(", ")}: \`${model}\``)
-    .join("; ");
-};
-
-/** Renders `agy-swarm.md` with resolved role models and `always_on` trigger for Antigravity. */
-const renderAgySwarmRule = (rulePath: string, models: ReadonlyMap<string, string>): string =>
+/** Renders `agy-swarm.md` with the role and review models and `always_on` trigger for Antigravity. */
+const renderAgySwarmRule = (
+  rulePath: string,
+  models: ReadonlyMap<string, string>,
+  reviews: ReadonlyMap<string, string>,
+): string =>
   `---\ntrigger: always_on\n---\n\n${fs
     .readFileSync(rulePath, "utf8")
-    .replace("{{ROLE_MODELS}}", formatRoleModels(models))}`;
+    .replace("{{ROLE_MODELS}}", formatRoles(models))
+    .replace("{{REVIEW_MODELS}}", formatRoles(reviews))}`;
 
 // Antigravity's native tool for each Claude Code grant, as its plugin import maps them. A grant with
 // no native tool, such as Skill, is dropped: agy surfaces a skill as a read of its SKILL.md.
@@ -52,14 +45,6 @@ const agyTools = (list: string): string[] => {
   for (const grant of grants)
     for (const tool of AGY_TOOLS[grant] ?? []) if (!tools.includes(tool)) tools.push(tool);
   return tools;
-};
-
-/** `text` without the Claude-only `model` and `effort` lines of its frontmatter. */
-const stripClaudeOnly = (text: string): string => {
-  const end = text.startsWith("---\n") ? text.indexOf("\n---", 4) : -1;
-  return end === -1
-    ? text
-    : text.slice(0, end + 1).replace(/^(?:model|effort):[^\n]*\n/gm, "") + text.slice(end + 1);
 };
 
 /** Antigravity's model for each Claude model alias; an agent's `effort` becomes its suffix. */
@@ -112,18 +97,24 @@ const adaptForAgy = (work: string): void => {
     if (next !== text) fs.writeFileSync(file, next);
   }
 
-  const swarmRulePath = path.join(work, AGY_SWARM_RULE);
-  fs.writeFileSync(swarmRulePath, renderAgySwarmRule(swarmRulePath, agentModels));
-
+  // A reviewer runs on its review skill's model (rules/artifact.md#review), read before stripping.
+  const reviewModels = new Map<string, string>();
   const skillsDir = path.join(work, "skills");
-  for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) {
+  for (const entry of fs
+    .readdirSync(skillsDir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))) {
     if (!entry.isDirectory()) continue;
     const file = path.join(skillsDir, entry.name, "SKILL.md");
     if (!fs.existsSync(file)) continue;
     const text = fs.readFileSync(file, "utf8");
+    const model = entry.name.startsWith("review-") ? agyModel(text) : undefined;
+    if (model !== undefined) reviewModels.set(entry.name, model);
     const next = stripClaudeOnly(text);
     if (next !== text) fs.writeFileSync(file, next);
   }
+
+  const swarmRulePath = path.join(work, AGY_SWARM_RULE);
+  fs.writeFileSync(swarmRulePath, renderAgySwarmRule(swarmRulePath, agentModels, reviewModels));
 
   const rulesDir = path.join(work, "rules");
   for (const entry of fs.readdirSync(rulesDir, { withFileTypes: true })) {
@@ -139,6 +130,7 @@ main("build-agy.ts", "dev-agy", {
   finish: (work) => {
     fs.cpSync(path.join(SRC, "plugin.json"), path.join(work, "plugin.json"));
     fs.cpSync(path.join(SRC, "agy/hooks.json"), path.join(work, "hooks.json"));
+    dropHarnessRules(work, "agy-swarm.md");
     adaptForAgy(work);
   },
 });

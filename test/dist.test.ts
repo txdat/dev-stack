@@ -60,6 +60,7 @@ test("the build emits JavaScript and copies the plugin's files", () => {
     [],
   );
   assert.ok(!all.includes("rules/agy-swarm.md"), "dist/dev excludes Antigravity-only agy-swarm.md");
+  assert.ok(!all.includes("rules/codex-agents.md"), "dist/dev excludes Codex-only codex-agents.md");
   for (const want of [
     ".claude-plugin/plugin.json",
     "hooks/hooks.json",

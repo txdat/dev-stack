@@ -10,12 +10,12 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { b, utf8 } from "../core/bytes.ts";
 import { processCtx } from "../core/cli.ts";
-import { gateCheck, gateIndexed, isPhaseCall } from "../core/gate-check.ts";
+import { gateCheck, isPhaseCall } from "../core/gate-check.ts";
 import { type HookInput, type Json, member, str } from "../core/hook-input.ts";
-import { PlanLib, planMentions } from "../core/plan-lib.ts";
+import { planMentions } from "../core/plan-lib.ts";
 import { serialCheck } from "../core/serial-check.ts";
+import { skillFromPath, skillReadBlock } from "../core/skill-read.ts";
 import { stackCommand } from "../core/stack-command.ts";
-import { tryMainRoot } from "../core/utils.ts";
 import { COMMANDS, RULE_FILES, rulesText } from "../hooks/commands.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -85,77 +85,12 @@ const sessionRules = (root: string): unknown => {
   };
 };
 
-/** Skill slug if `filePath` points to a skill's SKILL.md (e.g., .../skills/<slug>/SKILL.md). */
-const skillFromPath = (filePath: string): string => {
-  const m = /(?:^|\/)skills\/([a-z0-9-]+)\/SKILL\.md$/i.exec(filePath.replace(/\\/g, "/"));
-  return m?.[1] ?? "";
-};
-
 /** Parses a typed `/dev-stack-*` command from user input, or undefined for any other input. */
 const parseStackCommand = (text: string): { name: string; args: string } | undefined => {
   const m = /^[ \t\r\n]*\/(dev-stack-[a-z-]+)(?:[ \t\r\n]+([\s\S]*))?$/.exec(text);
   const name = m?.[1];
   if (!name || !COMMANDS.some((c) => c.name === name)) return undefined;
   return { name, args: (m[2] ?? "").trim() };
-};
-
-/** Whether `text` invokes an orchestrator (`autopilot` or `run-stack`). */
-const isOrchestratorInput = (text: string): boolean =>
-  /^[ \t\n\v\f\r]*\/?(?:skill:(?:dev[:-])?|dev[:-])?(?:autopilot|run-stack)(?:[^a-z0-9_-]|$)/i.test(
-    text.replace(/_/g, "-"),
-  );
-
-const PHASE_ENTRY_STATUSES: Record<string, readonly string[]> = {
-  "review-feature": ["planning", "needs-changes", "ready"],
-  "execute-feature": ["approved", "auto-approved"],
-  "review-code": ["implemented"],
-  "create-pr": ["reviewed"],
-};
-
-/**
- * Checks whether any plan in the main root's `docs/plans/` passes `gateIndexed` for `skill`.
- * A `Status: ready` plan counts as runnable for `review-feature` only when its review is stale
- * (not current `ready`), so a plan awaiting user approval does not permanently unlock the gate.
- */
-const hasRunnablePlan = (skill: string, ctx: Parameters<typeof gateCheck>[1]): boolean => {
-  const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
-  const allowedStatuses = PHASE_ENTRY_STATUSES[slug];
-  if (!allowedStatuses) return false;
-  const root = tryMainRoot(ctx.cwd, ctx.env);
-  if (!root) return false;
-  const plansDir = path.join(root, "docs", "plans");
-  let stacks: fs.Dirent[];
-  try {
-    stacks = fs.readdirSync(plansDir, { withFileTypes: true });
-  } catch {
-    return false;
-  }
-  const lib = new PlanLib(root, ctx);
-  const indexed = new Set<string>();
-  for (const stack of stacks) {
-    if (!stack.isDirectory()) continue;
-    const stackDir = path.join(plansDir, stack.name);
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(stackDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isFile() || !/^pr[1-9][0-9]*\.spec\.md$/.test(entry.name)) continue;
-      const planPath = path.join(stackDir, entry.name);
-      const status = lib.status(planPath);
-      if (!allowedStatuses.includes(status)) continue;
-      if (!indexed.has(stackDir)) {
-        lib.indexStack(planPath);
-        indexed.add(stackDir);
-      }
-      if (slug === "review-feature" && status === "ready" && lib.reviewState(planPath) === "ready")
-        continue;
-      if (gateIndexed(slug, planPath, lib) === undefined) return true;
-    }
-  }
-  return false;
 };
 
 /** A JSON string as the UTF-8 text a HookInput carries, which core's str() reads as bytes. */
@@ -314,21 +249,9 @@ const run = (raw: HookInput): void => {
       writeJson({ decision: "deny", reason: utf8(serial) });
       return;
     }
-    const verdict = gateCheck(mapped, ctx);
-    if (verdict && "block" in verdict) {
-      const skill = str(member(mapped["tool_input"], "skill")) ?? "";
-      const args = str(member(mapped["tool_input"], "arguments")) ?? "";
-      const runnable = isPhaseCall(mapped) && hasRunnablePlan(skill, ctx);
-      if (runnable && (isOrchestratorInput(args) || planMentions(args).length === 0)) {
-        writeJson({ decision: "allow" });
-        return;
-      }
-      // A plan the message names blocked the call while another plan can run this phase.
-      const slug = skill.startsWith("dev:") ? skill.slice(4) : skill;
-      const hint = runnable
-        ? ` To run ${slug} on a runnable plan, read its SKILL.md in a message that says \`Starting ${slug} on <plan path>\` and names no other plan (skills/run-stack/SKILL.md, step 2).`
-        : "";
-      writeJson({ decision: "deny", reason: utf8(verdict.block) + hint });
+    const reason = skillReadBlock(mapped, ctx);
+    if (reason !== undefined) {
+      writeJson({ decision: "deny", reason: utf8(reason) });
       return;
     }
     writeJson({ decision: "allow" });

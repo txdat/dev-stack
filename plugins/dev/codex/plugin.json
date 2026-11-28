@@ -1,0 +1,12 @@
+{
+  "name": "dev",
+  "version": "0.1.0",
+  "description": "Plan-backed dev workflow: skills, agents, phase gates, rules, and /dev-stack-* commands",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "dev-stack",
+    "shortDescription": "Plan-backed development with phase gates",
+    "category": "Developer Tools"
+  }
+}

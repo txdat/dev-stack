@@ -2,13 +2,14 @@
   "name": "dev-stack",
   "private": true,
   "type": "module",
-  "description": "Plan-backed dev workflow for Claude Code, Pi, DeepSeek Harness, OpenCode, and Antigravity: rules, skills, phase gates, and /dev-stack-* commands",
+  "description": "Plan-backed dev workflow for Claude Code, Pi, DeepSeek Harness, OpenCode, Antigravity, and Codex: rules, skills, phase gates, and /dev-stack-* commands",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "build": "node scripts/build.ts",
     "build:agy": "node scripts/build-agy.ts",
+    "build:codex": "node scripts/build-codex.ts",
     "typecheck": "tsc -p tsconfig.engine.json && tsc -p tsconfig.node.json",
     "lint": "biome check .",
     "format": "biome check --write .",

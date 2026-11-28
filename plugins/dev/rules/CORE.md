@@ -1,4 +1,4 @@
-# AI Rules
+# Dev Rules
 
 ## Authority
 

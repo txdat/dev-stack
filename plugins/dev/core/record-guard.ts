@@ -342,6 +342,9 @@ const editGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
 
 const libFor = (root: string, ctx: GateCtx): PlanLib => new PlanLib(root, ctx);
 
+/** The directory families the record guard judges: plans, runbooks, architecture documents. */
+export const GUARDED_PATH = /(^|\/)docs\/(plans|runbook|architecture)(\/|$)/;
+
 /** Before a shell or edit call: throws Block when the call breaks the record. */
 export const recordGuard = (tool: string, input: HookInput, ctx: GateCtx): void => {
   if (tool === "Bash") shellGuard(input, ctx);
@@ -497,12 +500,13 @@ const storeDir = (parent: string): string | undefined => {
 };
 
 /**
- * Before a shell call: snapshots every plan spec and stack log in the docs/plans of the cwd's
+ * Before a shell call, or another call bashPostCheck checks after it runs, such as Codex's
+ * apply_patch: snapshots every plan spec and stack log in the docs/plans of the cwd's
  * repository. A file it cannot read is skipped, and the check after treats it as new. Snapshots
  * older than a day, left by calls that never finished, go, as do store entries no snapshot linked
  * or unlinked for a day.
  */
-const snapshotPlans = (input: HookInput, ctx: GateCtx): void => {
+export const snapshotPlans = (input: HookInput, ctx: GateCtx): void => {
   const scope = snapScope(input, ctx);
   if (scope === undefined) return;
   const base = `${scope}/docs/plans`;

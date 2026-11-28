@@ -6,6 +6,7 @@ import { b } from "../core/bytes.ts";
 import { byteEnv } from "../core/cli.ts";
 import { type GateResult, gateCheck, skillSlug } from "../core/gate-check.ts";
 import type { GateCtx, HookInput } from "../core/hook-input.ts";
+import { GUARDED_PATH } from "../core/record-guard.ts";
 import { serialCheck } from "../core/serial-check.ts";
 import { GATED_PHASES } from "../hooks/commands.ts";
 import type { SessionMessage } from "./api.ts";
@@ -100,9 +101,6 @@ export const serialDeny = (args: unknown): string | undefined =>
 
 /** The files a `patch` call names, from its patch text; `Move to:` names a moved file's target. */
 const PATCH_TARGET = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm;
-
-/** The directory families the record guard judges, which `patch` cannot model. */
-const GUARDED_PATH = /(^|\/)docs\/(plans|runbook|architecture)(\/|$)/;
 
 /**
  * Whether a `patch` call changes a plan, runbook, or architecture document. OpenCode's `patch`
